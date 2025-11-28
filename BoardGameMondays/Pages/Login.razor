@@ -1,0 +1,42 @@
+@page "/login"
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.AspNetCore.Components
+@using BoardGameMondays.Core
+@inject AuthenticationStateProvider AuthStateProvider
+@inject NavigationManager Navigation
+@inject BoardGameMondays.Core.BgmMemberService MemberService
+
+<h1>Login</h1>
+
+<EditForm Model="loginModel" OnValidSubmit="HandleLogin">
+    <InputText @bind-Value="loginModel.UserName" placeholder="Username" />
+    <br />
+    <InputText @bind-Value="loginModel.Password" placeholder="Password" type="password" />
+    <br />
+    <button type="submit">Login</button>
+</EditForm>
+
+@code {
+    private BoardGameMondays.Core.LoginModel loginModel = new BoardGameMondays.Core.LoginModel();
+
+    private async Task HandleLogin()
+    {
+        // For demo purposes accept any non-empty username.
+        if (!string.IsNullOrWhiteSpace(loginModel.UserName))
+        {
+            if (AuthStateProvider is SimpleAuthStateProvider simple)
+            {
+                await simple.MarkUserAsAuthenticated(loginModel.UserName);
+                // Create a BgmMember instance and store it
+                MemberService.SetMember(new BoardGameMondays.Core.DemoBgmMember(loginModel.UserName));
+                Navigation.NavigateTo("/");
+            }
+        }
+    }
+
+    // Simple concrete BgmMember for demo
+    // Must be in BoardGameMondays.Core namespace for type compatibility
+}
+
+

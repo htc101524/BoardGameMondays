@@ -1,0 +1,10 @@
+namedspace BoardGameMondays;
+
+public abstract class BoardGame
+{
+    public abstract string Name { get; }
+
+    public abstract Overview Overview { get; }
+
+    public abstract IEnumerable<Review> Reviews { get; }
+}
