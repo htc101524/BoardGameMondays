@@ -1,0 +1,96 @@
+body {
+    background: #18271b;
+    color: #181818;
+    font-family: 'Georgia', 'Times New Roman', serif;
+    min-height: 100vh;
+}
+
+.library-navbar {
+    background: linear-gradient(90deg, #22311c 0%, #4b3a1a 100%);
+    border-bottom: 2px solid #bfa14a;
+    box-shadow: 0 2px 12px rgba(34, 24, 10, 0.18);
+    min-height: 64px;
+    display: flex;
+    align-items: center;
+    padding: 0 2.5vw;
+}
+
+.library-title {
+    font-family: 'Georgia', 'Times New Roman', serif;
+    color: #e6c97a !important;
+    font-size: 2.2rem;
+    font-weight: bold;
+    letter-spacing: 2.5px;
+    text-shadow: 1px 1px 8px #2d3c2a;
+    margin-right: 2vw;
+}
+
+.navbar-nav {
+    flex-direction: row;
+    gap: 2vw;
+}
+
+.navbar-nav .nav-link {
+    color: #e6c97a !important;
+    font-weight: 600;
+    font-size: 1.15rem;
+    margin: 0 0.7vw;
+    padding: 0.5rem 1.2rem;
+    border-radius: 6px;
+    transition: background 0.2s, color 0.2s;
+}
+
+.navbar-nav .nav-link:hover, .navbar-nav .nav-link.active {
+    color: #fffbe6 !important;
+    background: rgba(191, 161, 74, 0.18);
+    box-shadow: 0 2px 8px rgba(34, 24, 10, 0.10);
+}
+
+h1, h2, h3, h4, h5, h6 {
+    color: #e6c97a;
+    font-family: 'Georgia', 'Times New Roman', serif;
+    font-weight: bold;
+    text-shadow: 1px 1px 8px #2d3c2a;
+}
+
+.content {
+    background: rgba(255,255,255,0.07);
+    border-radius: 18px;
+    box-shadow: 0 4px 32px rgba(34, 24, 10, 0.10);
+    margin: 2.5rem auto 0 auto;
+    padding: 2.5rem 3vw 2.5rem 3vw;
+    max-width: 900px;
+}
+
+.lead, p, li, label, .form-label {
+    color: #181818;
+    font-size: 1.08rem;
+}
+
+.btn-primary, .btn-success, .btn-secondary {
+    background: #22311c;
+    color: #e6c97a;
+    border: 1px solid #bfa14a;
+    font-weight: 600;
+    border-radius: 6px;
+    box-shadow: 0 2px 8px rgba(34, 24, 10, 0.10);
+}
+
+.btn-primary:hover, .btn-success:hover, .btn-secondary:hover {
+    background: #bfa14a;
+    color: #22311c;
+    border: 1px solid #22311c;
+}
+
+input, textarea, select {
+    background: #f5f3e7;
+    border: 1px solid #bfa14a;
+    color: #181818;
+    border-radius: 4px;
+    padding: 0.4rem 0.7rem;
+}
+
+input:focus, textarea:focus, select:focus {
+    border-color: #bfa14a;
+    box-shadow: 0 0 0 2px #bfa14a33;
+}
