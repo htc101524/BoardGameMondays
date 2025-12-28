@@ -1,7 +1,10 @@
 @page "/games"
 
-<PageTitle>Games</PageTitle>
+@inject NavigationManager Navigation
 
-<h1>Games</h1>
-
-<p>Games page (placeholder).</p>
+@code {
+	protected override void OnInitialized()
+	{
+		Navigation.NavigateTo("/#games", replace: true);
+	}
+}

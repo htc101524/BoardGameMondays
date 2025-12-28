@@ -30,8 +30,8 @@
 
 <aside id="bgm-popup" class="bgm-popup @(_menuOpen ? "is-open" : "")" role="dialog" aria-modal="true">
     <nav class="bgm-popup__nav" aria-label="Menu">
-        <NavLink class="bgm-popup__link" href="games" @onclick="CloseMenu">Games</NavLink>
-        <NavLink class="bgm-popup__link" href="people" @onclick="CloseMenu">People</NavLink>
+        <a class="bgm-popup__link" href="/#games" @onclick="CloseMenu">Games</a>
+        <a class="bgm-popup__link" href="/#people" @onclick="CloseMenu">People</a>
 
         <AuthorizeView>
             <Authorized>

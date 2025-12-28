@@ -6,11 +6,13 @@ public sealed class LatestReviewedGame : BoardGame
         string title,
         string tagline,
         string imageUrl,
+        string whatWeThought,
         DateTimeOffset reviewedOn)
     {
         Title = title;
         Tagline = tagline;
         ImageUrl = imageUrl;
+        WhatWeThought = whatWeThought;
         ReviewedOn = reviewedOn;
     }
 
@@ -20,6 +22,8 @@ public sealed class LatestReviewedGame : BoardGame
     public override string Tagline { get; }
 
     public override string ImageUrl { get; }
+
+    public string WhatWeThought { get; }
 
     public DateTimeOffset ReviewedOn { get; }
 

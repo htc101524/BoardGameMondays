@@ -1,12 +1,13 @@
 ﻿@page "/"
 
 @using BoardGameMondays.Core
+@using BoardGameMondays.Components.Sections
 @inject LatestReviewedGameService LatestReviewedGameService
 
 <PageTitle>Board Game Mondays</PageTitle>
 
 
-<section class="home-hero" aria-label="Latest reviewed game">
+<section id="latest" class="home-hero" aria-label="Latest reviewed game">
     <div class="home-hero__center">
         <div class="home-hero__kicker">Latest review</div>
 
@@ -33,6 +34,29 @@
         }
     </div>
 </section>
+
+<section id="thoughts" class="home-section" aria-label="What we thought">
+    <div class="home-section__inner">
+        <h1>What we thought</h1>
+
+        @if (_latest is LatestReviewedGame latest && !string.IsNullOrWhiteSpace(latest.WhatWeThought))
+        {
+            <p>@latest.WhatWeThought</p>
+        }
+        else if (_latest is not null && !string.IsNullOrWhiteSpace(_latest.Tagline))
+        {
+            <p>@_latest.Tagline</p>
+        }
+        else
+        {
+            <p>No thoughts yet.</p>
+        }
+    </div>
+</section>
+
+<GamesSection />
+
+<PeopleSection />
 
 @code {
     private BoardGame? _latest;

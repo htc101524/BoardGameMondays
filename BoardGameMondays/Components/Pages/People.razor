@@ -1,7 +1,10 @@
 @page "/people"
 
-<PageTitle>People</PageTitle>
+@inject NavigationManager Navigation
 
-<h1>People</h1>
-
-<p>People page (placeholder).</p>
+@code {
+	protected override void OnInitialized()
+	{
+		Navigation.NavigateTo("/#people", replace: true);
+	}
+}
