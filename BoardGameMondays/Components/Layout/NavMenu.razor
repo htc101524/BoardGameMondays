@@ -1,4 +1,10 @@
-﻿<header class="bgm-header" role="banner">
+﻿@using Microsoft.AspNetCore.Components.Authorization
+@using BoardGameMondays.Core
+@inject AuthenticationStateProvider AuthStateProvider
+@inject BgmMemberService MemberService
+@inject NavigationManager Navigation
+
+<header class="bgm-header" role="banner">
     <div class="bgm-header__inner">
         <a class="bgm-brand" href="/" aria-label="Board Game Mondays">
             <img class="bgm-brand__logo" src="images/bgm-logo.svg" alt="" />
@@ -26,7 +32,15 @@
     <nav class="bgm-popup__nav" aria-label="Menu">
         <NavLink class="bgm-popup__link" href="games" @onclick="CloseMenu">Games</NavLink>
         <NavLink class="bgm-popup__link" href="people" @onclick="CloseMenu">People</NavLink>
-        <NavLink class="bgm-popup__link" href="login" @onclick="CloseMenu">Login</NavLink>
+
+        <AuthorizeView>
+            <Authorized>
+                <button type="button" class="bgm-popup__link bgm-popup__linkButton" @onclick="Logout">Logout</button>
+            </Authorized>
+            <NotAuthorized>
+                <NavLink class="bgm-popup__link" href="login" @onclick="CloseMenu">Login</NavLink>
+            </NotAuthorized>
+        </AuthorizeView>
     </nav>
 </aside>
 
@@ -35,5 +49,17 @@
 
     private void ToggleMenu() => _menuOpen = !_menuOpen;
     private void CloseMenu() => _menuOpen = false;
+
+    private async Task Logout()
+    {
+        if (AuthStateProvider is SimpleAuthStateProvider simple)
+        {
+            await simple.MarkUserAsLoggedOut();
+        }
+
+        MemberService.ClearMember();
+        CloseMenu();
+        Navigation.NavigateTo("/");
+    }
 }
 

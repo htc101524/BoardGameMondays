@@ -6,13 +6,13 @@ public sealed class LatestReviewedGameService
     private static readonly LatestReviewedGame[] Seed =
     [
         new(
-            Title: "Cascadia",
-            Tagline: "A calm, clever tile-laying puzzle with satisfying combos.",
-            ImageUrl: "images/placeholder-game-cover.svg",
-            ReviewedOn: new DateTimeOffset(2025, 12, 15, 0, 0, 0, TimeSpan.Zero)
+            title: "Cascadia",
+            tagline: "A calm, clever tile-laying puzzle with satisfying combos.",
+            imageUrl: "images/placeholder-game-cover.svg",
+            reviewedOn: new DateTimeOffset(2025, 12, 15, 0, 0, 0, TimeSpan.Zero)
         )
     ];
 
-    public Task<LatestReviewedGame?> GetLatestAsync(CancellationToken ct = default)
-        => Task.FromResult(Seed.OrderByDescending(x => x.ReviewedOn).FirstOrDefault());
+    public Task<BoardGame?> GetLatestAsync(CancellationToken ct = default)
+        => Task.FromResult<BoardGame?>(Seed.OrderByDescending(x => x.ReviewedOn).FirstOrDefault());
 }

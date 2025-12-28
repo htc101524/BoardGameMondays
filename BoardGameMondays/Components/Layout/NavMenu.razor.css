@@ -135,3 +135,11 @@
     background: rgba(191, 161, 74, 0.14);
     color: #22311c;
 }
+
+.bgm-popup__linkButton {
+    width: 100%;
+    text-align: left;
+    cursor: pointer;
+    font: inherit;
+    border: 1px solid rgba(75, 58, 26, 0.14);
+}

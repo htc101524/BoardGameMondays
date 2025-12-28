@@ -17,18 +17,25 @@
         }
         else
         {
-            <h1 class="home-hero__title">@_latest.Title</h1>
-            <p class="home-hero__subtitle">@_latest.Tagline</p>
+            <h1 class="home-hero__title">@_latest.Name</h1>
 
-            <div class="home-hero__media">
-                <img src="@_latest.ImageUrl" alt="@($"{_latest.Title} cover")" />
-            </div>
+            @if (!string.IsNullOrWhiteSpace(_latest.Tagline))
+            {
+                <p class="home-hero__subtitle">@_latest.Tagline</p>
+            }
+
+            @if (!string.IsNullOrWhiteSpace(_latest.ImageUrl))
+            {
+                <div class="home-hero__media">
+                    <img src="@_latest.ImageUrl" alt="@($"{_latest.Name} cover")" />
+                </div>
+            }
         }
     </div>
 </section>
 
 @code {
-    private LatestReviewedGame? _latest;
+    private BoardGame? _latest;
 
     protected override async Task OnInitializedAsync()
     {
