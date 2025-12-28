@@ -1,10 +1,35 @@
 ﻿@inherits LayoutComponentBase
 
+@inject NavigationManager Navigation
 
-<div class="page">
+@code {
+    private bool IsHome
+    {
+        get
+        {
+            var relative = Navigation.ToBaseRelativePath(Navigation.Uri);
+            if (string.IsNullOrWhiteSpace(relative))
+            {
+                return true;
+            }
+
+            var cut = relative.IndexOfAny(['?', '#']);
+            if (cut >= 0)
+            {
+                relative = relative[..cut];
+            }
+
+            relative = relative.Trim('/');
+            return string.IsNullOrEmpty(relative);
+        }
+    }
+}
+
+
+<div class="page @(IsHome ? "page--home" : "")">
     <NavMenu />
     <main>
-        <article class="content px-4">
+        <article class="content px-4 @(IsHome ? "content--home" : "")">
             @Body
         </article>
     </main>

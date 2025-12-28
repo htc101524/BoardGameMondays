@@ -1,73 +1,38 @@
 ﻿@page "/"
 
+@using BoardGameMondays.Core
+@inject LatestReviewedGameService LatestReviewedGameService
+
 <PageTitle>Board Game Mondays</PageTitle>
 
-<h1>Welcome to Board Game Mondays!</h1>
 
-<p class="lead">
-    Join us every Monday for a fun evening of board games, strategy, and friendly competition.
-</p>
+<section class="home-hero" aria-label="Latest reviewed game">
+    <div class="home-hero__center">
+        <div class="home-hero__kicker">Latest review</div>
 
-@using BoardGameMondays.Core
-@using Microsoft.AspNetCore.Components.Authorization
-@inject BgmMemberService MemberService
-
-<AuthorizeView>
-    <Authorized>
-        <div class="alert alert-success">Welcome, @MemberService.CurrentMember?.Name! You can add board games and reviews.</div>
-        <button class="btn btn-primary" @onclick="ShowAddBoardGame">Add Board Game</button>
-        <button class="btn btn-secondary" @onclick="ShowAddReview">Add Review</button>
-        @if (showAddBoardGame)
+        @if (_latest is null)
         {
-            <div class="mt-3">
-                <input @bind="newBoardGameName" placeholder="Board Game Name" />
-                <button class="btn btn-success" @onclick="AddBoardGame">Save Board Game</button>
+            <h1 class="home-hero__title">No reviews yet</h1>
+            <p class="home-hero__subtitle">Add your first review to feature it here.</p>
+        }
+        else
+        {
+            <h1 class="home-hero__title">@_latest.Title</h1>
+            <p class="home-hero__subtitle">@_latest.Tagline</p>
+
+            <div class="home-hero__media">
+                <img src="@_latest.ImageUrl" alt="@($"{_latest.Title} cover")" />
             </div>
         }
-        @if (showAddReview)
-        {
-            <div class="mt-3">
-                <input @bind="newReviewText" placeholder="Review" />
-                <button class="btn btn-success" @onclick="AddReview">Save Review</button>
-            </div>
-        }
-    </Authorized>
-    <NotAuthorized>
-        <div class="alert alert-info">Login to add board games or reviews.</div>
-    </NotAuthorized>
-</AuthorizeView>
+    </div>
+</section>
 
 @code {
-    private bool showAddBoardGame = false;
-    private bool showAddReview = false;
-    private string? newBoardGameName;
-    private string? newReviewText;
+    private LatestReviewedGame? _latest;
 
-    void ShowAddBoardGame() => showAddBoardGame = !showAddBoardGame;
-    void ShowAddReview() => showAddReview = !showAddReview;
-    void AddBoardGame()
+    protected override async Task OnInitializedAsync()
     {
-        // Here you would add logic to actually add a board game to your collection
-        showAddBoardGame = false;
-        newBoardGameName = null;
-    }
-    void AddReview()
-    {
-        // Here you would add logic to actually add a review
-        showAddReview = false;
-        newReviewText = null;
+        _latest = await LatestReviewedGameService.GetLatestAsync();
     }
 }
-    <div class="col-md-4">
-        <h3>🎲 What We Do</h3>
-        <p>We gather weekly to play a variety of board games, from classic favorites to modern strategy games.</p>
-    </div>
-    <div class="col-md-4">
-        <h3>📅 When We Meet</h3>
-        <p>Every Monday evening. Check back for specific times and locations.</p>
-    </div>
-    <div class="col-md-4">
-        <h3>👥 Who Can Join</h3>
-        <p>Everyone is welcome! Whether you're a seasoned gamer or new to board games, come join the fun.</p>
-    </div>
 

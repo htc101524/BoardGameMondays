@@ -1,47 +1,39 @@
-﻿@using Microsoft.AspNetCore.Components.Authorization
-@inject AuthenticationStateProvider AuthStateProvider
+﻿<header class="bgm-header" role="banner">
+    <div class="bgm-header__inner">
+        <a class="bgm-brand" href="/" aria-label="Board Game Mondays">
+            <img class="bgm-brand__logo" src="images/bgm-logo.svg" alt="" />
+            <span class="bgm-brand__text">Board Game Mondays</span>
+        </a>
 
-
-<nav class="navbar navbar-expand-lg library-navbar">
-    <div class="container-fluid">
-        <a class="navbar-brand library-title" href="">BoardGameMondays</a>
-        <div class="collapse navbar-collapse">
-            <ul class="navbar-nav me-auto mb-2 mb-lg-0">
-                <li class="nav-item">
-                    <NavLink class="nav-link" href="" Match="NavLinkMatch.All">Home</NavLink>
-                </li>
-                <li class="nav-item">
-                    <NavLink class="nav-link" href="counter">Counter</NavLink>
-                </li>
-                <li class="nav-item">
-                    <NavLink class="nav-link" href="weather">Weather</NavLink>
-                </li>
-            </ul>
-            <ul class="navbar-nav ms-auto mb-2 mb-lg-0">
-                <li class="nav-item">
-                    @* Authentication UI *@
-                    <AuthorizeView Context="authState">
-                        <Authorized>
-                            <span class="nav-link">@authState.User.Identity?.Name</span>
-                            <button class="nav-link btn btn-link" @onclick="Logout">Logout</button>
-                        </Authorized>
-                        <NotAuthorized>
-                            <NavLink class="nav-link" href="login">Login</NavLink>
-                        </NotAuthorized>
-                    </AuthorizeView>
-                </li>
-            </ul>
-        </div>
+        <button class="bgm-menuButton"
+                type="button"
+                aria-label="Open menu"
+                aria-controls="bgm-popup"
+                aria-expanded="@_menuOpen"
+                @onclick="ToggleMenu">
+            <svg viewBox="0 0 48 48" class="bgm-menuIcon" aria-hidden="true" focusable="false">
+                <path d="M10 14 H38" />
+                <path d="M10 24 H38" />
+                <path d="M10 34 H38" />
+            </svg>
+        </button>
     </div>
-</nav>
+</header>
+
+<div class="bgm-backdrop @(_menuOpen ? "is-open" : "")" @onclick="CloseMenu"></div>
+
+<aside id="bgm-popup" class="bgm-popup @(_menuOpen ? "is-open" : "")" role="dialog" aria-modal="true">
+    <nav class="bgm-popup__nav" aria-label="Menu">
+        <NavLink class="bgm-popup__link" href="games" @onclick="CloseMenu">Games</NavLink>
+        <NavLink class="bgm-popup__link" href="people" @onclick="CloseMenu">People</NavLink>
+        <NavLink class="bgm-popup__link" href="login" @onclick="CloseMenu">Login</NavLink>
+    </nav>
+</aside>
 
 @code {
-    private async Task Logout()
-    {
-        if (AuthStateProvider is BoardGameMondays.Core.SimpleAuthStateProvider simple)
-        {
-            await simple.MarkUserAsLoggedOut();
-        }
-    }
+    private bool _menuOpen;
+
+    private void ToggleMenu() => _menuOpen = !_menuOpen;
+    private void CloseMenu() => _menuOpen = false;
 }
 

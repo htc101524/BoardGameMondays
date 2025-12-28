@@ -9,6 +9,15 @@ main {
     width: 100%;
 }
 
+.content--home {
+    max-width: none;
+    margin: 0;
+    padding: 0 !important;
+    background: transparent;
+    border-radius: 0;
+    box-shadow: none;
+}
+
 #blazor-error-ui {
     color-scheme: light only;
     background: lightyellow;
