@@ -1,15 +1,33 @@
 namespace BoardGameMondays.Core;
 
-public abstract class BoardGame
+public sealed class BoardGame
 {
-    public abstract string Name { get; }
+    public BoardGame(
+        string name,
+        Overview? overview = null,
+        IEnumerable<Review>? reviews = null,
+        DateTimeOffset? reviewedOn = null,
+        string? tagline = null,
+        string? imageUrl = null)
+    {
+        Name = name;
+        Overview = overview ?? EmptyOverview.Instance;
+        Reviews = (reviews ?? Array.Empty<Review>()).ToArray();
+        ReviewedOn = reviewedOn;
+        Tagline = tagline;
+        ImageUrl = imageUrl;
+    }
 
-    public abstract Overview Overview { get; }
+    public string Name { get; }
 
-    public abstract IEnumerable<Review> Reviews { get; }
+    public Overview Overview { get; }
+
+    public IReadOnlyList<Review> Reviews { get; }
+
+    public DateTimeOffset? ReviewedOn { get; }
 
     // Optional metadata for UI.
-    public virtual string? Tagline => null;
+    public string? Tagline { get; }
 
-    public virtual string? ImageUrl => null;
+    public string? ImageUrl { get; }
 }

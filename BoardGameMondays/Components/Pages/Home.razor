@@ -2,7 +2,7 @@
 
 @using BoardGameMondays.Core
 @using BoardGameMondays.Components.Sections
-@inject LatestReviewedGameService LatestReviewedGameService
+@inject BoardGameService BoardGameService
 
 <PageTitle>Board Game Mondays</PageTitle>
 
@@ -37,20 +37,45 @@
 
 <section id="thoughts" class="home-section" aria-label="What we thought">
     <div class="home-section__inner">
-        <h1>What we thought</h1>
+        <div class="bgm-thoughtsHeader">
+            <h1 class="bgm-thoughtsHeader__title">What we thought</h1>
+            @if (_selectedReview is not null)
+            {
+                <div class="bgm-scoreBadge" aria-label="Score">@_selectedReview.Rating</div>
+            }
+        </div>
 
-        @if (_latest is LatestReviewedGame latest && !string.IsNullOrWhiteSpace(latest.WhatWeThought))
-        {
-            <p>@latest.WhatWeThought</p>
-        }
-        else if (_latest is not null && !string.IsNullOrWhiteSpace(_latest.Tagline))
-        {
-            <p>@_latest.Tagline</p>
-        }
-        else
-        {
-            <p>No thoughts yet.</p>
-        }
+        <div class="bgm-thoughtsBody">
+            @if (_latest?.Reviews?.Any() == true)
+            {
+                <div class="bgm-review-switcher bgm-review-switcher--side" role="group" aria-label="Select a reviewer">
+                    @foreach (var review in _latest.Reviews)
+                    {
+                        <button type="button"
+                                class="bgm-review-switcher__button @(ReferenceEquals(review, _selectedReview) ? "is-active" : "")"
+                                aria-pressed="@(ReferenceEquals(review, _selectedReview))"
+                                @onclick="() => SelectReview(review)">
+                            @review.Reviewer.Name
+                        </button>
+                    }
+                </div>
+            }
+
+            <div class="bgm-thoughtsContent">
+                @if (_selectedReview is not null)
+                {
+                    <p>@_selectedReview.Description</p>
+                }
+                else if (_latest is not null && !string.IsNullOrWhiteSpace(_latest.Tagline))
+                {
+                    <p>@_latest.Tagline</p>
+                }
+                else
+                {
+                    <p>No thoughts yet.</p>
+                }
+            </div>
+        </div>
     </div>
 </section>
 
@@ -60,10 +85,15 @@
 
 @code {
     private BoardGame? _latest;
+    private Review? _selectedReview;
 
     protected override async Task OnInitializedAsync()
     {
-        _latest = await LatestReviewedGameService.GetLatestAsync();
+        _latest = await BoardGameService.GetLatestReviewedAsync();
+        _selectedReview = _latest?.Reviews?.FirstOrDefault();
     }
+
+    private void SelectReview(Review review)
+        => _selectedReview = review;
 }
 
