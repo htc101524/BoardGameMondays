@@ -43,7 +43,7 @@
                 <button type="button" class="bgm-popup__link bgm-popup__linkButton" @onclick="Logout">Logout</button>
             </Authorized>
             <NotAuthorized>
-                <NavLink class="bgm-popup__link" href="login" @onclick="CloseMenu">Login</NavLink>
+                <button type="button" class="bgm-popup__link bgm-popup__linkButton" @onclick="GoToLogin">Login</button>
             </NotAuthorized>
         </AuthorizeView>
     </nav>
@@ -72,6 +72,12 @@
         MemberService.ClearMember();
         CloseMenu();
         Navigation.NavigateTo("/");
+    }
+
+    private void GoToLogin()
+    {
+        CloseMenu();
+        Navigation.NavigateTo("/login");
     }
 }
 
