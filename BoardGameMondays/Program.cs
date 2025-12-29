@@ -12,6 +12,7 @@ builder.Services.AddRazorComponents()
 builder.Services.AddAuthorizationCore();
 builder.Services.AddScoped<AuthenticationStateProvider, SimpleAuthStateProvider>();
 builder.Services.AddScoped<BoardGameMondays.Core.BgmMemberService>();
+builder.Services.AddSingleton<BoardGameMondays.Core.BgmMemberDirectoryService>();
 builder.Services.AddScoped<BoardGameMondays.Core.BoardGameService>();
 
 var app = builder.Build();

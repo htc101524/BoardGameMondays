@@ -1,0 +1,51 @@
+.bgm-peopleGrid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 18px;
+    align-items: stretch;
+    margin-top: 20px;
+}
+
+.bgm-peopleCard {
+    flex: 1 1 260px;
+    max-width: 360px;
+    border-radius: 14px;
+    border: 1px solid rgba(75, 58, 26, 0.14);
+    background: rgba(255, 255, 255, 0.65);
+    padding: 16px;
+}
+
+.bgm-peopleCard__top {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.bgm-peopleCard__avatar {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    display: grid;
+    place-items: center;
+    font-weight: 800;
+    color: #22311c;
+    background: rgba(191, 161, 74, 0.18);
+    border: 1px solid rgba(75, 58, 26, 0.14);
+}
+
+.bgm-peopleCard__name {
+    font-weight: 800;
+    color: #4b3a1a;
+    line-height: 1.1;
+}
+
+.bgm-peopleCard__email {
+    color: rgba(34, 49, 28, 0.80);
+    font-size: 0.95rem;
+}
+
+.bgm-peopleCard__summary {
+    margin: 0;
+    color: rgba(34, 49, 28, 0.92);
+}

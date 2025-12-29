@@ -1,8 +1,36 @@
+@using BoardGameMondays.Core
+@inject BgmMemberDirectoryService MemberDirectory
+
 <section id="people" class="home-section" aria-label="People">
     <PageTitle>People</PageTitle>
 
     <div class="home-section__inner">
         <h1>People</h1>
-        <p>People page (placeholder).</p>
+
+        <div class="bgm-peopleGrid" role="list" aria-label="Members">
+            @foreach (var member in MemberDirectory.GetAll())
+            {
+                <article class="bgm-peopleCard" role="listitem" aria-label="@member.Name">
+                    <div class="bgm-peopleCard__top">
+                        <div class="bgm-peopleCard__avatar" aria-hidden="true">
+                            @(string.IsNullOrWhiteSpace(member.Name) ? "?" : member.Name[..1].ToUpperInvariant())
+                        </div>
+                        <div class="bgm-peopleCard__who">
+                            <div class="bgm-peopleCard__name">@member.Name</div>
+                            <div class="bgm-peopleCard__email">@member.Email</div>
+                        </div>
+                    </div>
+
+                    @if (!string.IsNullOrWhiteSpace(member.Summary))
+                    {
+                        <p class="bgm-peopleCard__summary">@member.Summary</p>
+                    }
+                    else
+                    {
+                        <p class="bgm-peopleCard__summary">Board Game Mondays member.</p>
+                    }
+                </article>
+            }
+        </div>
     </div>
 </section>

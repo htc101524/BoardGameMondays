@@ -6,6 +6,7 @@
 @inject AuthenticationStateProvider AuthStateProvider
 @inject NavigationManager Navigation
 @inject BoardGameMondays.Core.BgmMemberService MemberService
+@inject BoardGameMondays.Core.BgmMemberDirectoryService MemberDirectory
 
 <h1>Login</h1>
 
@@ -29,7 +30,8 @@
             {
                 await simple.MarkUserAsAuthenticated(loginModel.UserName);
                 // Create a BgmMember instance and store it
-                MemberService.SetMember(new BoardGameMondays.Core.DemoBgmMember(loginModel.UserName));
+                var member = MemberDirectory.GetOrCreate(loginModel.UserName);
+                MemberService.SetMember(member);
                 Navigation.NavigateTo("/");
             }
         }
