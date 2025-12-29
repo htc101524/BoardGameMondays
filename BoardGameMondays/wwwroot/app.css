@@ -5,7 +5,7 @@
     --bgm-home-section-padding-y: 56px;
 
     --bgm-home-section-bg-thoughts: transparent;
-    --bgm-home-section-bg-games: transparent;
+    --bgm-home-section-bg-games: rgba(34, 49, 28, 0.06);
     --bgm-home-section-bg-people: transparent;
 }
 
