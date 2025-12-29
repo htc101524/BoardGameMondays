@@ -3,10 +3,15 @@
 @inject AuthenticationStateProvider AuthStateProvider
 @inject BgmMemberService MemberService
 @inject NavigationManager Navigation
+@inject IJSRuntime JS
 
 <header class="bgm-header" role="banner">
     <div class="bgm-header__inner">
-        <a class="bgm-brand" href="/" aria-label="Board Game Mondays">
+        <a class="bgm-brand"
+           href="/#latest"
+           aria-label="Board Game Mondays"
+           @onclick:preventDefault="true"
+           @onclick="OnBrandClick">
             <img class="bgm-brand__logo" src="images/bgm-logo.svg" alt="" />
             <span class="bgm-brand__text">Board Game Mondays</span>
         </a>
@@ -49,6 +54,13 @@
 
     private void ToggleMenu() => _menuOpen = !_menuOpen;
     private void CloseMenu() => _menuOpen = false;
+
+    private async Task OnBrandClick()
+    {
+        CloseMenu();
+        Navigation.NavigateTo("/#latest");
+        await JS.InvokeVoidAsync("bgm.scrollToTopNextFrame", "smooth");
+    }
 
     private async Task Logout()
     {

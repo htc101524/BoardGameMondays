@@ -1,4 +1,40 @@
 @import url('library-theme.css');
+
+:root {
+    --bgm-home-section-min-height: 100vh;
+    --bgm-home-section-padding-y: 56px;
+
+    --bgm-home-section-bg-thoughts: transparent;
+    --bgm-home-section-bg-games: transparent;
+    --bgm-home-section-bg-people: transparent;
+}
+
+.home-section {
+    scroll-margin-top: var(--bgm-header-height, 72px);
+    min-height: var(--bgm-home-section-min-height, 100vh);
+    padding: var(--bgm-home-section-padding-y, 56px) 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.home-section__inner {
+    width: min(980px, 92vw);
+    margin: 0 auto;
+}
+
+#thoughts.home-section {
+    background: var(--bgm-home-section-bg-thoughts, transparent);
+}
+
+#games.home-section {
+    background: var(--bgm-home-section-bg-games, transparent);
+}
+
+#people.home-section {
+    background: var(--bgm-home-section-bg-people, transparent);
+}
+
 html, body {
     font-family: 'Georgia', 'Times New Roman', serif;
 }
