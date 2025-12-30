@@ -3,6 +3,7 @@
 @using BoardGameMondays.Core
 @using BoardGameMondays.Components.Sections
 @inject BoardGameService BoardGameService
+@inject IJSRuntime JS
 
 <PageTitle>Board Game Mondays</PageTitle>
 
@@ -11,24 +12,24 @@
     <div class="home-hero__center">
         <div class="home-hero__kicker">Latest review</div>
 
-        @if (_latest is null)
+        @if (_latestReviewed is null)
         {
             <h1 class="home-hero__title">No reviews yet</h1>
             <p class="home-hero__subtitle">Add your first review to feature it here.</p>
         }
         else
         {
-            <h1 class="home-hero__title">@_latest.Name</h1>
+            <h1 class="home-hero__title">@_latestReviewed.Name</h1>
 
-            @if (!string.IsNullOrWhiteSpace(_latest.Tagline))
+            @if (!string.IsNullOrWhiteSpace(_latestReviewed.Tagline))
             {
-                <p class="home-hero__subtitle">@_latest.Tagline</p>
+                <p class="home-hero__subtitle">@_latestReviewed.Tagline</p>
             }
 
-            @if (!string.IsNullOrWhiteSpace(_latest.ImageUrl))
+            @if (!string.IsNullOrWhiteSpace(_latestReviewed.ImageUrl))
             {
                 <div class="home-hero__media">
-                    <img src="@_latest.ImageUrl" alt="@($"{_latest.Name} cover")" />
+                    <img src="@_latestReviewed.ImageUrl" alt="@($"{_latestReviewed.Name} cover")" />
                 </div>
             }
         }
@@ -37,8 +38,12 @@
 
 <section id="thoughts" class="home-section" aria-label="What we thought">
     <div class="home-section__inner">
+        @{
+            var thoughtsGame = _thoughtsGame ?? _latestReviewed;
+        }
+
         <div class="bgm-thoughtsHeader">
-            <h1 class="bgm-thoughtsHeader__title">What we thought of @_latest?.Name</h1>
+            <h1 class="bgm-thoughtsHeader__title">What we thought of @thoughtsGame?.Name</h1>
             @if (_selectedReview is not null)
             {
                 <div class="bgm-scoreBadge" aria-label="Score">@_selectedReview.Rating</div>
@@ -46,10 +51,10 @@
         </div>
 
         <div class="bgm-thoughtsBody">
-            @if (_latest?.Reviews?.Any() == true)
+            @if (thoughtsGame?.Reviews?.Any() == true)
             {
                 <div class="bgm-review-switcher bgm-review-switcher--side" role="group" aria-label="Select a reviewer">
-                    @foreach (var review in _latest.Reviews)
+                    @foreach (var review in thoughtsGame.Reviews)
                     {
                         <button type="button"
                                 class="bgm-review-switcher__button @(ReferenceEquals(review, _selectedReview) ? "is-active" : "")"
@@ -66,9 +71,9 @@
                 {
                     <p>@_selectedReview.Description</p>
                 }
-                else if (_latest is not null && !string.IsNullOrWhiteSpace(_latest.Tagline))
+                else if (thoughtsGame is not null && !string.IsNullOrWhiteSpace(thoughtsGame.Tagline))
                 {
-                    <p>@_latest.Tagline</p>
+                    <p>@thoughtsGame.Tagline</p>
                 }
                 else
                 {
@@ -79,21 +84,31 @@
     </div>
 </section>
 
-<GamesSection />
+<GamesSection OnGameSelected="HandleGameSelectedAsync" />
 
 <PeopleSection />
 
 @code {
-    private BoardGame? _latest;
+    private BoardGame? _latestReviewed;
+    private BoardGame? _thoughtsGame;
     private Review? _selectedReview;
 
     protected override async Task OnInitializedAsync()
     {
-        _latest = await BoardGameService.GetLatestReviewedAsync();
-        _selectedReview = _latest?.Reviews?.FirstOrDefault();
+        _latestReviewed = await BoardGameService.GetLatestReviewedAsync();
+        _thoughtsGame = _latestReviewed;
+        _selectedReview = _thoughtsGame?.Reviews?.FirstOrDefault();
     }
 
     private void SelectReview(Review review)
         => _selectedReview = review;
+
+    private async Task HandleGameSelectedAsync(BoardGame game)
+    {
+        _thoughtsGame = game;
+        _selectedReview = game.Reviews.FirstOrDefault();
+
+        await JS.InvokeVoidAsync("bgm.scrollToIdNextFrame", "thoughts", "smooth");
+    }
 }
 

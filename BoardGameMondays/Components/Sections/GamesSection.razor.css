@@ -1,0 +1,70 @@
+.bgm-gamesHeader {
+    display: flex;
+    justify-content: flex-start;
+    margin-bottom: 18px;
+}
+
+.bgm-segmented {
+    --bgm-seg-index: 1;
+    position: relative;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0;
+    padding: 4px;
+    border-radius: 999px;
+    border: 1px solid rgba(75, 58, 26, 0.18);
+    background: rgba(255, 255, 255, 0.55);
+    width: min(420px, 92vw);
+}
+
+.bgm-segmented::before {
+    content: "";
+    position: absolute;
+    top: 4px;
+    bottom: 4px;
+    left: 4px;
+    width: calc((100% - 8px) / 3);
+    border-radius: 999px;
+    background: rgba(191, 161, 74, 0.18);
+    border: 1px solid rgba(75, 58, 26, 0.14);
+    transform: translateX(calc(var(--bgm-seg-index) * 100%));
+    transition: transform 160ms ease;
+}
+
+.bgm-segmented__item {
+    position: relative;
+    z-index: 1;
+    border: 0;
+    background: transparent;
+    color: rgba(34, 49, 28, 0.92);
+    padding: 12px 14px;
+    border-radius: 999px;
+    font: inherit;
+}
+
+.bgm-segmented__item.is-active {
+    color: #22311c;
+    font-weight: 700;
+}
+
+.bgm-segmented__item:focus-visible {
+    outline: 2px solid rgba(191, 161, 74, 0.55);
+    outline-offset: 3px;
+}
+
+.bgm-gameCardButton {
+    display: block;
+    width: 100%;
+    height: 100%;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    text-align: inherit;
+    cursor: pointer;
+}
+
+.bgm-gameCardButton:focus-visible {
+    outline: 2px solid rgba(191, 161, 74, 0.55);
+    outline-offset: 4px;
+    border-radius: 12px;
+}

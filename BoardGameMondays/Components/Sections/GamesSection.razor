@@ -2,7 +2,119 @@
     <PageTitle>Games</PageTitle>
 
     <div class="home-section__inner">
+        <div class="bgm-gamesHeader">
+            <div class="bgm-segmented" role="tablist" aria-label="Games view" style="--bgm-seg-index: @((int)_mode)">
+                <button type="button"
+                        class="bgm-segmented__item @(_mode == GamesMode.Decided ? "is-active" : "")"
+                        role="tab"
+                        aria-selected="@(_mode == GamesMode.Decided)"
+                        @onclick="() => SetModeAsync(GamesMode.Decided)">
+                    Decided
+                </button>
+                <button type="button"
+                        class="bgm-segmented__item @(_mode == GamesMode.Playing ? "is-active" : "")"
+                        role="tab"
+                        aria-selected="@(_mode == GamesMode.Playing)"
+                        @onclick="() => SetModeAsync(GamesMode.Playing)">
+                    Playing
+                </button>
+                <button type="button"
+                        class="bgm-segmented__item @(_mode == GamesMode.Queued ? "is-active" : "")"
+                        role="tab"
+                        aria-selected="@(_mode == GamesMode.Queued)"
+                        @onclick="() => SetModeAsync(GamesMode.Queued)">
+                    Queued
+                </button>
+            </div>
+        </div>
+
         <h1>Games</h1>
-        <p>Games page (placeholder).</p>
+
+        <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-3">
+            @foreach (var game in _games)
+            {
+                <div class="col">
+                    <button type="button"
+                            class="bgm-gameCardButton"
+                            aria-label="Show thoughts for @game.Name"
+                            @onclick="() => SelectGameAsync(game)">
+                        <div class="card h-100">
+                            <img class="card-img-top" src="@(game.ImageUrl ?? "images/placeholder-game-cover.svg")" alt="" />
+                            <div class="card-body">
+                                <h5 class="card-title">@game.Name</h5>
+                                @if (!string.IsNullOrWhiteSpace(game.Tagline))
+                                {
+                                    <p class="card-text">@game.Tagline</p>
+                                }
+                            </div>
+                            <div class="card-footer d-flex justify-content-between align-items-center">
+                                <small class="text-muted">
+                                    @if (game.ReviewedOn is { } reviewedOn)
+                                    {
+                                        <span>Reviewed @reviewedOn:yyyy-MM-dd</span>
+                                    }
+                                    else
+                                    {
+                                        <span>Not reviewed yet</span>
+                                    }
+                                </small>
+
+                                <small class="text-muted">@game.Reviews.Count review(s)</small>
+                            </div>
+                        </div>
+                    </button>
+                </div>
+            }
+        </div>
     </div>
 </section>
+
+@inject BoardGameMondays.Core.BoardGameService BoardGameService
+
+@code {
+    [Parameter]
+    public EventCallback<BoardGameMondays.Core.BoardGame> OnGameSelected { get; set; }
+
+    private GamesMode _mode = GamesMode.Playing;
+    private IReadOnlyList<BoardGameMondays.Core.BoardGame> _games = Array.Empty<BoardGameMondays.Core.BoardGame>();
+
+    protected override async Task OnInitializedAsync()
+        => await LoadAsync();
+
+    private async Task SetModeAsync(GamesMode mode)
+    {
+        if (_mode == mode)
+        {
+            return;
+        }
+
+        _mode = mode;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _games = _mode switch
+        {
+            GamesMode.Decided => await BoardGameService.GetDecidedAsync(),
+            GamesMode.Playing => await BoardGameService.GetPlayingAsync(),
+            GamesMode.Queued => await BoardGameService.GetQueuedAsync(),
+            _ => Array.Empty<BoardGameMondays.Core.BoardGame>()
+        };
+    }
+
+    private async Task SelectGameAsync(BoardGameMondays.Core.BoardGame game)
+    {
+        if (OnGameSelected.HasDelegate)
+        {
+            await OnGameSelected.InvokeAsync(game);
+        }
+    }
+
+    private enum GamesMode
+    {
+        Decided = 0,
+        Playing = 1,
+        Queued = 2
+    }
+}
