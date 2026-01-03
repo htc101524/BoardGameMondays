@@ -83,11 +83,16 @@
             @if (thoughtsGame?.Reviews?.Any() == true)
             {
                 <div class="bgm-review-switcher bgm-review-switcher--side" role="group" aria-label="Select a reviewer">
-                    @foreach (var review in thoughtsGame.Reviews)
+                    @foreach (var review in thoughtsGame.Reviews
+                        .GroupBy(r => r.Reviewer.Name, StringComparer.OrdinalIgnoreCase)
+                        .Select(g => g.OrderByDescending(r => r.CreatedOn).First())
+                        .OrderBy(r => r.Reviewer.Name, StringComparer.OrdinalIgnoreCase))
                     {
+                        var isSelected = string.Equals(review.Reviewer.Name, _selectedReview?.Reviewer.Name, StringComparison.OrdinalIgnoreCase);
+
                         <button type="button"
-                                class="bgm-review-switcher__button @(ReferenceEquals(review, _selectedReview) ? "is-active" : "")"
-                                aria-pressed="@(ReferenceEquals(review, _selectedReview))"
+                                class="bgm-review-switcher__button @(isSelected ? "is-active" : "")"
+                                aria-pressed="@isSelected"
                                 @onclick="() => SelectReview(review)">
                             @review.Reviewer.Name
                         </button>
@@ -143,7 +148,7 @@
         if (resetThoughts || _thoughtsGame is null || ReferenceEquals(_thoughtsGame, previousLatest))
         {
             _thoughtsGame = _latestReviewed;
-            _selectedReview = _thoughtsGame?.Reviews?.FirstOrDefault();
+            _selectedReview = PickDefaultReview(_thoughtsGame);
         }
     }
 
@@ -186,9 +191,12 @@
     private async Task HandleGameSelectedAsync(BoardGame game)
     {
         _thoughtsGame = game;
-        _selectedReview = game.Reviews.FirstOrDefault();
+        _selectedReview = PickDefaultReview(game);
 
         await JS.InvokeVoidAsync("bgm.scrollToIdNextFrame", "thoughts", "smooth");
     }
+
+    private static Review? PickDefaultReview(BoardGame? game)
+        => game?.Reviews?.OrderByDescending(r => r.CreatedOn).FirstOrDefault();
 }
 
