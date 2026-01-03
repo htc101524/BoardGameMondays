@@ -1,7 +1,4 @@
 ﻿@using Microsoft.AspNetCore.Components.Authorization
-@using BoardGameMondays.Core
-@inject AuthenticationStateProvider AuthStateProvider
-@inject BgmMemberService MemberService
 @inject NavigationManager Navigation
 @inject IJSRuntime JS
 
@@ -39,8 +36,15 @@
         <a class="bgm-popup__link" href="/#people" @onclick="CloseMenu">People</a>
 
         <AuthorizeView>
-            <Authorized>
-                <button type="button" class="bgm-popup__link bgm-popup__linkButton" @onclick="Logout">Logout</button>
+            <Authorized Context="auth">
+                <AuthorizeView Roles="Admin">
+                    <Authorized Context="adminAuth">
+                        <a class="bgm-popup__link" href="/admin" @onclick="CloseMenu">Admin</a>
+                    </Authorized>
+                </AuthorizeView>
+                <form method="post" action="/account/logout">
+                    <button type="submit" class="bgm-popup__link bgm-popup__linkButton" @onclick="CloseMenu">Logout</button>
+                </form>
             </Authorized>
             <NotAuthorized>
                 <button type="button" class="bgm-popup__link bgm-popup__linkButton" @onclick="GoToLogin">Login</button>
@@ -60,18 +64,6 @@
         CloseMenu();
         Navigation.NavigateTo("/#latest");
         await JS.InvokeVoidAsync("bgm.scrollToTopNextFrame", "smooth");
-    }
-
-    private async Task Logout()
-    {
-        if (AuthStateProvider is SimpleAuthStateProvider simple)
-        {
-            await simple.MarkUserAsLoggedOut();
-        }
-
-        MemberService.ClearMember();
-        CloseMenu();
-        Navigation.NavigateTo("/");
     }
 
     private void GoToLogin()

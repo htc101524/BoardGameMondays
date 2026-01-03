@@ -1,0 +1,201 @@
+@page "/admin/games/{Id:guid}"
+@using BoardGameMondays.Core
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Forms
+@attribute [Authorize(Roles = "Admin")]
+@inject BoardGameService BoardGameService
+@inject BgmMemberDirectoryService MemberDirectory
+@inject NavigationManager Navigation
+
+<h1>Edit game</h1>
+
+@if (_game is null)
+{
+    <p>Game not found.</p>
+}
+else
+{
+    <EditForm Model="_model" OnValidSubmit="SaveAsync">
+        <DataAnnotationsValidator />
+
+        <div class="mb-3">
+            <label class="form-label">Name</label>
+            <InputText class="form-control" @bind-Value="_model.Name" />
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Status</label>
+            <InputSelect class="form-select" @bind-Value="_model.Status">
+                <option value="@GameStatus.Decided">Decided</option>
+                <option value="@GameStatus.Playing">Playing</option>
+                <option value="@GameStatus.Queued">Queued</option>
+            </InputSelect>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Tagline</label>
+            <InputText class="form-control" @bind-Value="_model.Tagline" />
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Image URL</label>
+            <InputText class="form-control" @bind-Value="_model.ImageUrl" />
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Reviewed on (YYYY-MM-DD)</label>
+            <InputText class="form-control" @bind-Value="_model.ReviewedOn" />
+        </div>
+
+        <button type="submit" class="btn btn-primary">Save</button>
+        <a class="btn btn-link" href="/admin">Back</a>
+
+        @if (!string.IsNullOrWhiteSpace(_saveStatus))
+        {
+            <div class="text-muted mt-2">@_saveStatus</div>
+        }
+    </EditForm>
+
+    <hr class="my-4" />
+
+    <h2 class="h4">Reviews</h2>
+
+    @if (_game.Reviews.Count == 0)
+    {
+        <p>No reviews yet.</p>
+    }
+    else
+    {
+        <div class="list-group mb-3">
+            @foreach (var review in _game.Reviews)
+            {
+                <div class="list-group-item">
+                    <div class="d-flex justify-content-between">
+                        <div class="fw-semibold">@review.Reviewer.Name</div>
+                        <div class="text-muted">@review.Rating</div>
+                    </div>
+                    <div>@review.Description</div>
+                </div>
+            }
+        </div>
+    }
+
+    <h3 class="h5">Add review</h3>
+
+    <EditForm Model="_reviewModel" OnValidSubmit="AddReviewAsync">
+        <div class="mb-3">
+            <label class="form-label">Reviewer</label>
+            <InputSelect class="form-select" @bind-Value="_reviewModel.ReviewerName">
+                @foreach (var member in MemberDirectory.GetAll())
+                {
+                    <option value="@member.Name">@member.Name</option>
+                }
+            </InputSelect>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Rating</label>
+            <InputNumber class="form-control" @bind-Value="_reviewModel.Rating" />
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Description</label>
+            <InputTextArea class="form-control" @bind-Value="_reviewModel.Description" />
+        </div>
+
+        <button type="submit" class="btn btn-primary">Add review</button>
+
+        @if (!string.IsNullOrWhiteSpace(_reviewStatus))
+        {
+            <div class="text-muted mt-2">@_reviewStatus</div>
+        }
+    </EditForm>
+}
+
+@code {
+    [Parameter]
+    public Guid Id { get; set; }
+
+    private BoardGame? _game;
+    private EditGameModel _model = new();
+    private string? _saveStatus;
+
+    private AddReviewModel _reviewModel = new();
+    private string? _reviewStatus;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _game = await BoardGameService.GetByIdAsync(Id);
+        if (_game is null)
+        {
+            return;
+        }
+
+        _model = new EditGameModel
+        {
+            Name = _game.Name,
+            Status = _game.Status,
+            Tagline = _game.Tagline,
+            ImageUrl = _game.ImageUrl,
+            ReviewedOn = _game.ReviewedOn?.ToString("yyyy-MM-dd")
+        };
+
+        var members = MemberDirectory.GetAll();
+        _reviewModel.ReviewerName = members.FirstOrDefault()?.Name ?? string.Empty;
+        _reviewModel.Rating = 8;
+        _reviewModel.Description = string.Empty;
+    }
+
+    private async Task SaveAsync()
+    {
+        DateTimeOffset? reviewedOn = null;
+        if (!string.IsNullOrWhiteSpace(_model.ReviewedOn) && DateTimeOffset.TryParse(_model.ReviewedOn, out var parsed))
+        {
+            reviewedOn = parsed;
+        }
+
+        var updated = await BoardGameService.UpdateGameAsync(
+            id: Id,
+            name: _model.Name,
+            status: _model.Status,
+            tagline: _model.Tagline,
+            imageUrl: _model.ImageUrl,
+            reviewedOn: reviewedOn);
+
+        _game = updated;
+        _saveStatus = updated is null ? "Game not found." : "Saved.";
+    }
+
+    private async Task AddReviewAsync()
+    {
+        if (_game is null)
+        {
+            return;
+        }
+
+        var reviewer = MemberDirectory.GetOrCreate(_reviewModel.ReviewerName);
+        var review = new MemberReview(reviewer, _reviewModel.Rating, _reviewModel.Description ?? string.Empty);
+
+        var updated = await BoardGameService.AddReviewAsync(_game.Id, review);
+        _game = updated;
+        _reviewStatus = updated is null ? "Game not found." : "Review added.";
+
+        _reviewModel.Description = string.Empty;
+    }
+
+    private sealed class EditGameModel
+    {
+        public string Name { get; set; } = string.Empty;
+        public GameStatus Status { get; set; }
+        public string? Tagline { get; set; }
+        public string? ImageUrl { get; set; }
+        public string? ReviewedOn { get; set; }
+    }
+
+    private sealed class AddReviewModel
+    {
+        public string ReviewerName { get; set; } = string.Empty;
+        public int Rating { get; set; } = 8;
+        public string? Description { get; set; }
+    }
+}

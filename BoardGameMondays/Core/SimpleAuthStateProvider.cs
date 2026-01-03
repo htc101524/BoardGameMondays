@@ -17,9 +17,15 @@ namespace BoardGameMondays.Core
             return Task.FromResult(new AuthenticationState(_current));
         }
 
-        public Task MarkUserAsAuthenticated(string userName)
+        public Task MarkUserAsAuthenticated(string userName, bool isAdmin = false)
         {
-            var identity = new ClaimsIdentity(new[] { new Claim(ClaimTypes.Name, userName) }, "SimpleAuth");
+            var claims = new List<Claim> { new Claim(ClaimTypes.Name, userName) };
+            if (isAdmin)
+            {
+                claims.Add(new Claim(ClaimTypes.Role, "Admin"));
+            }
+
+            var identity = new ClaimsIdentity(claims, "SimpleAuth");
             _current = new ClaimsPrincipal(identity);
             NotifyAuthenticationStateChanged(Task.FromResult(new AuthenticationState(_current)));
             return Task.CompletedTask;

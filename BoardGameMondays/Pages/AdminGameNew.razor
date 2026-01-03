@@ -1,0 +1,77 @@
+@page "/admin/games/new"
+@using BoardGameMondays.Core
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Forms
+@attribute [Authorize(Roles = "Admin")]
+@inject BoardGameService BoardGameService
+@inject NavigationManager Navigation
+
+<h1>Add game</h1>
+
+<EditForm Model="_model" OnValidSubmit="CreateAsync">
+    <DataAnnotationsValidator />
+
+    <div class="mb-3">
+        <label class="form-label">Name</label>
+        <InputText class="form-control" @bind-Value="_model.Name" />
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label">Status</label>
+        <InputSelect class="form-select" @bind-Value="_model.Status">
+            <option value="@GameStatus.Decided">Decided</option>
+            <option value="@GameStatus.Playing">Playing</option>
+            <option value="@GameStatus.Queued">Queued</option>
+        </InputSelect>
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label">Tagline</label>
+        <InputText class="form-control" @bind-Value="_model.Tagline" />
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label">Image URL</label>
+        <InputText class="form-control" @bind-Value="_model.ImageUrl" />
+        <div class="form-text">Example: images/placeholder-game-cover.svg</div>
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label">Reviewed on (YYYY-MM-DD)</label>
+        <InputText class="form-control" @bind-Value="_model.ReviewedOn" />
+    </div>
+
+    <button type="submit" class="btn btn-primary">Create</button>
+    <a class="btn btn-link" href="/admin">Cancel</a>
+</EditForm>
+
+@code {
+    private NewGameModel _model = new();
+
+    private async Task CreateAsync()
+    {
+        DateTimeOffset? reviewedOn = null;
+        if (!string.IsNullOrWhiteSpace(_model.ReviewedOn) && DateTimeOffset.TryParse(_model.ReviewedOn, out var parsed))
+        {
+            reviewedOn = parsed;
+        }
+
+        var created = await BoardGameService.AddGameAsync(
+            name: _model.Name,
+            status: _model.Status,
+            tagline: _model.Tagline,
+            imageUrl: _model.ImageUrl,
+            reviewedOn: reviewedOn);
+
+        Navigation.NavigateTo($"/admin/games/{created.Id}");
+    }
+
+    private sealed class NewGameModel
+    {
+        public string Name { get; set; } = string.Empty;
+        public GameStatus Status { get; set; } = GameStatus.Queued;
+        public string? Tagline { get; set; }
+        public string? ImageUrl { get; set; } = "images/placeholder-game-cover.svg";
+        public string? ReviewedOn { get; set; }
+    }
+}

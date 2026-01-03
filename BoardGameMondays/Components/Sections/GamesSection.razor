@@ -96,9 +96,9 @@
     {
         _games = _mode switch
         {
-            GamesMode.Decided => await BoardGameService.GetDecidedAsync(),
-            GamesMode.Playing => await BoardGameService.GetPlayingAsync(),
-            GamesMode.Queued => await BoardGameService.GetQueuedAsync(),
+            GamesMode.Decided => await BoardGameService.GetByStatusAsync(BoardGameMondays.Core.GameStatus.Decided),
+            GamesMode.Playing => await BoardGameService.GetByStatusAsync(BoardGameMondays.Core.GameStatus.Playing),
+            GamesMode.Queued => await BoardGameService.GetByStatusAsync(BoardGameMondays.Core.GameStatus.Queued),
             _ => Array.Empty<BoardGameMondays.Core.BoardGame>()
         };
     }

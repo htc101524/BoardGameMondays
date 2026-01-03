@@ -1,0 +1,105 @@
+@page "/admin"
+@using BoardGameMondays.Core
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Forms
+@attribute [Authorize(Roles = "Admin")]
+@inject BoardGameService BoardGameService
+
+<h1>Admin</h1>
+
+<div class="mb-4">
+    <h2 class="h4">Featured game (manual override)</h2>
+
+    @if (_games.Count == 0)
+    {
+        <p>No games yet.</p>
+    }
+    else
+    {
+        <div class="d-flex gap-2 align-items-end flex-wrap">
+            <div>
+                <label class="form-label" for="bgmFeatured">Featured game</label>
+                        <InputSelect id="bgmFeatured" class="form-select" @bind-Value="_selectedFeatured">
+                            <option value="">(Auto: latest reviewed)</option>
+                            @foreach (var game in _games)
+                            {
+                                <option value="@game.Id.ToString()">@game.Name</option>
+                            }
+                        </InputSelect>
+            </div>
+
+            <button type="button" class="btn btn-primary" @onclick="SaveFeaturedAsync">Save</button>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(_featuredStatus))
+        {
+            <div class="text-muted mt-2">@_featuredStatus</div>
+        }
+    }
+</div>
+
+<div class="mb-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+    <h2 class="h4 m-0">Games</h2>
+    <a class="btn btn-primary" href="/admin/games/new">Add game</a>
+</div>
+
+@if (_games.Count == 0)
+{
+    <p>No games yet.</p>
+}
+else
+{
+    <div class="table-responsive">
+        <table class="table align-middle">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Status</th>
+                    <th class="text-nowrap">Reviewed on</th>
+                    <th>Reviews</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var game in _games)
+                {
+                    <tr>
+                        <td class="fw-semibold">@game.Name</td>
+                        <td>@game.Status</td>
+                        <td class="text-nowrap">@(game.ReviewedOn is { } ro ? ro.ToString("yyyy-MM-dd") : "—")</td>
+                        <td>@game.Reviews.Count</td>
+                        <td class="text-end text-nowrap">
+                            <a class="btn btn-sm btn-outline-secondary" href="@($"/admin/games/{game.Id}")">Edit</a>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    private List<BoardGame> _games = new();
+    private string? _selectedFeatured;
+    private string? _featuredStatus;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _games = (await BoardGameService.GetAllAsync()).ToList();
+
+        var featuredId = await BoardGameService.GetFeaturedGameIdAsync();
+        _selectedFeatured = featuredId?.ToString();
+    }
+
+    private async Task SaveFeaturedAsync()
+    {
+        Guid? selected = null;
+        if (!string.IsNullOrWhiteSpace(_selectedFeatured) && Guid.TryParse(_selectedFeatured, out var id))
+        {
+            selected = id;
+        }
+
+        await BoardGameService.SetFeaturedGameAsync(selected);
+        _featuredStatus = selected is null ? "Set to Auto (latest reviewed)." : "Featured game updated.";
+    }
+}

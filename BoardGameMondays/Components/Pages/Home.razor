@@ -95,7 +95,7 @@
 
     protected override async Task OnInitializedAsync()
     {
-        _latestReviewed = await BoardGameService.GetLatestReviewedAsync();
+        _latestReviewed = await BoardGameService.GetFeaturedOrLatestReviewedAsync();
         _thoughtsGame = _latestReviewed;
         _selectedReview = _thoughtsGame?.Reviews?.FirstOrDefault();
     }
