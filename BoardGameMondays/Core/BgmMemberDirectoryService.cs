@@ -1,4 +1,6 @@
-using System.Collections.Concurrent;
+using BoardGameMondays.Data;
+using BoardGameMondays.Data.Entities;
+using Microsoft.EntityFrameworkCore;
 
 namespace BoardGameMondays.Core;
 
@@ -7,19 +9,18 @@ namespace BoardGameMondays.Core;
 /// </summary>
 public sealed class BgmMemberDirectoryService
 {
-    private readonly ConcurrentDictionary<string, BgmMember> _members = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ApplicationDbContext _db;
 
-    public BgmMemberDirectoryService()
+    public BgmMemberDirectoryService(ApplicationDbContext db)
     {
-        // Seed a few demo members so the People page isn't empty.
-        AddOrUpdate(new DemoBgmMember("Henry", summary: "Organizes the Monday game nights."));
-        AddOrUpdate(new DemoBgmMember("Alex", summary: "Loves puzzly euros and clever drafting."));
-        AddOrUpdate(new DemoBgmMember("Sam", summary: "Always up for a fast teach and a rematch."));
+        _db = db;
     }
 
     public IReadOnlyList<BgmMember> GetAll()
-        => _members.Values
-            .OrderBy(m => m.Name, StringComparer.OrdinalIgnoreCase)
+        => _db.Members
+            .AsNoTracking()
+            .OrderBy(m => m.Name)
+            .Select(m => (BgmMember)new PersistedBgmMember(m.Name, m.Email, m.Summary))
             .ToArray();
 
     public BgmMember GetOrCreate(string name)
@@ -29,7 +30,23 @@ public sealed class BgmMemberDirectoryService
             throw new ArgumentException("Name is required.", nameof(name));
         }
 
-        return _members.GetOrAdd(name.Trim(), n => new DemoBgmMember(n));
+        var trimmed = name.Trim();
+        var existing = _db.Members.FirstOrDefault(m => m.Name.ToLower() == trimmed.ToLower());
+        if (existing is not null)
+        {
+            return new PersistedBgmMember(existing.Name, existing.Email, existing.Summary);
+        }
+
+        var created = new MemberEntity
+        {
+            Id = Guid.NewGuid(),
+            Name = trimmed,
+            Email = $"{trimmed.ToLowerInvariant()}@placeholder.com"
+        };
+
+        _db.Members.Add(created);
+        _db.SaveChanges();
+        return new PersistedBgmMember(created.Name, created.Email, created.Summary);
     }
 
     public void AddOrUpdate(BgmMember member)
@@ -39,6 +56,23 @@ public sealed class BgmMemberDirectoryService
             throw new ArgumentNullException(nameof(member));
         }
 
-        _members[member.Name] = member;
+        var existing = _db.Members.FirstOrDefault(m => m.Name.ToLower() == member.Name.ToLower());
+        if (existing is null)
+        {
+            _db.Members.Add(new MemberEntity
+            {
+                Id = Guid.NewGuid(),
+                Name = member.Name,
+                Email = member.Email,
+                Summary = member.Summary
+            });
+        }
+        else
+        {
+            existing.Email = member.Email;
+            existing.Summary = member.Summary;
+        }
+
+        _db.SaveChanges();
     }
 }

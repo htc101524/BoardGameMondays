@@ -1,15 +1,43 @@
 @page "/login"
 
+@using Microsoft.AspNetCore.WebUtilities
+
+@inject NavigationManager Navigation
+
 <h1>Login</h1>
 
 <form method="post" action="/account/login">
     <div class="mb-2">
-        <input name="UserName" placeholder="Username" class="form-control" />
+        <label class="form-label" for="login-username">Username</label>
+        <input id="login-username" name="UserName" class="form-control" autocomplete="username" />
     </div>
-    <div class="mb-3">
-        <input name="Password" placeholder="Password" type="password" class="form-control" />
+    <div class="mb-2">
+        <label class="form-label" for="login-password">Password</label>
+        <input id="login-password" name="Password" class="form-control" type="password" autocomplete="current-password" />
     </div>
+    <div class="form-check mb-3">
+        <input id="login-remember" name="RememberMe" value="true" type="checkbox" class="form-check-input" />
+        <label class="form-check-label" for="login-remember">Remember me</label>
+    </div>
+
     <button type="submit" class="btn btn-primary">Login</button>
+    <a class="btn btn-link" href="/register">Sign up</a>
+
+    @if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <div class="text-danger mt-3">@_error</div>
+    }
 </form>
+
+@code {
+    private string? _error;
+
+    protected override void OnParametersSet()
+    {
+        var uri = Navigation.ToAbsoluteUri(Navigation.Uri);
+        var query = QueryHelpers.ParseQuery(uri.Query);
+        _error = query.TryGetValue("error", out var error) ? error.ToString() : null;
+    }
+}
 
 

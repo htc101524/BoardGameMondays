@@ -1,140 +1,103 @@
+using BoardGameMondays.Data;
+using BoardGameMondays.Data.Entities;
+using Microsoft.EntityFrameworkCore;
+
 namespace BoardGameMondays.Core;
 
 public sealed class BoardGameService
 {
-    private readonly List<BoardGame> _games;
-    private Guid? _featuredGameId;
+    private readonly ApplicationDbContext _db;
 
     public event Action? Changed;
 
-    public BoardGameService()
+    public BoardGameService(ApplicationDbContext db)
     {
-        // TODO: Replace with real persistence when a database is introduced.
-        // For now, treat these as the "logged to the site" games.
-        _games =
-        [
-            CreateCascadia(),
-            new BoardGame(
-                name: "Azul",
-                status: GameStatus.Decided,
-                tagline: "Draft tiles, build patterns, and try not to take what you can’t place.",
-                imageUrl: "images/placeholder-game-cover.svg"),
-            new BoardGame(
-                name: "Wingspan",
-                status: GameStatus.Decided,
-                tagline: "A cozy engine-builder about birds with surprisingly crunchy decisions.",
-                imageUrl: "images/placeholder-game-cover.svg"),
-            new BoardGame(
-                name: "The Crew: Mission Deep Sea",
-                status: GameStatus.Playing,
-                tagline: "A co-op trick-taking campaign with clever communication limits.",
-                imageUrl: "images/placeholder-game-cover.svg"),
-            new BoardGame(
-                name: "Spirit Island",
-                status: GameStatus.Playing,
-                tagline: "Tense co-op defense with powerful combos and lots to master.",
-                imageUrl: "images/placeholder-game-cover.svg"),
-            new BoardGame(
-                name: "Heat: Pedal to the Metal",
-                status: GameStatus.Queued,
-                tagline: "Push-your-luck racing with clean rules and exciting turns.",
-                imageUrl: "images/placeholder-game-cover.svg"),
-            new BoardGame(
-                name: "Dune: Imperium",
-                status: GameStatus.Queued,
-                tagline: "Deck-building plus worker placement in a tight, tactical package.",
-                imageUrl: "images/placeholder-game-cover.svg")
-        ];
+        _db = db;
     }
 
-    private static BoardGame CreateCascadia()
+    public async Task<BoardGame?> GetLatestReviewedAsync(CancellationToken ct = default)
     {
-        var henry = new DemoBgmMember("Henry");
-        var alex = new DemoBgmMember("Alex");
-        var sam = new DemoBgmMember("Sam");
+        // SQLite can't translate Max(DateTimeOffset). Instead, find the newest review and take its game.
+        var latestGameId = await _db.Reviews
+            .AsNoTracking()
+            .OrderByDescending(r => r.CreatedOn)
+            .Select(r => (Guid?)r.GameId)
+            .FirstOrDefaultAsync(ct);
 
-        var reviewedOn = new DateTimeOffset(2025, 12, 15, 0, 0, 0, TimeSpan.Zero);
-
-        return new BoardGame(
-            name: "Cascadia",
-            status: GameStatus.Decided,
-            tagline: "A calm, clever tile-laying puzzle with satisfying combos.",
-            imageUrl: "images/placeholder-game-cover.svg",
-            reviews:
-            [
-                new MemberReview(
-                    reviewer: henry,
-                    rating: 9,
-                    description: "Soothing, quick to teach, and the scoring goals keep it fresh. I love how the drafting stays gentle but still forces real trade-offs.",
-                    createdOn: reviewedOn
-                ),
-                new MemberReview(
-                    reviewer: alex,
-                    rating: 8,
-                    description: "Great puzzle feel. The spatial constraints are satisfying and it never feels mean. I’d like a bit more tension, but it’s a great weeknight game.",
-                    createdOn: reviewedOn
-                ),
-                new MemberReview(
-                    reviewer: sam,
-                    rating: 7,
-                    description: "Solid and relaxing. I enjoy the combos, but it can feel a touch samey if you play it back-to-back. Still a keeper.",
-                    createdOn: reviewedOn
-                )
-            ]
-        );
+        return latestGameId is null ? null : await GetByIdAsync(latestGameId.Value, ct);
     }
 
-    public Task<BoardGame?> GetLatestReviewedAsync(CancellationToken ct = default)
+    public async Task<BoardGame?> GetFeaturedOrLatestReviewedAsync(CancellationToken ct = default)
     {
-        // In-memory store; no async work yet.
-        var latest = _games
-            .Where(x => x.Reviews.Any())
-            .OrderByDescending(x => x.ReviewedOn ?? DateTimeOffset.MinValue)
-            .FirstOrDefault();
-
-        return Task.FromResult<BoardGame?>(latest);
-    }
-
-    public Task<BoardGame?> GetFeaturedOrLatestReviewedAsync(CancellationToken ct = default)
-    {
-        if (_featuredGameId is { } featuredId)
+        var featuredId = await GetFeaturedGameIdAsync(ct);
+        if (featuredId is { } id)
         {
-            var featured = _games.FirstOrDefault(g => g.Id == featuredId);
+            var featured = await GetByIdAsync(id, ct);
             if (featured is not null)
             {
-                return Task.FromResult<BoardGame?>(featured);
+                return featured;
             }
 
-            _featuredGameId = null;
+            await SetFeaturedGameAsync(null, ct);
         }
 
-        return GetLatestReviewedAsync(ct);
+        return await GetLatestReviewedAsync(ct);
     }
 
-    public Task SetFeaturedGameAsync(Guid? gameId, CancellationToken ct = default)
+    public async Task SetFeaturedGameAsync(Guid? gameId, CancellationToken ct = default)
     {
-        _featuredGameId = gameId;
+        var state = await _db.FeaturedState.FirstOrDefaultAsync(x => x.Id == 1, ct);
+        if (state is null)
+        {
+            state = new FeaturedStateEntity { Id = 1 };
+            _db.FeaturedState.Add(state);
+        }
+
+        state.FeaturedGameId = gameId;
+        await _db.SaveChangesAsync(ct);
         Changed?.Invoke();
-        return Task.CompletedTask;
     }
 
-    public Task<Guid?> GetFeaturedGameIdAsync(CancellationToken ct = default)
-        => Task.FromResult(_featuredGameId);
+    public async Task<Guid?> GetFeaturedGameIdAsync(CancellationToken ct = default)
+        => (await _db.FeaturedState.AsNoTracking().FirstOrDefaultAsync(x => x.Id == 1, ct))?.FeaturedGameId;
 
-    public Task<IReadOnlyList<BoardGame>> GetAllAsync(CancellationToken ct = default)
-        => Task.FromResult<IReadOnlyList<BoardGame>>(
-            _games.OrderBy(g => g.Name, StringComparer.OrdinalIgnoreCase).ToArray());
+    public async Task<IReadOnlyList<BoardGame>> GetAllAsync(CancellationToken ct = default)
+    {
+        var games = await _db.Games
+            .AsNoTracking()
+            .Include(g => g.Reviews)
+            .ThenInclude(r => r.Reviewer)
+            .OrderBy(g => g.Name)
+            .ToListAsync(ct);
 
-    public Task<BoardGame?> GetByIdAsync(Guid id, CancellationToken ct = default)
-        => Task.FromResult(_games.FirstOrDefault(g => g.Id == id));
+        return games.Select(ToDomain).ToArray();
+    }
 
-    public Task<IReadOnlyList<BoardGame>> GetByStatusAsync(GameStatus status, CancellationToken ct = default)
-        => Task.FromResult<IReadOnlyList<BoardGame>>(
-            _games.Where(g => g.Status == status)
-                .OrderBy(g => g.Name, StringComparer.OrdinalIgnoreCase)
-                .ToArray());
+    public async Task<BoardGame?> GetByIdAsync(Guid id, CancellationToken ct = default)
+    {
+        var game = await _db.Games
+            .AsNoTracking()
+            .Include(g => g.Reviews)
+            .ThenInclude(r => r.Reviewer)
+            .FirstOrDefaultAsync(g => g.Id == id, ct);
 
-    public Task<BoardGame> AddGameAsync(
+        return game is null ? null : ToDomain(game);
+    }
+
+    public async Task<IReadOnlyList<BoardGame>> GetByStatusAsync(GameStatus status, CancellationToken ct = default)
+    {
+        var games = await _db.Games
+            .AsNoTracking()
+            .Include(g => g.Reviews)
+            .ThenInclude(r => r.Reviewer)
+            .Where(g => g.Status == (int)status)
+            .OrderBy(g => g.Name)
+            .ToListAsync(ct);
+
+        return games.Select(ToDomain).ToArray();
+    }
+
+    public async Task<BoardGame> AddGameAsync(
         string name,
         GameStatus status,
         string? tagline = null,
@@ -146,18 +109,22 @@ public sealed class BoardGameService
             throw new ArgumentException("Name is required.", nameof(name));
         }
 
-        var game = new BoardGame(
-            name: name.Trim(),
-            status: status,
-            tagline: tagline,
-            imageUrl: imageUrl);
+        var entity = new BoardGameEntity
+        {
+            Id = Guid.NewGuid(),
+            Name = name.Trim(),
+            Status = (int)status,
+            Tagline = tagline,
+            ImageUrl = imageUrl
+        };
 
-        _games.Add(game);
+        _db.Games.Add(entity);
+        await _db.SaveChangesAsync(ct);
         Changed?.Invoke();
-        return Task.FromResult(game);
+        return ToDomain(entity);
     }
 
-    public Task<BoardGame?> UpdateGameAsync(
+    public async Task<BoardGame?> UpdateGameAsync(
         Guid id,
         string name,
         GameStatus status,
@@ -170,55 +137,96 @@ public sealed class BoardGameService
             throw new ArgumentException("Name is required.", nameof(name));
         }
 
-        var existingIndex = _games.FindIndex(g => g.Id == id);
-        if (existingIndex < 0)
+        var entity = await _db.Games.FirstOrDefaultAsync(g => g.Id == id, ct);
+        if (entity is null)
         {
-            return Task.FromResult<BoardGame?>(null);
+            return null;
         }
 
-        var existing = _games[existingIndex];
+        entity.Name = name.Trim();
+        entity.Status = (int)status;
+        entity.Tagline = tagline;
+        entity.ImageUrl = imageUrl;
 
-        var updated = new BoardGame(
-            id: existing.Id,
-            name: name.Trim(),
-            status: status,
-            overview: existing.Overview,
-            reviews: existing.Reviews,
-            tagline: tagline,
-            imageUrl: imageUrl);
-
-        _games[existingIndex] = updated;
+        await _db.SaveChangesAsync(ct);
         Changed?.Invoke();
-        return Task.FromResult<BoardGame?>(updated);
+
+        return await GetByIdAsync(id, ct);
     }
 
-    public Task<BoardGame?> AddReviewAsync(Guid gameId, Review review, CancellationToken ct = default)
+    public async Task<BoardGame?> AddReviewAsync(Guid gameId, Review review, CancellationToken ct = default)
     {
         if (review is null)
         {
             throw new ArgumentNullException(nameof(review));
         }
 
-        var existingIndex = _games.FindIndex(g => g.Id == gameId);
-        if (existingIndex < 0)
+        var gameExists = await _db.Games.AnyAsync(g => g.Id == gameId, ct);
+        if (!gameExists)
         {
-            return Task.FromResult<BoardGame?>(null);
+            return null;
         }
 
-        var existing = _games[existingIndex];
-        var updatedReviews = existing.Reviews.Concat(new[] { review }).ToArray();
+        var reviewerId = await GetOrCreateReviewerIdAsync(review.Reviewer, ct);
 
-        var updated = new BoardGame(
-            id: existing.Id,
-            name: existing.Name,
-            status: existing.Status,
-            overview: existing.Overview,
-            reviews: updatedReviews,
-            tagline: existing.Tagline,
-            imageUrl: existing.ImageUrl);
+        var entity = new ReviewEntity
+        {
+            Id = Guid.NewGuid(),
+            GameId = gameId,
+            ReviewerId = reviewerId,
+            Rating = review.Rating,
+            Description = review.Description,
+            CreatedOn = review.CreatedOn
+        };
 
-        _games[existingIndex] = updated;
+        _db.Reviews.Add(entity);
+        await _db.SaveChangesAsync(ct);
         Changed?.Invoke();
-        return Task.FromResult<BoardGame?>(updated);
+
+        return await GetByIdAsync(gameId, ct);
+    }
+
+    private async Task<Guid> GetOrCreateReviewerIdAsync(BgmMember member, CancellationToken ct)
+    {
+        var name = member.Name.Trim();
+
+        var existing = await _db.Members.FirstOrDefaultAsync(m => m.Name == name, ct);
+        if (existing is not null)
+        {
+            return existing.Id;
+        }
+
+        var created = new MemberEntity
+        {
+            Id = Guid.NewGuid(),
+            Name = name,
+            Email = string.IsNullOrWhiteSpace(member.Email) ? $"{name.ToLowerInvariant()}@placeholder.com" : member.Email,
+            Summary = member.Summary
+        };
+
+        _db.Members.Add(created);
+        await _db.SaveChangesAsync(ct);
+        return created.Id;
+    }
+
+    private static BoardGame ToDomain(BoardGameEntity entity)
+    {
+        var reviews = entity.Reviews
+            .OrderByDescending(r => r.CreatedOn)
+            .Select(r => (Review)new MemberReview(
+                reviewer: new PersistedBgmMember(r.Reviewer.Name, r.Reviewer.Email, r.Reviewer.Summary),
+                rating: r.Rating,
+                description: r.Description,
+                createdOn: r.CreatedOn))
+            .ToArray();
+
+        return new BoardGame(
+            id: entity.Id,
+            name: entity.Name,
+            status: (GameStatus)entity.Status,
+            overview: EmptyOverview.Instance,
+            reviews: reviews,
+            tagline: entity.Tagline,
+            imageUrl: entity.ImageUrl);
     }
 }

@@ -48,6 +48,7 @@
             </Authorized>
             <NotAuthorized>
                 <button type="button" class="bgm-popup__link bgm-popup__linkButton" @onclick="GoToLogin">Login</button>
+                <button type="button" class="bgm-popup__link bgm-popup__linkButton" @onclick="GoToRegister">Sign up</button>
             </NotAuthorized>
         </AuthorizeView>
     </nav>
@@ -70,6 +71,12 @@
     {
         CloseMenu();
         Navigation.NavigateTo("/login");
+    }
+
+    private void GoToRegister()
+    {
+        CloseMenu();
+        Navigation.NavigateTo("/register");
     }
 }
 
