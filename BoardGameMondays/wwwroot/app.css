@@ -58,19 +58,107 @@
     margin: 0;
 }
 
+.bgm-scoreSummary {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 0 0 auto;
+}
+
+.bgm-scoreSummary__label {
+    color: #4b3a1a;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.bgm-scoreBadges {
+    position: relative;
+    width: 120px;
+    aspect-ratio: 1 / 1;
+    flex: 0 0 auto;
+}
+
 .bgm-scoreBadge {
+    position: relative;
     width: 120px;
     aspect-ratio: 1 / 1;
     display: grid;
     place-items: center;
     clip-path: polygon(25% 6%, 75% 6%, 100% 50%, 75% 94%, 25% 94%, 0% 50%);
-    background: rgba(191, 161, 74, 0.35);
-    border: 1px solid rgba(75, 58, 26, 0.24);
     color: #22311c;
     font-weight: 800;
     font-size: 2.4rem;
     letter-spacing: 0.04em;
     text-shadow: 1px 1px 10px rgba(34, 24, 10, 0.10);
+}
+
+.bgm-scoreBadge--avg {
+    --bgm-score-mix: 100%;
+    background: color-mix(
+        in srgb,
+        rgba(var(--bs-secondary-rgb), 0.22) calc(100% - var(--bgm-score-mix)),
+        rgba(var(--bs-warning-rgb), 0.42) var(--bgm-score-mix)
+    );
+    border: 1px solid color-mix(
+        in srgb,
+        rgba(var(--bs-secondary-rgb), 0.36) calc(100% - var(--bgm-score-mix)),
+        rgba(var(--bs-warning-rgb), 0.52) var(--bgm-score-mix)
+    );
+}
+
+.bgm-scoreBadge--bad {
+    background: rgba(var(--bs-danger-rgb), 0.20);
+    border: 1px solid rgba(var(--bs-danger-rgb), 0.38);
+}
+
+.bgm-scoreBadge--secondary {
+    width: 64px;
+    font-size: 1.2rem;
+    background: rgba(var(--bs-secondary-rgb), 0.18);
+    border: 1px solid rgba(var(--bs-secondary-rgb), 0.28);
+    color: var(--bs-body-color);
+    text-shadow: none;
+}
+
+.bgm-scoreBadge--review {
+    float: right;
+    margin-left: 16px;
+    margin-bottom: 10px;
+    shape-margin: 10px;
+    shape-outside: polygon(25% 6%, 75% 6%, 100% 50%, 75% 94%, 25% 94%, 0% 50%);
+}
+
+.bgm-reviewText::after {
+    content: "";
+    display: block;
+    clear: both;
+}
+
+.bgm-scoreBadge--secondary .bgm-scoreBadge__value {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    line-height: 1;
+}
+
+.bgm-scoreBadge--secondary .bgm-scoreBadge__label {
+    position: absolute;
+    left: 50%;
+    bottom: 6px;
+    transform: translateX(-50%);
+    font-size: 0.55rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    opacity: 0.88;
+    max-width: 52px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-align: center;
 }
 
 .bgm-thoughtsBody {
@@ -116,9 +204,40 @@
 }
 
 @media (max-width: 640px) {
+    .bgm-scoreSummary {
+        gap: 10px;
+    }
+
+    .bgm-scoreSummary__label {
+        font-size: 0.85rem;
+    }
+
+    .bgm-scoreBadges {
+        width: 96px;
+    }
+
     .bgm-scoreBadge {
         width: 96px;
         font-size: 2.0rem;
+    }
+
+    .bgm-scoreBadge--secondary {
+        width: 52px;
+        font-size: 1.0rem;
+    }
+
+    .bgm-scoreBadge--review {
+        margin-left: 12px;
+        margin-bottom: 8px;
+        shape-margin: 8px;
+    }
+
+    .bgm-scoreBadge--secondary .bgm-scoreBadge__label {
+        left: 50%;
+        bottom: 5px;
+        transform: translateX(-50%);
+        font-size: 0.5rem;
+        max-width: 44px;
     }
 
     .bgm-thoughtsBody {

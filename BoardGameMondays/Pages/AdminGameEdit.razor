@@ -72,7 +72,7 @@ else
                 <div class="list-group-item">
                     <div class="d-flex justify-content-between">
                         <div class="fw-semibold">@review.Reviewer.Name</div>
-                        <div class="text-muted">@review.Rating</div>
+                        <div class="text-muted">@review.Rating.ToString("0.0")</div>
                     </div>
                     <div>@review.Description</div>
                 </div>
@@ -95,7 +95,7 @@ else
 
         <div class="mb-3">
             <label class="form-label">Rating</label>
-            <InputNumber class="form-control" @bind-Value="_reviewModel.Rating" />
+            <InputNumber class="form-control" @bind-Value="_reviewModel.Rating" step="0.1" />
         </div>
 
         <div class="mb-3">
@@ -195,7 +195,7 @@ else
     private sealed class AddReviewModel
     {
         public string ReviewerName { get; set; } = string.Empty;
-        public int Rating { get; set; } = 8;
+        public double Rating { get; set; } = 8;
         public string? Description { get; set; }
     }
 }

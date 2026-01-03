@@ -8,5 +8,5 @@ public abstract class Review
 
     public abstract string Description { get; }
 
-    public abstract int Rating { get; }
+    public abstract double Rating { get; }
 }

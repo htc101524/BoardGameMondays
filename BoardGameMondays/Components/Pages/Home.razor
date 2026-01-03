@@ -43,13 +43,39 @@
     <div class="home-section__inner">
         @{
             var thoughtsGame = _thoughtsGame ?? _latestReviewed;
+            var avgScore = thoughtsGame?.Reviews?.Any() == true
+                ? thoughtsGame.Reviews.Average(r => r.Rating)
+                : (double?)null;
+
+            var avgClass = string.Empty;
+            var avgStyle = string.Empty;
+            if (avgScore is { } avg)
+            {
+                if (avg < 7)
+                {
+                    avgClass = "bgm-scoreBadge--bad";
+                }
+                else
+                {
+                    avgClass = "bgm-scoreBadge--avg";
+
+                    var mix = Math.Clamp((avg - 7) / 3d, 0d, 1d);
+                    avgStyle = $"--bgm-score-mix: {(mix * 100):0}%";
+                }
+            }
         }
 
         <div class="bgm-thoughtsHeader">
             <h1 class="bgm-thoughtsHeader__title">What we thought of @thoughtsGame?.Name</h1>
-            @if (_selectedReview is not null)
+            @if (avgScore is not null)
             {
-                <div class="bgm-scoreBadge" aria-label="Score">@_selectedReview.Rating</div>
+                <div class="bgm-scoreSummary" aria-label="Scores">
+                    <div class="bgm-scoreSummary__label">BGM RATING:</div>
+
+                    <div class="bgm-scoreBadges" aria-label="Average and reviewer scores">
+                        <div class="bgm-scoreBadge @avgClass" style="@avgStyle" aria-label="BGM rating">@FormatScore(avgScore.Value)</div>
+                    </div>
+                </div>
             }
         </div>
 
@@ -72,7 +98,13 @@
             <div class="bgm-thoughtsContent">
                 @if (_selectedReview is not null)
                 {
-                    <p>@_selectedReview.Description</p>
+                    <div class="bgm-reviewText">
+                        <div class="bgm-scoreBadge bgm-scoreBadge--secondary bgm-scoreBadge--review" aria-label="Reviewer score" title="@_selectedReview.Reviewer.Name">
+                            <div class="bgm-scoreBadge__value">@FormatScore(_selectedReview.Rating)</div>
+                            <div class="bgm-scoreBadge__label">@_selectedReview.Reviewer.Name</div>
+                        </div>
+                        <p>@_selectedReview.Description</p>
+                    </div>
                 }
                 else if (thoughtsGame is not null && !string.IsNullOrWhiteSpace(thoughtsGame.Tagline))
                 {
@@ -147,6 +179,9 @@
 
     private void SelectReview(Review review)
         => _selectedReview = review;
+
+    private static string FormatScore(double score)
+        => score.ToString("0.0");
 
     private async Task HandleGameSelectedAsync(BoardGame game)
     {
