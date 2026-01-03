@@ -6,6 +6,8 @@ public abstract class Review
 
     public virtual IEnumerable<Comment> Comments { get; } = Array.Empty<Comment>();
 
+    public abstract DateTimeOffset CreatedOn { get; }
+
     public abstract string Description { get; }
 
     public abstract double Rating { get; }

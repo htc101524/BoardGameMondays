@@ -7,7 +7,6 @@ public sealed class BoardGame
         GameStatus status = GameStatus.Queued,
         Overview? overview = null,
         IEnumerable<Review>? reviews = null,
-        DateTimeOffset? reviewedOn = null,
         string? tagline = null,
         string? imageUrl = null,
         Guid? id = null)
@@ -17,7 +16,6 @@ public sealed class BoardGame
         Status = status;
         Overview = overview ?? EmptyOverview.Instance;
         Reviews = (reviews ?? Array.Empty<Review>()).ToArray();
-        ReviewedOn = reviewedOn;
         Tagline = tagline;
         ImageUrl = imageUrl;
     }
@@ -32,7 +30,8 @@ public sealed class BoardGame
 
     public IReadOnlyList<Review> Reviews { get; }
 
-    public DateTimeOffset? ReviewedOn { get; }
+    public DateTimeOffset? ReviewedOn
+        => Reviews.Count == 0 ? null : Reviews.Max(r => r.CreatedOn);
 
     // Optional metadata for UI.
     public string? Tagline { get; }

@@ -42,11 +42,6 @@ else
             <InputText class="form-control" @bind-Value="_model.ImageUrl" />
         </div>
 
-        <div class="mb-3">
-            <label class="form-label">Reviewed on (YYYY-MM-DD)</label>
-            <InputText class="form-control" @bind-Value="_model.ReviewedOn" />
-        </div>
-
         <button type="submit" class="btn btn-primary">Save</button>
         <a class="btn btn-link" href="/admin">Back</a>
 
@@ -136,8 +131,7 @@ else
             Name = _game.Name,
             Status = _game.Status,
             Tagline = _game.Tagline,
-            ImageUrl = _game.ImageUrl,
-            ReviewedOn = _game.ReviewedOn?.ToString("yyyy-MM-dd")
+            ImageUrl = _game.ImageUrl
         };
 
         var members = MemberDirectory.GetAll();
@@ -148,19 +142,12 @@ else
 
     private async Task SaveAsync()
     {
-        DateTimeOffset? reviewedOn = null;
-        if (!string.IsNullOrWhiteSpace(_model.ReviewedOn) && DateTimeOffset.TryParse(_model.ReviewedOn, out var parsed))
-        {
-            reviewedOn = parsed;
-        }
-
         var updated = await BoardGameService.UpdateGameAsync(
             id: Id,
             name: _model.Name,
             status: _model.Status,
             tagline: _model.Tagline,
-            imageUrl: _model.ImageUrl,
-            reviewedOn: reviewedOn);
+            imageUrl: _model.ImageUrl);
 
         _game = updated;
         _saveStatus = updated is null ? "Game not found." : "Saved.";
@@ -189,7 +176,6 @@ else
         public GameStatus Status { get; set; }
         public string? Tagline { get; set; }
         public string? ImageUrl { get; set; }
-        public string? ReviewedOn { get; set; }
     }
 
     private sealed class AddReviewModel

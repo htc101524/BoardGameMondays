@@ -53,28 +53,32 @@ public sealed class BoardGameService
         var alex = new DemoBgmMember("Alex");
         var sam = new DemoBgmMember("Sam");
 
+        var reviewedOn = new DateTimeOffset(2025, 12, 15, 0, 0, 0, TimeSpan.Zero);
+
         return new BoardGame(
             name: "Cascadia",
             status: GameStatus.Decided,
             tagline: "A calm, clever tile-laying puzzle with satisfying combos.",
             imageUrl: "images/placeholder-game-cover.svg",
-            reviewedOn: new DateTimeOffset(2025, 12, 15, 0, 0, 0, TimeSpan.Zero),
             reviews:
             [
                 new MemberReview(
                     reviewer: henry,
                     rating: 9,
-                    description: "Soothing, quick to teach, and the scoring goals keep it fresh. I love how the drafting stays gentle but still forces real trade-offs."
+                    description: "Soothing, quick to teach, and the scoring goals keep it fresh. I love how the drafting stays gentle but still forces real trade-offs.",
+                    createdOn: reviewedOn
                 ),
                 new MemberReview(
                     reviewer: alex,
                     rating: 8,
-                    description: "Great puzzle feel. The spatial constraints are satisfying and it never feels mean. I’d like a bit more tension, but it’s a great weeknight game."
+                    description: "Great puzzle feel. The spatial constraints are satisfying and it never feels mean. I’d like a bit more tension, but it’s a great weeknight game.",
+                    createdOn: reviewedOn
                 ),
                 new MemberReview(
                     reviewer: sam,
                     rating: 7,
-                    description: "Solid and relaxing. I enjoy the combos, but it can feel a touch samey if you play it back-to-back. Still a keeper."
+                    description: "Solid and relaxing. I enjoy the combos, but it can feel a touch samey if you play it back-to-back. Still a keeper.",
+                    createdOn: reviewedOn
                 )
             ]
         );
@@ -84,6 +88,7 @@ public sealed class BoardGameService
     {
         // In-memory store; no async work yet.
         var latest = _games
+            .Where(x => x.Reviews.Any())
             .OrderByDescending(x => x.ReviewedOn ?? DateTimeOffset.MinValue)
             .FirstOrDefault();
 
@@ -134,7 +139,6 @@ public sealed class BoardGameService
         GameStatus status,
         string? tagline = null,
         string? imageUrl = null,
-        DateTimeOffset? reviewedOn = null,
         CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(name))
@@ -146,8 +150,7 @@ public sealed class BoardGameService
             name: name.Trim(),
             status: status,
             tagline: tagline,
-            imageUrl: imageUrl,
-            reviewedOn: reviewedOn);
+            imageUrl: imageUrl);
 
         _games.Add(game);
         Changed?.Invoke();
@@ -160,7 +163,6 @@ public sealed class BoardGameService
         GameStatus status,
         string? tagline,
         string? imageUrl,
-        DateTimeOffset? reviewedOn,
         CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(name))
@@ -182,7 +184,6 @@ public sealed class BoardGameService
             status: status,
             overview: existing.Overview,
             reviews: existing.Reviews,
-            reviewedOn: reviewedOn,
             tagline: tagline,
             imageUrl: imageUrl);
 
@@ -213,7 +214,6 @@ public sealed class BoardGameService
             status: existing.Status,
             overview: existing.Overview,
             reviews: updatedReviews,
-            reviewedOn: existing.ReviewedOn,
             tagline: existing.Tagline,
             imageUrl: existing.ImageUrl);
 
