@@ -1,9 +1,12 @@
 ﻿@page "/"
 
+@implements IDisposable
+
 @using BoardGameMondays.Core
 @using BoardGameMondays.Components.Sections
 @inject BoardGameService BoardGameService
 @inject IJSRuntime JS
+@inject NavigationManager Navigation
 
 <PageTitle>Board Game Mondays</PageTitle>
 
@@ -95,9 +98,51 @@
 
     protected override async Task OnInitializedAsync()
     {
+        Navigation.LocationChanged += OnLocationChanged;
+        BoardGameService.Changed += OnBoardGameServiceChanged;
+        await RefreshFeaturedAsync(resetThoughts: true);
+    }
+
+    private async Task RefreshFeaturedAsync(bool resetThoughts)
+    {
+        var previousLatest = _latestReviewed;
         _latestReviewed = await BoardGameService.GetFeaturedOrLatestReviewedAsync();
-        _thoughtsGame = _latestReviewed;
-        _selectedReview = _thoughtsGame?.Reviews?.FirstOrDefault();
+
+        if (resetThoughts || _thoughtsGame is null || ReferenceEquals(_thoughtsGame, previousLatest))
+        {
+            _thoughtsGame = _latestReviewed;
+            _selectedReview = _thoughtsGame?.Reviews?.FirstOrDefault();
+        }
+    }
+
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+    {
+        var path = new Uri(e.Location).AbsolutePath;
+        if (!string.Equals(path, "/", StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        _ = InvokeAsync(async () =>
+        {
+            await RefreshFeaturedAsync(resetThoughts: true);
+            StateHasChanged();
+        });
+    }
+
+    private void OnBoardGameServiceChanged()
+    {
+        _ = InvokeAsync(async () =>
+        {
+            await RefreshFeaturedAsync(resetThoughts: false);
+            StateHasChanged();
+        });
+    }
+
+    public void Dispose()
+    {
+        Navigation.LocationChanged -= OnLocationChanged;
+        BoardGameService.Changed -= OnBoardGameServiceChanged;
     }
 
     private void SelectReview(Review review)

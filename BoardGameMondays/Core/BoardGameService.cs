@@ -5,6 +5,8 @@ public sealed class BoardGameService
     private readonly List<BoardGame> _games;
     private Guid? _featuredGameId;
 
+    public event Action? Changed;
+
     public BoardGameService()
     {
         // TODO: Replace with real persistence when a database is introduced.
@@ -107,6 +109,7 @@ public sealed class BoardGameService
     public Task SetFeaturedGameAsync(Guid? gameId, CancellationToken ct = default)
     {
         _featuredGameId = gameId;
+        Changed?.Invoke();
         return Task.CompletedTask;
     }
 
@@ -147,6 +150,7 @@ public sealed class BoardGameService
             reviewedOn: reviewedOn);
 
         _games.Add(game);
+        Changed?.Invoke();
         return Task.FromResult(game);
     }
 
@@ -183,6 +187,7 @@ public sealed class BoardGameService
             imageUrl: imageUrl);
 
         _games[existingIndex] = updated;
+        Changed?.Invoke();
         return Task.FromResult<BoardGame?>(updated);
     }
 
@@ -213,6 +218,7 @@ public sealed class BoardGameService
             imageUrl: existing.ImageUrl);
 
         _games[existingIndex] = updated;
+        Changed?.Invoke();
         return Task.FromResult<BoardGame?>(updated);
     }
 }

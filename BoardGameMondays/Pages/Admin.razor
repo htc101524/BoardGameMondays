@@ -16,20 +16,22 @@
     }
     else
     {
-        <div class="d-flex gap-2 align-items-end flex-wrap">
-            <div>
-                <label class="form-label" for="bgmFeatured">Featured game</label>
-                        <InputSelect id="bgmFeatured" class="form-select" @bind-Value="_selectedFeatured">
-                            <option value="">(Auto: latest reviewed)</option>
-                            @foreach (var game in _games)
-                            {
-                                <option value="@game.Id.ToString()">@game.Name</option>
-                            }
-                        </InputSelect>
-            </div>
+        <EditForm Model="_featuredForm" OnValidSubmit="SaveFeaturedAsync">
+            <div class="d-flex gap-2 align-items-end flex-wrap">
+                <div>
+                    <label class="form-label" for="bgmFeatured">Featured game</label>
+                    <InputSelect id="bgmFeatured" class="form-select" @bind-Value="_featuredForm.SelectedFeatured">
+                        <option value="">(Auto: latest reviewed)</option>
+                        @foreach (var game in _games)
+                        {
+                            <option value="@game.Id">@game.Name</option>
+                        }
+                    </InputSelect>
+                </div>
 
-            <button type="button" class="btn btn-primary" @onclick="SaveFeaturedAsync">Save</button>
-        </div>
+                <button type="submit" class="btn btn-primary">Save</button>
+            </div>
+        </EditForm>
 
         @if (!string.IsNullOrWhiteSpace(_featuredStatus))
         {
@@ -79,27 +81,27 @@ else
 }
 
 @code {
+    private sealed class FeaturedFormModel
+    {
+        public Guid? SelectedFeatured { get; set; }
+    }
+
     private List<BoardGame> _games = new();
-    private string? _selectedFeatured;
+    private FeaturedFormModel _featuredForm = new();
     private string? _featuredStatus;
 
     protected override async Task OnInitializedAsync()
     {
         _games = (await BoardGameService.GetAllAsync()).ToList();
 
-        var featuredId = await BoardGameService.GetFeaturedGameIdAsync();
-        _selectedFeatured = featuredId?.ToString();
+        _featuredForm.SelectedFeatured = await BoardGameService.GetFeaturedGameIdAsync();
     }
 
     private async Task SaveFeaturedAsync()
     {
-        Guid? selected = null;
-        if (!string.IsNullOrWhiteSpace(_selectedFeatured) && Guid.TryParse(_selectedFeatured, out var id))
-        {
-            selected = id;
-        }
-
-        await BoardGameService.SetFeaturedGameAsync(selected);
-        _featuredStatus = selected is null ? "Set to Auto (latest reviewed)." : "Featured game updated.";
+        await BoardGameService.SetFeaturedGameAsync(_featuredForm.SelectedFeatured);
+        _featuredStatus = _featuredForm.SelectedFeatured is null
+            ? "Set to Auto (latest reviewed)."
+            : "Featured game updated.";
     }
 }
