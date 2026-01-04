@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Components.Server;
 using BoardGameMondays.Core;
 using BoardGameMondays.Data;
 using BoardGameMondays.Data.Entities;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Mvc;
@@ -68,6 +69,49 @@ using (var scope = app.Services.CreateScope())
     await EnsureSqliteSchemaUpToDateAsync(db);
     
     await DataSeeder.SeedAsync(db);
+
+    // Dev convenience: create a non-admin user for quickly checking the non-admin UX.
+    if (app.Environment.IsDevelopment())
+    {
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        await SeedDevNonAdminUserAsync(userManager, db);
+    }
+}
+
+static async Task SeedDevNonAdminUserAsync(UserManager<ApplicationUser> userManager, ApplicationDbContext db)
+{
+    const string userName = "nonadmin";
+    const string password = "test123";
+    const string displayName = "Non-admin";
+
+    var existing = await userManager.FindByNameAsync(userName);
+    if (existing is null)
+    {
+        existing = new ApplicationUser { UserName = userName };
+        var result = await userManager.CreateAsync(existing, password);
+        if (!result.Succeeded)
+        {
+            // If seeding fails (e.g., password policy changes), don't block app startup.
+            return;
+        }
+    }
+
+    var claims = await userManager.GetClaimsAsync(existing);
+
+    if (!claims.Any(c => c.Type == BgmClaimTypes.DisplayName))
+    {
+        await userManager.AddClaimAsync(existing, new Claim(BgmClaimTypes.DisplayName, displayName));
+    }
+
+    // If this observer was accidentally created as a BGM member previously, mark them as not a member
+    // so they never show up in People.
+    var existingMember = await db.Members.FirstOrDefaultAsync(
+        m => m.Name.ToLower() == displayName.ToLower());
+    if (existingMember is not null && existingMember.IsBgmMember)
+    {
+        existingMember.IsBgmMember = false;
+        await db.SaveChangesAsync();
+    }
 }
 
 static async Task EnsureSqliteSchemaUpToDateAsync(ApplicationDbContext db)
@@ -85,15 +129,38 @@ static async Task EnsureSqliteSchemaUpToDateAsync(ApplicationDbContext db)
 
     try
     {
-        var hasTimesPlayed = false;
+        // Members.IsBgmMember
+        var hasIsBgmMember = false;
+        await using (var cmd = connection.CreateCommand())
+        {
+            cmd.CommandText = "PRAGMA table_info('Members');";
+            await using var reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                var name = reader.GetString(1);
+                if (string.Equals(name, "IsBgmMember", StringComparison.OrdinalIgnoreCase))
+                {
+                    hasIsBgmMember = true;
+                    break;
+                }
+            }
+        }
 
+        if (!hasIsBgmMember)
+        {
+            await using var alter = connection.CreateCommand();
+            alter.CommandText = "ALTER TABLE Members ADD COLUMN IsBgmMember INTEGER NOT NULL DEFAULT 1;";
+            await alter.ExecuteNonQueryAsync();
+        }
+
+        // Reviews.TimesPlayed
+        var hasTimesPlayed = false;
         await using (var cmd = connection.CreateCommand())
         {
             cmd.CommandText = "PRAGMA table_info('Reviews');";
             await using var reader = await cmd.ExecuteReaderAsync();
             while (await reader.ReadAsync())
             {
-                // PRAGMA table_info returns: cid, name, type, notnull, dflt_value, pk
                 var name = reader.GetString(1);
                 if (string.Equals(name, "TimesPlayed", StringComparison.OrdinalIgnoreCase))
                 {
@@ -111,7 +178,6 @@ static async Task EnsureSqliteSchemaUpToDateAsync(ApplicationDbContext db)
         }
 
         // Admin tickets + priorities.
-        // Using CREATE TABLE IF NOT EXISTS keeps this safe for existing dev DBs created via EnsureCreated.
         await using (var createTickets = connection.CreateCommand())
         {
             createTickets.CommandText = @"
@@ -152,7 +218,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS IX_TicketPriorities_Admin_Ticket ON TicketPrio
             await createIndexes.ExecuteNonQueryAsync();
         }
 
-        // Review agreements (per-user ratings of reviews)
+        // Review agreements
         await using (var createReviewAgreements = connection.CreateCommand())
         {
             createReviewAgreements.CommandText = @"
@@ -177,7 +243,7 @@ CREATE INDEX IF NOT EXISTS IX_ReviewAgreements_UserId ON ReviewAgreements(UserId
             await createReviewAgreementIndexes.ExecuteNonQueryAsync();
         }
 
-        // Game nights (per Monday)
+        // Game nights
         await using (var createGameNights = connection.CreateCommand())
         {
             createGameNights.CommandText = @"
@@ -221,7 +287,6 @@ CREATE TABLE IF NOT EXISTS GameNightGames (
             await createGameNightGames.ExecuteNonQueryAsync();
         }
 
-        // If GameNightGames existed before WinnerMemberId was added, patch it in.
         var hasWinnerMemberId = false;
         await using (var cmd = connection.CreateCommand())
         {

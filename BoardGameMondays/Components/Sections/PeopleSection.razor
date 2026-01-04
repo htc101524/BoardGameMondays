@@ -10,7 +10,7 @@
     <div class="home-section__inner">
         <h1>People</h1>
 
-        <AuthorizeView>
+        <AuthorizeView Roles="Admin">
             <Authorized>
                 <form class="mb-3" method="post" action="/account/avatar" enctype="multipart/form-data">
                     <label class="form-label" for="avatar-file">Your avatar</label>

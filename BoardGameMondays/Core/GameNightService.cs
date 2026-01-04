@@ -246,6 +246,26 @@ public sealed class GameNightService
             .Select(m => new MemberOption(m.Id, m.Name))
             .ToListAsync(ct);
 
+    public async Task<IReadOnlyList<DateOnly>> GetRecentPastGameNightDatesAsync(DateOnly beforeDate, int take, CancellationToken ct = default)
+    {
+        if (take <= 0)
+        {
+            return Array.Empty<DateOnly>();
+        }
+
+        var beforeKey = ToDateKey(beforeDate);
+
+        var keys = await _db.GameNights
+            .AsNoTracking()
+            .Where(n => n.DateKey < beforeKey)
+            .OrderByDescending(n => n.DateKey)
+            .Select(n => n.DateKey)
+            .Take(take)
+            .ToListAsync(ct);
+
+        return keys.Select(FromDateKey).OrderBy(d => d).ToArray();
+    }
+
     private static GameNight ToDomain(GameNightEntity entity)
     {
         var date = FromDateKey(entity.DateKey);

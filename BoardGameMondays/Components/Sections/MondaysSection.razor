@@ -280,11 +280,32 @@
         _isAdmin = user.Identity?.IsAuthenticated == true && user.IsInRole("Admin");
         _memberId = TryGetMemberId(user);
 
-        var pastCount = _isAdmin ? PastCountAdmin : 0;
-        var first = _nextMonday.AddDays(-7 * pastCount);
-        var last = _nextMonday.AddDays(7 * (UpcomingCount - 1));
+        var dates = new HashSet<DateOnly>();
 
-        for (var date = first; date <= last; date = date.AddDays(7))
+        if (_isAdmin)
+        {
+            var first = _nextMonday.AddDays(-7 * PastCountAdmin);
+            for (var date = first; date < _nextMonday; date = date.AddDays(7))
+            {
+                dates.Add(date);
+            }
+        }
+        else
+        {
+            // Non-admins can browse previous *actual* Board Game Mondays (only dates with a stored game night).
+            foreach (var date in await GameNightService.GetRecentPastGameNightDatesAsync(_nextMonday, take: 12))
+            {
+                dates.Add(date);
+            }
+        }
+
+        var lastUpcoming = _nextMonday.AddDays(7 * (UpcomingCount - 1));
+        for (var date = _nextMonday; date <= lastUpcoming; date = date.AddDays(7))
+        {
+            dates.Add(date);
+        }
+
+        foreach (var date in dates.OrderBy(d => d))
         {
             var kind = date < _nextMonday ? "Past" : "Upcoming";
             _items.Add(new MondayItem(date, kind));

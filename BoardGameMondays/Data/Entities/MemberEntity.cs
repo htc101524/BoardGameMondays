@@ -8,6 +8,9 @@ public sealed class MemberEntity
     public Guid Id { get; set; }
 
     [Required]
+    public bool IsBgmMember { get; set; } = true;
+
+    [Required]
     [MaxLength(128)]
     public string Name { get; set; } = string.Empty;
 

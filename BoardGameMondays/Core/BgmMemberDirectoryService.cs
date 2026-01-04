@@ -19,6 +19,7 @@ public sealed class BgmMemberDirectoryService
     public IReadOnlyList<BgmMember> GetAll()
         => _db.Members
             .AsNoTracking()
+            .Where(m => m.IsBgmMember)
             .OrderBy(m => m.Name)
             .Select(m => (BgmMember)new PersistedBgmMember(m.Name, m.Email, m.Summary, m.AvatarUrl))
             .ToArray();
@@ -40,6 +41,7 @@ public sealed class BgmMemberDirectoryService
         var created = new MemberEntity
         {
             Id = Guid.NewGuid(),
+            IsBgmMember = true,
             Name = trimmed,
             Email = $"{trimmed.ToLowerInvariant()}@placeholder.com"
         };
@@ -66,6 +68,7 @@ public sealed class BgmMemberDirectoryService
         var created = new MemberEntity
         {
             Id = Guid.NewGuid(),
+            IsBgmMember = true,
             Name = trimmed,
             Email = $"{trimmed.ToLowerInvariant()}@placeholder.com"
         };
@@ -88,6 +91,7 @@ public sealed class BgmMemberDirectoryService
             _db.Members.Add(new MemberEntity
             {
                 Id = Guid.NewGuid(),
+                IsBgmMember = true,
                 Name = member.Name,
                 Email = member.Email,
                 Summary = member.Summary,
