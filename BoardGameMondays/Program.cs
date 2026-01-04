@@ -3,9 +3,11 @@ using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Components.Server;
 using BoardGameMondays.Core;
 using BoardGameMondays.Data;
+using BoardGameMondays.Data.Entities;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -94,9 +96,15 @@ app.MapPost("/account/register", async (
     IWebHostEnvironment env) =>
 {
     var userName = request.UserName?.Trim();
+    var displayName = request.DisplayName?.Trim();
     if (string.IsNullOrWhiteSpace(userName) || string.IsNullOrWhiteSpace(request.Password))
     {
         return Results.Redirect($"/register?error={Uri.EscapeDataString("Username and password are required.")}");
+    }
+
+    if (string.IsNullOrWhiteSpace(displayName))
+    {
+        return Results.Redirect($"/register?error={Uri.EscapeDataString("Name is required.")}");
     }
 
     if (!string.Equals(request.Password, request.ConfirmPassword, StringComparison.Ordinal))
@@ -112,6 +120,12 @@ app.MapPost("/account/register", async (
         return Results.Redirect($"/register?error={Uri.EscapeDataString(message)}");
     }
 
+    // Store the friendly display name separately from the login username.
+    await userManager.AddClaimAsync(user, new Claim(BgmClaimTypes.DisplayName, displayName));
+
+    var memberId = members.GetOrCreateMemberId(displayName);
+    await userManager.AddClaimAsync(user, new Claim(BgmClaimTypes.MemberId, memberId.ToString()));
+
     // Dev convenience: automatically grant Admin role so existing admin tooling works.
     if (env.IsDevelopment())
     {
@@ -125,13 +139,14 @@ app.MapPost("/account/register", async (
     }
 
     await signInManager.SignInAsync(user, isPersistent: true);
-    members.GetOrCreate(userName);
+    members.GetOrCreate(displayName);
     return Results.Redirect("/");
 }).DisableAntiforgery();
 
 app.MapPost("/account/login", async (
     [FromForm] LoginRequest request,
     SignInManager<ApplicationUser> signInManager,
+    UserManager<ApplicationUser> userManager,
     BoardGameMondays.Core.BgmMemberDirectoryService members) =>
 {
     var userName = request.UserName?.Trim();
@@ -146,14 +161,127 @@ app.MapPost("/account/login", async (
         return Results.Redirect($"/login?error={Uri.EscapeDataString("Invalid username or password.")}");
     }
 
-    members.GetOrCreate(userName);
+    var displayName = userName;
+    var user = await userManager.FindByNameAsync(userName);
+    if (user is not null)
+    {
+        var claims = await userManager.GetClaimsAsync(user);
+        displayName = claims.FirstOrDefault(c => c.Type == BgmClaimTypes.DisplayName)?.Value?.Trim() ?? userName;
+    }
+
+    members.GetOrCreate(displayName);
     return Results.Redirect("/");
 }).DisableAntiforgery();
+
+app.MapPost("/account/avatar", async (
+    HttpContext http,
+    IFormFile avatar,
+    UserManager<ApplicationUser> userManager,
+    ApplicationDbContext db,
+    IWebHostEnvironment env) =>
+{
+    if (avatar is null || avatar.Length == 0)
+    {
+        return Results.Redirect($"/?avatarError={Uri.EscapeDataString("Please choose an image.")}#people");
+    }
+
+    const long maxBytes = 2 * 1024 * 1024; // 2MB
+    if (avatar.Length > maxBytes)
+    {
+        return Results.Redirect($"/?avatarError={Uri.EscapeDataString("Image must be 2MB or smaller.")}#people");
+    }
+
+    var contentType = avatar.ContentType?.ToLowerInvariant();
+    var extension = contentType switch
+    {
+        "image/jpeg" => ".jpg",
+        "image/jpg" => ".jpg",
+        "image/png" => ".png",
+        "image/webp" => ".webp",
+        "image/gif" => ".gif",
+        _ => null
+    };
+
+    if (extension is null)
+    {
+        return Results.Redirect($"/?avatarError={Uri.EscapeDataString("Supported formats: JPG, PNG, WEBP, GIF.")}#people");
+    }
+
+    var userName = http.User?.Identity?.Name;
+    if (string.IsNullOrWhiteSpace(userName))
+    {
+        return Results.Redirect($"/?avatarError={Uri.EscapeDataString("You must be logged in.")}#people");
+    }
+
+    var user = await userManager.FindByNameAsync(userName);
+    if (user is null)
+    {
+        return Results.Redirect($"/?avatarError={Uri.EscapeDataString("You must be logged in.")}#people");
+    }
+
+    var claims = await userManager.GetClaimsAsync(user);
+    var displayName = claims.FirstOrDefault(c => c.Type == BgmClaimTypes.DisplayName)?.Value?.Trim();
+    if (string.IsNullOrWhiteSpace(displayName))
+    {
+        displayName = userName;
+    }
+
+    MemberEntity? member = null;
+    var memberIdClaim = claims.FirstOrDefault(c => c.Type == BgmClaimTypes.MemberId)?.Value;
+    if (Guid.TryParse(memberIdClaim, out var memberId))
+    {
+        member = await db.Members.FirstOrDefaultAsync(m => m.Id == memberId);
+    }
+
+    if (member is null)
+    {
+        member = await db.Members.FirstOrDefaultAsync(m => m.Name.ToLower() == displayName.ToLower());
+    }
+
+    if (member is null)
+    {
+        member = new MemberEntity
+        {
+            Id = Guid.NewGuid(),
+            Name = displayName,
+            Email = $"{displayName.ToLowerInvariant()}@placeholder.com"
+        };
+        db.Members.Add(member);
+        await db.SaveChangesAsync();
+    }
+
+    var uploadsRoot = Path.Combine(env.WebRootPath, "uploads", "avatars");
+    Directory.CreateDirectory(uploadsRoot);
+
+    var fileName = $"{member.Id}{extension}";
+    var filePath = Path.Combine(uploadsRoot, fileName);
+    await using (var stream = File.Create(filePath))
+    {
+        await avatar.CopyToAsync(stream);
+    }
+
+    // Add a cache-buster so browsers refresh after re-upload.
+    member.AvatarUrl = $"/uploads/avatars/{fileName}?v={DateTimeOffset.UtcNow.UtcTicks}";
+    await db.SaveChangesAsync();
+
+    return Results.Redirect("/?avatarUpdated=1#people");
+}).RequireAuthorization().DisableAntiforgery();
 
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 
 app.Run();
 
-internal sealed record RegisterRequest(string UserName, string Password, string ConfirmPassword);
-internal sealed record LoginRequest(string UserName, string Password, bool RememberMe);
+internal sealed record RegisterRequest(string UserName, string DisplayName, string Password, string ConfirmPassword);
+internal sealed class LoginRequest
+{
+    public string UserName { get; set; } = string.Empty;
+    public string Password { get; set; } = string.Empty;
+    public bool RememberMe { get; set; } = false;
+}
+
+internal static class BgmClaimTypes
+{
+    public const string DisplayName = "bgm:displayName";
+    public const string MemberId = "bgm:memberId";
+}

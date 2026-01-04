@@ -16,4 +16,7 @@ public sealed class MemberEntity
 
     [MaxLength(512)]
     public string? Summary { get; set; }
+
+    [MaxLength(512)]
+    public string? AvatarUrl { get; set; }
 }

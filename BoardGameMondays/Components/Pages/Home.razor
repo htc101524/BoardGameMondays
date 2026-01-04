@@ -79,35 +79,33 @@
             }
         </div>
 
-        <div class="bgm-thoughtsBody">
-            @if (thoughtsGame?.Reviews?.Any() == true)
-            {
-                <div class="bgm-review-switcher bgm-review-switcher--side" role="group" aria-label="Select a reviewer">
-                    @foreach (var review in thoughtsGame.Reviews
-                        .GroupBy(r => r.Reviewer.Name, StringComparer.OrdinalIgnoreCase)
-                        .Select(g => g.OrderByDescending(r => r.CreatedOn).First())
-                        .OrderBy(r => r.Reviewer.Name, StringComparer.OrdinalIgnoreCase))
-                    {
-                        var isSelected = string.Equals(review.Reviewer.Name, _selectedReview?.Reviewer.Name, StringComparison.OrdinalIgnoreCase);
+        @if (_selectedReview is not null)
+        {
+            <div class="bgm-thoughtsSelected" aria-label="Selected reviewer">
+                <div class="bgm-thoughtsSelected__score" aria-label="Selected reviewer score">
+                    <div class="bgm-scoreBadge bgm-scoreBadge--secondary" aria-label="Reviewer score">
+                        <div class="bgm-scoreBadge__value">@FormatScore(_selectedReview.Rating)</div>
+                    </div>
+                </div>
 
-                        <button type="button"
-                                class="bgm-review-switcher__button @(isSelected ? "is-active" : "")"
-                                aria-pressed="@isSelected"
-                                @onclick="() => SelectReview(review)">
-                            @review.Reviewer.Name
-                        </button>
+                <div class="bgm-thoughtsSelected__avatar" aria-hidden="true">
+                    @if (!string.IsNullOrWhiteSpace(_selectedReview.Reviewer.AvatarUrl))
+                    {
+                        <img src="@_selectedReview.Reviewer.AvatarUrl" alt="" />
+                    }
+                    else
+                    {
+                        @(string.IsNullOrWhiteSpace(_selectedReview.Reviewer.Name) ? "?" : _selectedReview.Reviewer.Name[..1].ToUpperInvariant())
                     }
                 </div>
-            }
+            </div>
+        }
 
+        <div class="bgm-thoughtsBody">
             <div class="bgm-thoughtsContent">
                 @if (_selectedReview is not null)
                 {
                     <div class="bgm-reviewText">
-                        <div class="bgm-scoreBadge bgm-scoreBadge--secondary bgm-scoreBadge--review" aria-label="Reviewer score" title="@_selectedReview.Reviewer.Name">
-                            <div class="bgm-scoreBadge__value">@FormatScore(_selectedReview.Rating)</div>
-                            <div class="bgm-scoreBadge__label">@_selectedReview.Reviewer.Name</div>
-                        </div>
                         <p>@_selectedReview.Description</p>
                     </div>
                 }
@@ -120,6 +118,36 @@
                     <p>No thoughts yet.</p>
                 }
             </div>
+
+            @if (thoughtsGame?.Reviews?.Any() == true)
+            {
+                <div class="bgm-review-switcher" role="group" aria-label="Select a reviewer">
+                    @foreach (var review in thoughtsGame.Reviews
+                        .GroupBy(r => r.Reviewer.Name, StringComparer.OrdinalIgnoreCase)
+                        .Select(g => g.OrderByDescending(r => r.CreatedOn).First())
+                        .OrderBy(r => r.Reviewer.Name, StringComparer.OrdinalIgnoreCase))
+                    {
+                        var isSelected = string.Equals(review.Reviewer.Name, _selectedReview?.Reviewer.Name, StringComparison.OrdinalIgnoreCase);
+
+                        <button type="button"
+                                class="bgm-review-switcher__button @(isSelected ? "is-active" : "")"
+                                aria-pressed="@isSelected"
+                                @onclick="() => SelectReview(review)">
+                            <span class="bgm-review-switcher__avatar" aria-hidden="true">
+                                @if (!string.IsNullOrWhiteSpace(review.Reviewer.AvatarUrl))
+                                {
+                                    <img src="@review.Reviewer.AvatarUrl" alt="" />
+                                }
+                                else
+                                {
+                                    @(string.IsNullOrWhiteSpace(review.Reviewer.Name) ? "?" : review.Reviewer.Name[..1].ToUpperInvariant())
+                                }
+                            </span>
+                            <span class="bgm-review-switcher__name">@review.Reviewer.Name</span>
+                        </button>
+                    }
+                </div>
+            }
         </div>
     </div>
 </section>

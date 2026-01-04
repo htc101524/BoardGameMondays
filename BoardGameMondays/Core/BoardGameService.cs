@@ -214,7 +214,7 @@ public sealed class BoardGameService
         var reviews = entity.Reviews
             .OrderByDescending(r => r.CreatedOn)
             .Select(r => (Review)new MemberReview(
-                reviewer: new PersistedBgmMember(r.Reviewer.Name, r.Reviewer.Email, r.Reviewer.Summary),
+                reviewer: new PersistedBgmMember(r.Reviewer.Name, r.Reviewer.Email, r.Reviewer.Summary, r.Reviewer.AvatarUrl),
                 rating: r.Rating,
                 description: r.Description,
                 createdOn: r.CreatedOn))

@@ -1,5 +1,8 @@
 @using BoardGameMondays.Core
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.WebUtilities
 @inject BgmMemberDirectoryService MemberDirectory
+@inject NavigationManager Navigation
 
 <section id="people" class="home-section" aria-label="People">
     <PageTitle>People</PageTitle>
@@ -7,13 +10,36 @@
     <div class="home-section__inner">
         <h1>People</h1>
 
+        <AuthorizeView>
+            <Authorized>
+                <form class="mb-3" method="post" action="/account/avatar" enctype="multipart/form-data">
+                    <label class="form-label" for="avatar-file">Your avatar</label>
+                    <div class="d-flex gap-2 align-items-center">
+                        <input id="avatar-file" class="form-control" style="max-width: 420px" type="file" name="avatar" accept="image/*" />
+                        <button type="submit" class="btn btn-outline-primary">Upload</button>
+                    </div>
+                    @if (!string.IsNullOrWhiteSpace(_avatarMessage))
+                    {
+                        <div class="text-muted mt-2">@_avatarMessage</div>
+                    }
+                </form>
+            </Authorized>
+        </AuthorizeView>
+
         <div class="bgm-peopleGrid" role="list" aria-label="Members">
             @foreach (var member in MemberDirectory.GetAll())
             {
                 <article class="bgm-peopleCard" role="listitem" aria-label="@member.Name">
                     <div class="bgm-peopleCard__top">
                         <div class="bgm-peopleCard__avatar" aria-hidden="true">
-                            @(string.IsNullOrWhiteSpace(member.Name) ? "?" : member.Name[..1].ToUpperInvariant())
+                            @if (!string.IsNullOrWhiteSpace(member.AvatarUrl))
+                            {
+                                <img src="@member.AvatarUrl" alt="" />
+                            }
+                            else
+                            {
+                                @(string.IsNullOrWhiteSpace(member.Name) ? "?" : member.Name[..1].ToUpperInvariant())
+                            }
                         </div>
                         <div class="bgm-peopleCard__who">
                             <div class="bgm-peopleCard__name">@member.Name</div>
@@ -34,3 +60,26 @@
         </div>
     </div>
 </section>
+
+@code {
+    private string? _avatarMessage;
+
+    protected override void OnParametersSet()
+    {
+        var uri = Navigation.ToAbsoluteUri(Navigation.Uri);
+        var query = QueryHelpers.ParseQuery(uri.Query);
+
+        if (query.TryGetValue("avatarError", out var error) && !string.IsNullOrWhiteSpace(error))
+        {
+            _avatarMessage = error.ToString();
+        }
+        else if (query.TryGetValue("avatarUpdated", out var updated) && updated == "1")
+        {
+            _avatarMessage = "Avatar updated.";
+        }
+        else
+        {
+            _avatarMessage = null;
+        }
+    }
+}

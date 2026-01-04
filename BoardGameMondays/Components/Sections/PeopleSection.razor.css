@@ -32,6 +32,14 @@
     color: #22311c;
     background: rgba(191, 161, 74, 0.18);
     border: 1px solid rgba(75, 58, 26, 0.14);
+    overflow: hidden;
+}
+
+.bgm-peopleCard__avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
 }
 
 .bgm-peopleCard__name {

@@ -20,8 +20,34 @@ public sealed class BgmMemberDirectoryService
         => _db.Members
             .AsNoTracking()
             .OrderBy(m => m.Name)
-            .Select(m => (BgmMember)new PersistedBgmMember(m.Name, m.Email, m.Summary))
+            .Select(m => (BgmMember)new PersistedBgmMember(m.Name, m.Email, m.Summary, m.AvatarUrl))
             .ToArray();
+
+    public Guid GetOrCreateMemberId(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            throw new ArgumentException("Name is required.", nameof(name));
+        }
+
+        var trimmed = name.Trim();
+        var existing = _db.Members.FirstOrDefault(m => m.Name.ToLower() == trimmed.ToLower());
+        if (existing is not null)
+        {
+            return existing.Id;
+        }
+
+        var created = new MemberEntity
+        {
+            Id = Guid.NewGuid(),
+            Name = trimmed,
+            Email = $"{trimmed.ToLowerInvariant()}@placeholder.com"
+        };
+
+        _db.Members.Add(created);
+        _db.SaveChanges();
+        return created.Id;
+    }
 
     public BgmMember GetOrCreate(string name)
     {
@@ -34,7 +60,7 @@ public sealed class BgmMemberDirectoryService
         var existing = _db.Members.FirstOrDefault(m => m.Name.ToLower() == trimmed.ToLower());
         if (existing is not null)
         {
-            return new PersistedBgmMember(existing.Name, existing.Email, existing.Summary);
+            return new PersistedBgmMember(existing.Name, existing.Email, existing.Summary, existing.AvatarUrl);
         }
 
         var created = new MemberEntity
@@ -46,7 +72,7 @@ public sealed class BgmMemberDirectoryService
 
         _db.Members.Add(created);
         _db.SaveChanges();
-        return new PersistedBgmMember(created.Name, created.Email, created.Summary);
+        return new PersistedBgmMember(created.Name, created.Email, created.Summary, created.AvatarUrl);
     }
 
     public void AddOrUpdate(BgmMember member)
@@ -64,13 +90,15 @@ public sealed class BgmMemberDirectoryService
                 Id = Guid.NewGuid(),
                 Name = member.Name,
                 Email = member.Email,
-                Summary = member.Summary
+                Summary = member.Summary,
+                AvatarUrl = member.AvatarUrl
             });
         }
         else
         {
             existing.Email = member.Email;
             existing.Summary = member.Summary;
+            existing.AvatarUrl = member.AvatarUrl;
         }
 
         _db.SaveChanges();

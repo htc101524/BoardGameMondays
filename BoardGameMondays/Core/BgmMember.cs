@@ -6,4 +6,6 @@ public abstract class BgmMember
     public abstract string Email { get; }
 
     public virtual string? Summary => null;
+
+    public virtual string? AvatarUrl => null;
 }
