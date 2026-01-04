@@ -1,0 +1,363 @@
+@page "/admin/tickets"
+@using System.Security.Claims
+@using BoardGameMondays.Core
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.AspNetCore.Components.Web
+@using static Microsoft.AspNetCore.Components.Web.RenderMode
+@rendermode InteractiveServer
+@attribute [Authorize(Roles = "Admin")]
+@inject TicketService Tickets
+@inject AuthenticationStateProvider AuthStateProvider
+
+<h1>Tickets</h1>
+
+<div class="mb-4">
+    <h2 class="h4">Add ticket</h2>
+
+    <EditForm Model="_newTicket" OnValidSubmit="CreateTicketAsync">
+        <div class="d-flex gap-2 align-items-end flex-wrap">
+            <div>
+                <label class="form-label">Type</label>
+                <InputSelect class="form-select" TValue="TicketType" @bind-Value="_newTicket.Type">
+                    <option value="@TicketType.Bug">Bug</option>
+                    <option value="@TicketType.Feature">Feature</option>
+                </InputSelect>
+            </div>
+
+            <div class="flex-grow-1">
+                <label class="form-label">Title</label>
+                <InputText class="form-control" @bind-Value="_newTicket.Title" />
+            </div>
+
+            <button type="submit" class="btn btn-primary">Add</button>
+        </div>
+
+        <div class="mt-2">
+            <label class="form-label">Description</label>
+            <InputTextArea class="form-control" @bind-Value="_newTicket.Description" />
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(_createStatus))
+        {
+            <div class="text-muted mt-2">@_createStatus</div>
+        }
+    </EditForm>
+</div>
+
+<hr class="my-4" />
+
+<div class="row g-4">
+    <div class="col-12 col-lg-6">
+        <h2 class="h4">Bugs</h2>
+
+        <div class="mb-3">
+            <div class="fw-semibold mb-2">Your top 3</div>
+            <EditForm Model="_bugTop3" OnValidSubmit="SaveBugTop3Async">
+                <div class="d-flex gap-2 flex-wrap align-items-end">
+                    <div>
+                        <label class="form-label">1st</label>
+                        <InputSelect class="form-select" TValue="string" @bind-Value="_bugTop3.First">
+                            <option value="">—</option>
+                            @foreach (var (id, title) in _bugChoices)
+                            {
+                                var key = id.ToString();
+                                var excluded = (key == _bugTop3.Second) || (key == _bugTop3.Third);
+                                if (!excluded || key == _bugTop3.First)
+                                {
+                                    <option value="@key">@title</option>
+                                }
+                            }
+                        </InputSelect>
+                    </div>
+
+                    <div>
+                        <label class="form-label">2nd</label>
+                        <InputSelect class="form-select" TValue="string" @bind-Value="_bugTop3.Second">
+                            <option value="">—</option>
+                            @foreach (var (id, title) in _bugChoices)
+                            {
+                                var key = id.ToString();
+                                var excluded = (key == _bugTop3.First) || (key == _bugTop3.Third);
+                                if (!excluded || key == _bugTop3.Second)
+                                {
+                                    <option value="@key">@title</option>
+                                }
+                            }
+                        </InputSelect>
+                    </div>
+
+                    <div>
+                        <label class="form-label">3rd</label>
+                        <InputSelect class="form-select" TValue="string" @bind-Value="_bugTop3.Third">
+                            <option value="">—</option>
+                            @foreach (var (id, title) in _bugChoices)
+                            {
+                                var key = id.ToString();
+                                var excluded = (key == _bugTop3.First) || (key == _bugTop3.Second);
+                                if (!excluded || key == _bugTop3.Third)
+                                {
+                                    <option value="@key">@title</option>
+                                }
+                            }
+                        </InputSelect>
+                    </div>
+
+                    <button type="submit" class="btn btn-sm btn-primary">Save</button>
+                </div>
+            </EditForm>
+
+            @if (!string.IsNullOrWhiteSpace(_bugPriorityStatus))
+            {
+                <div class="text-muted mt-2">@_bugPriorityStatus</div>
+            }
+        </div>
+
+        @if (_bugs.Count == 0)
+        {
+            <p>No bug tickets.</p>
+        }
+        else
+        {
+            <div class="list-group">
+                @foreach (var t in _bugs)
+                {
+                    <div class="list-group-item">
+                        <div class="d-flex justify-content-between align-items-start gap-2">
+                            <div class="fw-semibold">@t.Title</div>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => DoneAsync(t.Id)">Done</button>
+                        </div>
+                        @if (!string.IsNullOrWhiteSpace(t.Description))
+                        {
+                            <div class="text-muted mt-1">@t.Description</div>
+                        }
+                    </div>
+                }
+            </div>
+        }
+    </div>
+
+    <div class="col-12 col-lg-6">
+        <h2 class="h4">Features</h2>
+
+        <div class="mb-3">
+            <div class="fw-semibold mb-2">Your top 3</div>
+            <EditForm Model="_featureTop3" OnValidSubmit="SaveFeatureTop3Async">
+                <div class="d-flex gap-2 flex-wrap align-items-end">
+                    <div>
+                        <label class="form-label">1st</label>
+                        <InputSelect class="form-select" TValue="string" @bind-Value="_featureTop3.First">
+                            <option value="">—</option>
+                            @foreach (var (id, title) in _featureChoices)
+                            {
+                                var key = id.ToString();
+                                var excluded = (key == _featureTop3.Second) || (key == _featureTop3.Third);
+                                if (!excluded || key == _featureTop3.First)
+                                {
+                                    <option value="@key">@title</option>
+                                }
+                            }
+                        </InputSelect>
+                    </div>
+
+                    <div>
+                        <label class="form-label">2nd</label>
+                        <InputSelect class="form-select" TValue="string" @bind-Value="_featureTop3.Second">
+                            <option value="">—</option>
+                            @foreach (var (id, title) in _featureChoices)
+                            {
+                                var key = id.ToString();
+                                var excluded = (key == _featureTop3.First) || (key == _featureTop3.Third);
+                                if (!excluded || key == _featureTop3.Second)
+                                {
+                                    <option value="@key">@title</option>
+                                }
+                            }
+                        </InputSelect>
+                    </div>
+
+                    <div>
+                        <label class="form-label">3rd</label>
+                        <InputSelect class="form-select" TValue="string" @bind-Value="_featureTop3.Third">
+                            <option value="">—</option>
+                            @foreach (var (id, title) in _featureChoices)
+                            {
+                                var key = id.ToString();
+                                var excluded = (key == _featureTop3.First) || (key == _featureTop3.Second);
+                                if (!excluded || key == _featureTop3.Third)
+                                {
+                                    <option value="@key">@title</option>
+                                }
+                            }
+                        </InputSelect>
+                    </div>
+
+                    <button type="submit" class="btn btn-sm btn-primary">Save</button>
+                </div>
+            </EditForm>
+
+            @if (!string.IsNullOrWhiteSpace(_featurePriorityStatus))
+            {
+                <div class="text-muted mt-2">@_featurePriorityStatus</div>
+            }
+        </div>
+
+        @if (_features.Count == 0)
+        {
+            <p>No feature tickets.</p>
+        }
+        else
+        {
+            <div class="list-group">
+                @foreach (var t in _features)
+                {
+                    <div class="list-group-item">
+                        <div class="d-flex justify-content-between align-items-start gap-2">
+                            <div class="fw-semibold">@t.Title</div>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => DoneAsync(t.Id)">Done</button>
+                        </div>
+                        @if (!string.IsNullOrWhiteSpace(t.Description))
+                        {
+                            <div class="text-muted mt-1">@t.Description</div>
+                        }
+                    </div>
+                }
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private sealed class NewTicketModel
+    {
+        public TicketType Type { get; set; } = TicketType.Bug;
+        public string Title { get; set; } = string.Empty;
+        public string? Description { get; set; }
+    }
+
+    private sealed class Top3Model
+    {
+        public string First { get; set; } = string.Empty;
+        public string Second { get; set; } = string.Empty;
+        public string Third { get; set; } = string.Empty;
+
+        public (Guid? First, Guid? Second, Guid? Third) ToGuids()
+            => (Parse(First), Parse(Second), Parse(Third));
+
+        public void SetFromGuids(Guid? first, Guid? second, Guid? third)
+        {
+            First = first?.ToString() ?? string.Empty;
+            Second = second?.ToString() ?? string.Empty;
+            Third = third?.ToString() ?? string.Empty;
+        }
+
+        private static Guid? Parse(string? value)
+            => Guid.TryParse(value, out var g) ? g : null;
+    }
+
+    private NewTicketModel _newTicket = new();
+    private string? _createStatus;
+
+    private List<TicketService.TicketListItem> _bugs = new();
+    private List<TicketService.TicketListItem> _features = new();
+
+    private List<(Guid Id, string Title)> _bugChoices = new();
+    private List<(Guid Id, string Title)> _featureChoices = new();
+
+    private Top3Model _bugTop3 = new();
+    private Top3Model _featureTop3 = new();
+
+    private string? _bugPriorityStatus;
+    private string? _featurePriorityStatus;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await ReloadAsync();
+    }
+
+    private async Task CreateTicketAsync()
+    {
+        _createStatus = null;
+
+        var auth = await AuthStateProvider.GetAuthenticationStateAsync();
+        var userId = auth.User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        try
+        {
+            await Tickets.CreateAsync(_newTicket.Type, _newTicket.Title, _newTicket.Description, userId);
+            _newTicket.Title = string.Empty;
+            _newTicket.Description = string.Empty;
+            _createStatus = "Ticket added.";
+            await ReloadAsync();
+        }
+        catch (Exception ex)
+        {
+            _createStatus = ex.Message;
+        }
+    }
+
+    private async Task DoneAsync(Guid ticketId)
+    {
+        await Tickets.DeleteAsync(ticketId);
+        await ReloadAsync();
+    }
+
+    private async Task SaveBugTop3Async()
+    {
+        _bugPriorityStatus = null;
+        await SaveTop3Async(TicketType.Bug, _bugTop3, status => _bugPriorityStatus = status);
+    }
+
+    private async Task SaveFeatureTop3Async()
+    {
+        _featurePriorityStatus = null;
+        await SaveTop3Async(TicketType.Feature, _featureTop3, status => _featurePriorityStatus = status);
+    }
+
+    private async Task SaveTop3Async(TicketType type, Top3Model model, Action<string> setStatus)
+    {
+        var auth = await AuthStateProvider.GetAuthenticationStateAsync();
+        var userId = auth.User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            setStatus("Could not identify current user.");
+            return;
+        }
+
+        var (first, second, third) = model.ToGuids();
+
+        try
+        {
+            await Tickets.SetAdminTop3Async(userId, type, first, second, third);
+            setStatus("Saved.");
+            await ReloadAsync();
+        }
+        catch (Exception ex)
+        {
+            setStatus(ex.Message);
+        }
+    }
+
+    private async Task ReloadAsync()
+    {
+        _bugs = (await Tickets.GetOrderedAsync(TicketType.Bug)).ToList();
+        _features = (await Tickets.GetOrderedAsync(TicketType.Feature)).ToList();
+
+        _bugChoices = (await Tickets.GetOpenChoicesAsync(TicketType.Bug)).ToList();
+        _featureChoices = (await Tickets.GetOpenChoicesAsync(TicketType.Feature)).ToList();
+
+        var auth = await AuthStateProvider.GetAuthenticationStateAsync();
+        var userId = auth.User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        if (!string.IsNullOrWhiteSpace(userId))
+        {
+            var b = await Tickets.GetAdminTop3Async(userId, TicketType.Bug);
+            _bugTop3.SetFromGuids(b.First, b.Second, b.Third);
+
+            var f = await Tickets.GetAdminTop3Async(userId, TicketType.Feature);
+            _featureTop3.SetFromGuids(f.First, f.Second, f.Third);
+        }
+    }
+}

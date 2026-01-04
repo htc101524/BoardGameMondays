@@ -53,6 +53,7 @@ builder.Services.AddScoped<AuthenticationStateProvider, HttpContextAuthStateProv
 builder.Services.AddScoped<BoardGameMondays.Core.BgmMemberService>();
 builder.Services.AddScoped<BoardGameMondays.Core.BgmMemberDirectoryService>();
 builder.Services.AddScoped<BoardGameMondays.Core.BoardGameService>();
+builder.Services.AddScoped<BoardGameMondays.Core.TicketService>();
 
 var app = builder.Build();
 
@@ -105,6 +106,48 @@ static async Task EnsureSqliteSchemaUpToDateAsync(ApplicationDbContext db)
             await using var alter = connection.CreateCommand();
             alter.CommandText = "ALTER TABLE Reviews ADD COLUMN TimesPlayed INTEGER NOT NULL DEFAULT 0;";
             await alter.ExecuteNonQueryAsync();
+        }
+
+        // Admin tickets + priorities.
+        // Using CREATE TABLE IF NOT EXISTS keeps this safe for existing dev DBs created via EnsureCreated.
+        await using (var createTickets = connection.CreateCommand())
+        {
+            createTickets.CommandText = @"
+CREATE TABLE IF NOT EXISTS Tickets (
+    Id TEXT NOT NULL PRIMARY KEY,
+    Type INTEGER NOT NULL,
+    Title TEXT NOT NULL,
+    Description TEXT NULL,
+    CreatedOn INTEGER NOT NULL,
+    CreatedByUserId TEXT NULL
+);
+";
+            await createTickets.ExecuteNonQueryAsync();
+        }
+
+        await using (var createTicketPriorities = connection.CreateCommand())
+        {
+            createTicketPriorities.CommandText = @"
+CREATE TABLE IF NOT EXISTS TicketPriorities (
+    Id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    TicketId TEXT NOT NULL,
+    AdminUserId TEXT NOT NULL,
+    Type INTEGER NOT NULL,
+    Rank INTEGER NOT NULL,
+    FOREIGN KEY (TicketId) REFERENCES Tickets(Id) ON DELETE CASCADE
+);
+";
+            await createTicketPriorities.ExecuteNonQueryAsync();
+        }
+
+        await using (var createIndexes = connection.CreateCommand())
+        {
+            createIndexes.CommandText = @"
+CREATE INDEX IF NOT EXISTS IX_Tickets_Type ON Tickets(Type);
+CREATE UNIQUE INDEX IF NOT EXISTS IX_TicketPriorities_Admin_Type_Rank ON TicketPriorities(AdminUserId, Type, Rank);
+CREATE UNIQUE INDEX IF NOT EXISTS IX_TicketPriorities_Admin_Ticket ON TicketPriorities(AdminUserId, TicketId);
+";
+            await createIndexes.ExecuteNonQueryAsync();
         }
     }
     finally
