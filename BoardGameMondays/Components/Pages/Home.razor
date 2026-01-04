@@ -4,7 +4,11 @@
 
 @using BoardGameMondays.Core
 @using BoardGameMondays.Components.Sections
+@using Microsoft.AspNetCore.Components.Authorization
+@using System.Security.Claims
 @inject BoardGameService BoardGameService
+@inject AgreementService AgreementService
+@inject AuthenticationStateProvider AuthStateProvider
 @inject IJSRuntime JS
 @inject NavigationManager Navigation
 
@@ -108,52 +112,110 @@
         }
 
         <div class="bgm-thoughtsBody">
-            <div class="bgm-thoughtsContent">
-                @if (_selectedReview is not null)
+            <div class="bgm-thoughtsMain">
+                <div class="bgm-thoughtsContent">
+                    @if (_selectedReview is not null)
+                    {
+                        <div class="bgm-reviewText">
+                            <p>@_selectedReview.Description</p>
+
+                            <AuthorizeView>
+                                <Authorized>
+                                    <div class="mt-3" aria-label="Agreement">
+                                        <div class="d-flex align-items-center gap-2 flex-wrap">
+                                            <span class="fw-semibold">How much do you agree with @_selectedReview.Reviewer.Name?</span>
+
+                                            <div class="btn-group" role="group" aria-label="Rate agreement">
+                                                @for (var score = 1; score <= 5; score++)
+                                                {
+                                                    var s = score;
+                                                    var isActive = _myAgreement == s;
+                                                    <button type="button"
+                                                            class="btn btn-sm @(isActive ? "btn-success" : "btn-outline-secondary")"
+                                                            disabled="@_savingAgreement"
+                                                            @onclick="() => SetAgreementAsync(s)">@s</button>
+                                                }
+                                            </div>
+
+                                            @if (!string.IsNullOrWhiteSpace(_agreementStatus))
+                                            {
+                                                <span class="text-muted">@_agreementStatus</span>
+                                            }
+                                        </div>
+                                    </div>
+                                </Authorized>
+                            </AuthorizeView>
+                        </div>
+                    }
+                    else if (thoughtsGame is not null && !string.IsNullOrWhiteSpace(thoughtsGame.Tagline))
+                    {
+                        <p>@thoughtsGame.Tagline</p>
+                    }
+                    else
+                    {
+                        <p>No thoughts yet.</p>
+                    }
+                </div>
+
+                @if (thoughtsGame?.Reviews?.Any() == true)
                 {
-                    <div class="bgm-reviewText">
-                        <p>@_selectedReview.Description</p>
+                    <div class="bgm-review-switcher" role="group" aria-label="Select a reviewer">
+                        @foreach (var review in thoughtsGame.Reviews
+                            .GroupBy(r => r.Reviewer.Name, StringComparer.OrdinalIgnoreCase)
+                            .Select(g => g.OrderByDescending(r => r.CreatedOn).First())
+                            .OrderBy(r => r.Reviewer.Name, StringComparer.OrdinalIgnoreCase))
+                        {
+                            var isSelected = string.Equals(review.Reviewer.Name, _selectedReview?.Reviewer.Name, StringComparison.OrdinalIgnoreCase);
+
+                            <button type="button"
+                                    class="bgm-review-switcher__button @(isSelected ? "is-active" : "")"
+                                    aria-pressed="@isSelected"
+                                    @onclick="() => SelectReview(review)">
+                                <span class="bgm-review-switcher__avatar" aria-hidden="true">
+                                    @if (!string.IsNullOrWhiteSpace(review.Reviewer.AvatarUrl))
+                                    {
+                                        <img src="@review.Reviewer.AvatarUrl" alt="" />
+                                    }
+                                    else
+                                    {
+                                        @(string.IsNullOrWhiteSpace(review.Reviewer.Name) ? "?" : review.Reviewer.Name[..1].ToUpperInvariant())
+                                    }
+                                </span>
+                                <span class="bgm-review-switcher__name">@review.Reviewer.Name</span>
+                            </button>
+                        }
                     </div>
-                }
-                else if (thoughtsGame is not null && !string.IsNullOrWhiteSpace(thoughtsGame.Tagline))
-                {
-                    <p>@thoughtsGame.Tagline</p>
-                }
-                else
-                {
-                    <p>No thoughts yet.</p>
                 }
             </div>
 
-            @if (thoughtsGame?.Reviews?.Any() == true)
-            {
-                <div class="bgm-review-switcher" role="group" aria-label="Select a reviewer">
-                    @foreach (var review in thoughtsGame.Reviews
-                        .GroupBy(r => r.Reviewer.Name, StringComparer.OrdinalIgnoreCase)
-                        .Select(g => g.OrderByDescending(r => r.CreatedOn).First())
-                        .OrderBy(r => r.Reviewer.Name, StringComparer.OrdinalIgnoreCase))
-                    {
-                        var isSelected = string.Equals(review.Reviewer.Name, _selectedReview?.Reviewer.Name, StringComparison.OrdinalIgnoreCase);
+            <AuthorizeView>
+                <Authorized>
+                    <aside class="bgm-thoughtsSide" aria-label="Alignment leaderboard">
+                        <div class="card">
+                            <div class="card-body">
+                                <div class="fw-semibold mb-2">You align with</div>
 
-                        <button type="button"
-                                class="bgm-review-switcher__button @(isSelected ? "is-active" : "")"
-                                aria-pressed="@isSelected"
-                                @onclick="() => SelectReview(review)">
-                            <span class="bgm-review-switcher__avatar" aria-hidden="true">
-                                @if (!string.IsNullOrWhiteSpace(review.Reviewer.AvatarUrl))
+                                @if (_alignment.Count == 0)
                                 {
-                                    <img src="@review.Reviewer.AvatarUrl" alt="" />
+                                    <div class="text-muted">Rate a few reviews to see this.</div>
                                 }
                                 else
                                 {
-                                    @(string.IsNullOrWhiteSpace(review.Reviewer.Name) ? "?" : review.Reviewer.Name[..1].ToUpperInvariant())
+                                    <div class="list-group list-group-flush">
+                                        @foreach (var item in _alignment)
+                                        {
+                                            <div class="list-group-item d-flex justify-content-between align-items-center px-0">
+                                                <div class="text-truncate">@item.ReviewerName</div>
+                                                <div class="text-muted text-nowrap">@item.AverageScore.ToString("0.0")</div>
+                                            </div>
+                                        }
+                                    </div>
                                 }
-                            </span>
-                            <span class="bgm-review-switcher__name">@review.Reviewer.Name</span>
-                        </button>
-                    }
-                </div>
-            }
+                            </div>
+                        </div>
+                    </aside>
+                </Authorized>
+            </AuthorizeView>
         </div>
     </div>
 </section>
@@ -167,11 +229,17 @@
     private BoardGame? _thoughtsGame;
     private Review? _selectedReview;
 
+    private int? _myAgreement;
+    private bool _savingAgreement;
+    private string? _agreementStatus;
+    private List<AgreementService.ReviewerAlignment> _alignment = new();
+
     protected override async Task OnInitializedAsync()
     {
         Navigation.LocationChanged += OnLocationChanged;
         BoardGameService.Changed += OnBoardGameServiceChanged;
         await RefreshFeaturedAsync(resetThoughts: true);
+        await RefreshAgreementStateAsync();
     }
 
     private async Task RefreshFeaturedAsync(bool resetThoughts)
@@ -197,6 +265,7 @@
         _ = InvokeAsync(async () =>
         {
             await RefreshFeaturedAsync(resetThoughts: true);
+            await RefreshAgreementStateAsync();
             StateHasChanged();
         });
     }
@@ -206,6 +275,7 @@
         _ = InvokeAsync(async () =>
         {
             await RefreshFeaturedAsync(resetThoughts: false);
+            await RefreshAgreementStateAsync();
             StateHasChanged();
         });
     }
@@ -217,7 +287,10 @@
     }
 
     private void SelectReview(Review review)
-        => _selectedReview = review;
+    {
+        _selectedReview = review;
+        _ = InvokeAsync(RefreshAgreementStateAsync);
+    }
 
     private static string FormatScore(double score)
         => score.ToString("0.0");
@@ -227,10 +300,67 @@
         _thoughtsGame = game;
         _selectedReview = PickDefaultReview(game);
 
+        await RefreshAgreementStateAsync();
+
         await JS.InvokeVoidAsync("bgm.scrollToIdNextFrame", "thoughts", "smooth");
     }
 
     private static Review? PickDefaultReview(BoardGame? game)
         => game?.Reviews?.OrderByDescending(r => r.CreatedOn).FirstOrDefault();
+
+    private async Task RefreshAgreementStateAsync()
+    {
+        _agreementStatus = null;
+        _myAgreement = null;
+        _alignment.Clear();
+
+        if (_selectedReview is null || _selectedReview.Id == Guid.Empty)
+        {
+            return;
+        }
+
+        var auth = await AuthStateProvider.GetAuthenticationStateAsync();
+        var userId = auth.User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            return;
+        }
+
+        _myAgreement = await AgreementService.GetUserAgreementAsync(userId, _selectedReview.Id);
+        _alignment = (await AgreementService.GetAlignmentAsync(userId, take: 5)).ToList();
+    }
+
+    private async Task SetAgreementAsync(int score)
+    {
+        if (_selectedReview is null || _selectedReview.Id == Guid.Empty)
+        {
+            return;
+        }
+
+        _agreementStatus = null;
+        _savingAgreement = true;
+
+        try
+        {
+            var auth = await AuthStateProvider.GetAuthenticationStateAsync();
+            var userId = auth.User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrWhiteSpace(userId))
+            {
+                return;
+            }
+
+            await AgreementService.SetUserAgreementAsync(userId, _selectedReview.Id, score);
+            _myAgreement = score;
+            _alignment = (await AgreementService.GetAlignmentAsync(userId, take: 5)).ToList();
+        }
+        catch (Exception ex)
+        {
+            _agreementStatus = ex.Message;
+        }
+        finally
+        {
+            _savingAgreement = false;
+        }
+    }
 }
 

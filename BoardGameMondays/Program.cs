@@ -54,6 +54,7 @@ builder.Services.AddScoped<BoardGameMondays.Core.BgmMemberService>();
 builder.Services.AddScoped<BoardGameMondays.Core.BgmMemberDirectoryService>();
 builder.Services.AddScoped<BoardGameMondays.Core.BoardGameService>();
 builder.Services.AddScoped<BoardGameMondays.Core.TicketService>();
+builder.Services.AddScoped<BoardGameMondays.Core.AgreementService>();
 
 var app = builder.Build();
 
@@ -148,6 +149,31 @@ CREATE UNIQUE INDEX IF NOT EXISTS IX_TicketPriorities_Admin_Type_Rank ON TicketP
 CREATE UNIQUE INDEX IF NOT EXISTS IX_TicketPriorities_Admin_Ticket ON TicketPriorities(AdminUserId, TicketId);
 ";
             await createIndexes.ExecuteNonQueryAsync();
+        }
+
+        // Review agreements (per-user ratings of reviews)
+        await using (var createReviewAgreements = connection.CreateCommand())
+        {
+            createReviewAgreements.CommandText = @"
+CREATE TABLE IF NOT EXISTS ReviewAgreements (
+    Id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    ReviewId TEXT NOT NULL,
+    UserId TEXT NOT NULL,
+    Score INTEGER NOT NULL,
+    CreatedOn INTEGER NOT NULL,
+    FOREIGN KEY (ReviewId) REFERENCES Reviews(Id) ON DELETE CASCADE
+);
+";
+            await createReviewAgreements.ExecuteNonQueryAsync();
+        }
+
+        await using (var createReviewAgreementIndexes = connection.CreateCommand())
+        {
+            createReviewAgreementIndexes.CommandText = @"
+CREATE UNIQUE INDEX IF NOT EXISTS IX_ReviewAgreements_User_Review ON ReviewAgreements(UserId, ReviewId);
+CREATE INDEX IF NOT EXISTS IX_ReviewAgreements_UserId ON ReviewAgreements(UserId);
+";
+            await createReviewAgreementIndexes.ExecuteNonQueryAsync();
         }
     }
     finally

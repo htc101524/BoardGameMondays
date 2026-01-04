@@ -14,6 +14,7 @@ public sealed class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<MemberEntity> Members => Set<MemberEntity>();
     public DbSet<BoardGameEntity> Games => Set<BoardGameEntity>();
     public DbSet<ReviewEntity> Reviews => Set<ReviewEntity>();
+    public DbSet<ReviewAgreementEntity> ReviewAgreements => Set<ReviewAgreementEntity>();
     public DbSet<FeaturedStateEntity> FeaturedState => Set<FeaturedStateEntity>();
     public DbSet<TicketEntity> Tickets => Set<TicketEntity>();
     public DbSet<TicketPriorityEntity> TicketPriorities => Set<TicketPriorityEntity>();
@@ -29,6 +30,12 @@ public sealed class ApplicationDbContext : IdentityDbContext<ApplicationUser>
                 fromDb => new DateTimeOffset(new DateTime(fromDb, DateTimeKind.Utc)));
 
         builder.Entity<TicketEntity>()
+            .Property(x => x.CreatedOn)
+            .HasConversion(
+                toDb => toDb.UtcDateTime.Ticks,
+                fromDb => new DateTimeOffset(new DateTime(fromDb, DateTimeKind.Utc)));
+
+        builder.Entity<ReviewAgreementEntity>()
             .Property(x => x.CreatedOn)
             .HasConversion(
                 toDb => toDb.UtcDateTime.Ticks,
@@ -62,6 +69,16 @@ public sealed class ApplicationDbContext : IdentityDbContext<ApplicationUser>
 
         builder.Entity<TicketPriorityEntity>()
             .HasIndex(x => new { x.AdminUserId, x.TicketId })
+            .IsUnique();
+
+        builder.Entity<ReviewAgreementEntity>()
+            .HasOne(x => x.Review)
+            .WithMany()
+            .HasForeignKey(x => x.ReviewId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Entity<ReviewAgreementEntity>()
+            .HasIndex(x => new { x.UserId, x.ReviewId })
             .IsUnique();
     }
 }
