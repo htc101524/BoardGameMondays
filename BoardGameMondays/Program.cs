@@ -293,20 +293,20 @@ app.MapPost("/account/login", async (
 
 app.MapPost("/account/avatar", async (
     HttpContext http,
-    IFormFile avatar,
+    IFormFile? avatar,
     UserManager<ApplicationUser> userManager,
     ApplicationDbContext db,
     IWebHostEnvironment env) =>
 {
     if (avatar is null || avatar.Length == 0)
     {
-        return Results.Redirect($"/?avatarError={Uri.EscapeDataString("Please choose an image.")}#people");
+        return Results.Redirect($"/people?avatarError={Uri.EscapeDataString("Please choose an image.")}");
     }
 
     const long maxBytes = 2 * 1024 * 1024; // 2MB
     if (avatar.Length > maxBytes)
     {
-        return Results.Redirect($"/?avatarError={Uri.EscapeDataString("Image must be 2MB or smaller.")}#people");
+        return Results.Redirect($"/people?avatarError={Uri.EscapeDataString("Image must be 2MB or smaller.")}");
     }
 
     var contentType = avatar.ContentType?.ToLowerInvariant();
@@ -322,19 +322,19 @@ app.MapPost("/account/avatar", async (
 
     if (extension is null)
     {
-        return Results.Redirect($"/?avatarError={Uri.EscapeDataString("Supported formats: JPG, PNG, WEBP, GIF.")}#people");
+        return Results.Redirect($"/people?avatarError={Uri.EscapeDataString("Supported formats: JPG, PNG, WEBP, GIF.")}");
     }
 
     var userName = http.User?.Identity?.Name;
     if (string.IsNullOrWhiteSpace(userName))
     {
-        return Results.Redirect($"/?avatarError={Uri.EscapeDataString("You must be logged in.")}#people");
+        return Results.Redirect($"/people?avatarError={Uri.EscapeDataString("You must be logged in.")}");
     }
 
     var user = await userManager.FindByNameAsync(userName);
     if (user is null)
     {
-        return Results.Redirect($"/?avatarError={Uri.EscapeDataString("You must be logged in.")}#people");
+        return Results.Redirect($"/people?avatarError={Uri.EscapeDataString("You must be logged in.")}");
     }
 
     var claims = await userManager.GetClaimsAsync(user);
@@ -382,7 +382,7 @@ app.MapPost("/account/avatar", async (
     member.AvatarUrl = $"/uploads/avatars/{fileName}?v={DateTimeOffset.UtcNow.UtcTicks}";
     await db.SaveChangesAsync();
 
-    return Results.Redirect("/?avatarUpdated=1#people");
+    return Results.Redirect("/people?avatarUpdated=1");
 }).RequireAuthorization().DisableAntiforgery();
 
 app.MapRazorComponents<App>()

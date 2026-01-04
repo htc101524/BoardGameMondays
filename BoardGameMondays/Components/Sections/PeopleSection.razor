@@ -15,7 +15,7 @@
                 <form class="mb-3" method="post" action="/account/avatar" enctype="multipart/form-data">
                     <label class="form-label" for="avatar-file">Your avatar</label>
                     <div class="d-flex gap-2 align-items-center">
-                        <input id="avatar-file" class="form-control" style="max-width: 420px" type="file" name="avatar" accept="image/*" />
+                        <input id="avatar-file" class="form-control" style="max-width: 420px" type="file" name="avatar" accept="image/*" required />
                         <button type="submit" class="btn btn-outline-primary">Upload</button>
                     </div>
                     @if (!string.IsNullOrWhiteSpace(_avatarMessage))

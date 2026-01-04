@@ -1,10 +1,5 @@
 @page "/people"
 
-@inject NavigationManager Navigation
+@using BoardGameMondays.Components.Sections
 
-@code {
-	protected override void OnInitialized()
-	{
-		Navigation.NavigateTo("/#people", replace: true);
-	}
-}
+<PeopleSection />
