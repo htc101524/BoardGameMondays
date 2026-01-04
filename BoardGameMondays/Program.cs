@@ -55,6 +55,7 @@ builder.Services.AddScoped<BoardGameMondays.Core.BgmMemberDirectoryService>();
 builder.Services.AddScoped<BoardGameMondays.Core.BoardGameService>();
 builder.Services.AddScoped<BoardGameMondays.Core.TicketService>();
 builder.Services.AddScoped<BoardGameMondays.Core.AgreementService>();
+builder.Services.AddScoped<BoardGameMondays.Core.GameNightService>();
 
 var app = builder.Build();
 
@@ -174,6 +175,103 @@ CREATE UNIQUE INDEX IF NOT EXISTS IX_ReviewAgreements_User_Review ON ReviewAgree
 CREATE INDEX IF NOT EXISTS IX_ReviewAgreements_UserId ON ReviewAgreements(UserId);
 ";
             await createReviewAgreementIndexes.ExecuteNonQueryAsync();
+        }
+
+        // Game nights (per Monday)
+        await using (var createGameNights = connection.CreateCommand())
+        {
+            createGameNights.CommandText = @"
+CREATE TABLE IF NOT EXISTS GameNights (
+    Id TEXT NOT NULL PRIMARY KEY,
+    DateKey INTEGER NOT NULL
+);
+";
+            await createGameNights.ExecuteNonQueryAsync();
+        }
+
+        await using (var createGameNightAttendees = connection.CreateCommand())
+        {
+            createGameNightAttendees.CommandText = @"
+CREATE TABLE IF NOT EXISTS GameNightAttendees (
+    Id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    GameNightId TEXT NOT NULL,
+    MemberId TEXT NOT NULL,
+    CreatedOn INTEGER NOT NULL,
+    FOREIGN KEY (GameNightId) REFERENCES GameNights(Id) ON DELETE CASCADE,
+    FOREIGN KEY (MemberId) REFERENCES Members(Id) ON DELETE CASCADE
+);
+";
+            await createGameNightAttendees.ExecuteNonQueryAsync();
+        }
+
+        await using (var createGameNightGames = connection.CreateCommand())
+        {
+            createGameNightGames.CommandText = @"
+CREATE TABLE IF NOT EXISTS GameNightGames (
+    Id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    GameNightId TEXT NOT NULL,
+    GameId TEXT NOT NULL,
+    IsPlayed INTEGER NOT NULL,
+    WinnerMemberId TEXT NULL,
+    CreatedOn INTEGER NOT NULL,
+    FOREIGN KEY (GameNightId) REFERENCES GameNights(Id) ON DELETE CASCADE,
+    FOREIGN KEY (GameId) REFERENCES Games(Id) ON DELETE CASCADE
+);
+";
+            await createGameNightGames.ExecuteNonQueryAsync();
+        }
+
+        // If GameNightGames existed before WinnerMemberId was added, patch it in.
+        var hasWinnerMemberId = false;
+        await using (var cmd = connection.CreateCommand())
+        {
+            cmd.CommandText = "PRAGMA table_info('GameNightGames');";
+            await using var reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                var name = reader.GetString(1);
+                if (string.Equals(name, "WinnerMemberId", StringComparison.OrdinalIgnoreCase))
+                {
+                    hasWinnerMemberId = true;
+                    break;
+                }
+            }
+        }
+
+        if (!hasWinnerMemberId)
+        {
+            await using var alter = connection.CreateCommand();
+            alter.CommandText = "ALTER TABLE GameNightGames ADD COLUMN WinnerMemberId TEXT NULL;";
+            await alter.ExecuteNonQueryAsync();
+        }
+
+        await using (var createGameNightGamePlayers = connection.CreateCommand())
+        {
+            createGameNightGamePlayers.CommandText = @"
+CREATE TABLE IF NOT EXISTS GameNightGamePlayers (
+    Id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    GameNightGameId INTEGER NOT NULL,
+    MemberId TEXT NOT NULL,
+    CreatedOn INTEGER NOT NULL,
+    FOREIGN KEY (GameNightGameId) REFERENCES GameNightGames(Id) ON DELETE CASCADE,
+    FOREIGN KEY (MemberId) REFERENCES Members(Id) ON DELETE CASCADE
+);
+";
+            await createGameNightGamePlayers.ExecuteNonQueryAsync();
+        }
+
+        await using (var createGameNightIndexes = connection.CreateCommand())
+        {
+            createGameNightIndexes.CommandText = @"
+CREATE UNIQUE INDEX IF NOT EXISTS IX_GameNights_DateKey ON GameNights(DateKey);
+CREATE UNIQUE INDEX IF NOT EXISTS IX_GameNightAttendees_Night_Member ON GameNightAttendees(GameNightId, MemberId);
+CREATE UNIQUE INDEX IF NOT EXISTS IX_GameNightGames_Night_Game ON GameNightGames(GameNightId, GameId);
+CREATE UNIQUE INDEX IF NOT EXISTS IX_GameNightGamePlayers_NightGame_Member ON GameNightGamePlayers(GameNightGameId, MemberId);
+CREATE INDEX IF NOT EXISTS IX_GameNightAttendees_MemberId ON GameNightAttendees(MemberId);
+CREATE INDEX IF NOT EXISTS IX_GameNightGames_GameId ON GameNightGames(GameId);
+CREATE INDEX IF NOT EXISTS IX_GameNightGamePlayers_MemberId ON GameNightGamePlayers(MemberId);
+";
+            await createGameNightIndexes.ExecuteNonQueryAsync();
         }
     }
     finally

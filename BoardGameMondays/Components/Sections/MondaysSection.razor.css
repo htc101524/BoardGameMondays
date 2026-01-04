@@ -1,0 +1,60 @@
+.bgm-mondaysScroller {
+    display: flex;
+    gap: 12px;
+    overflow-x: auto;
+    padding: 8px 4px 12px;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+}
+
+.bgm-mondayCube {
+    flex: 0 0 auto;
+    width: 96px;
+    height: 96px;
+    border: 1px solid var(--bs-border-color);
+    border-radius: var(--bs-border-radius-lg);
+    background: var(--bs-body-bg);
+    display: grid;
+    align-content: center;
+    justify-items: center;
+    text-align: center;
+    padding: 8px;
+    scroll-snap-align: center;
+}
+
+.bgm-mondayCube:hover {
+    background: var(--bs-tertiary-bg);
+}
+
+.bgm-mondayCube.is-selected {
+    outline: 2px solid var(--bs-primary);
+    outline-offset: 2px;
+}
+
+.bgm-mondayCube:focus-visible {
+    outline: 2px solid var(--bs-primary);
+    outline-offset: 2px;
+}
+
+.bgm-mondayCube__dow {
+    font-size: 0.75rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.bgm-mondayCube__day {
+    font-size: 1.6rem;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.bgm-mondayCube__month {
+    font-size: 0.85rem;
+    font-weight: 600;
+    line-height: 1.1;
+}
+
+.bgm-mondayCube__kind {
+    font-size: 0.75rem;
+    line-height: 1.1;
+}

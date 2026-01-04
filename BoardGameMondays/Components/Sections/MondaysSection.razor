@@ -1,0 +1,526 @@
+@using BoardGameMondays.Core
+@using Microsoft.AspNetCore.Components.Authorization
+@using System.Security.Claims
+@inject GameNightService GameNightService
+@inject BoardGameService BoardGameService
+@inject AuthenticationStateProvider AuthStateProvider
+
+<section id="mondays" class="home-section" aria-label="Mondays">
+    <div class="home-section__inner">
+        <h1>Mondays</h1>
+
+        <div class="bgm-mondaysScroller" role="list" aria-label="Select a Monday">
+            @foreach (var item in _items)
+            {
+                var isSelected = item.Date == _selected;
+
+                <button type="button"
+                        class="bgm-mondayCube @(isSelected ? "is-selected" : "")"
+                        role="listitem"
+                        aria-pressed="@isSelected"
+                        @onclick="() => SelectAsync(item.Date)">
+                    <div class="bgm-mondayCube__dow">Mon</div>
+                    <div class="bgm-mondayCube__day">@item.Date.Day</div>
+                    <div class="bgm-mondayCube__month">@item.Date.ToString("MMM")</div>
+                    <div class="bgm-mondayCube__kind text-muted">@item.Kind</div>
+                </button>
+            }
+        </div>
+
+        <div class="card mt-3" aria-label="Selected Monday details">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+                    <div>
+                        <div class="fw-semibold">@FormatLongDate(_selected)</div>
+                        <div class="text-muted small">@(_selected < _nextMonday ? "Past" : "Upcoming")</div>
+                    </div>
+
+                    @if (_isAdmin && _selectedNight is null && !_loading)
+                    {
+                        <button type="button" class="btn btn-sm btn-outline-primary" @onclick="CreateNightAsync">
+                            Create game night
+                        </button>
+                    }
+                </div>
+
+                @if (_loading)
+                {
+                    <div class="text-muted mt-3">Loading…</div>
+                }
+                else if (_selectedNight is null)
+                {
+                    <div class="text-muted mt-3">There wasn't a game night on this Monday.</div>
+                }
+                else
+                {
+                    @if (_isAdmin && _selected >= _nextMonday)
+                    {
+                        <div class="mt-3" aria-label="Attendance">
+                            @if (_memberId is null)
+                            {
+                                <div class="text-muted">Your account isn't linked to a BGM member yet.</div>
+                            }
+                            else
+                            {
+                                <div class="d-flex align-items-center gap-2 flex-wrap">
+                                    <span class="fw-semibold">Attending?</span>
+
+                                    <button type="button"
+                                            class="btn btn-sm @(_amAttending ? "btn-success" : "btn-outline-success")"
+                                            disabled="@_saving"
+                                            @onclick="() => SetAttendingAsync(true)">
+                                        ✓
+                                    </button>
+                                    <button type="button"
+                                            class="btn btn-sm @(!_amAttending ? "btn-danger" : "btn-outline-danger")"
+                                            disabled="@_saving"
+                                            @onclick="() => SetAttendingAsync(false)">
+                                        ✕
+                                    </button>
+
+                                    @if (!string.IsNullOrWhiteSpace(_status))
+                                    {
+                                        <span class="text-muted">@_status</span>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    }
+
+                    <div class="mt-3" aria-label="Attendees">
+                        <div class="fw-semibold mb-1">People going</div>
+                        @if (_selectedNight.Attendees.Count == 0)
+                        {
+                            <div class="text-muted">No attendees yet.</div>
+                        }
+                        else
+                        {
+                            <div class="d-flex flex-wrap gap-2">
+                                @foreach (var attendee in _selectedNight.Attendees)
+                                {
+                                    <span class="badge text-bg-light">@attendee.MemberName</span>
+
+                                    @if (_isAdmin && _selected < _nextMonday)
+                                    {
+                                        <button type="button"
+                                                class="btn btn-sm btn-outline-danger"
+                                                disabled="@_saving"
+                                                title="Remove"
+                                                aria-label="Remove @attendee.MemberName"
+                                                @onclick="() => SetMemberAttendanceAsync(attendee.MemberId, false)">
+                                            ✕
+                                        </button>
+                                    }
+                                }
+                            </div>
+                        }
+
+                        @if (_isAdmin && _selected < _nextMonday)
+                        {
+                            <div class="mt-2 d-flex align-items-center gap-2 flex-wrap" aria-label="Add attendee">
+                                <select class="form-select form-select-sm" style="max-width: 360px" @bind="_selectedMemberId">
+                                    <option value="">Add a member…</option>
+                                    @foreach (var m in _allMembers)
+                                    {
+                                        <option value="@m.Id">@m.Name</option>
+                                    }
+                                </select>
+                                <button type="button" class="btn btn-sm btn-outline-primary" disabled="@_saving" @onclick="AddSelectedMemberAsync">
+                                    Add
+                                </button>
+                            </div>
+                        }
+                    </div>
+
+                    <div class="mt-3" aria-label="Planned games">
+                        <div class="fw-semibold mb-1">@(_selected < _nextMonday ? "Games played" : "Games planned")</div>
+                        @if (_selectedNight.Games.Count == 0)
+                        {
+                            <div class="text-muted">No planned games yet.</div>
+                        }
+                        else
+                        {
+                            <div class="d-grid gap-2">
+                                @foreach (var game in _selectedNight.Games)
+                                {
+                                    <div class="border rounded p-2" aria-label="Game">
+                                        <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+                                            <div class="fw-semibold">@game.GameName</div>
+
+                                            @if (game.Winner is not null)
+                                            {
+                                                <span class="badge text-bg-success">Winner: @game.Winner.MemberName</span>
+                                            }
+                                        </div>
+
+                                        <div class="mt-2" aria-label="Players">
+                                            <div class="text-muted small mb-1">Players</div>
+
+                                            @if (game.Players.Count == 0)
+                                            {
+                                                <div class="text-muted">No players yet.</div>
+                                            }
+                                            else
+                                            {
+                                                <div class="d-flex flex-wrap gap-2 align-items-center">
+                                                    @foreach (var player in game.Players)
+                                                    {
+                                                        <span class="badge text-bg-light">@player.MemberName</span>
+
+                                                        @if (_isAdmin)
+                                                        {
+                                                            <button type="button"
+                                                                    class="btn btn-sm btn-outline-danger"
+                                                                    disabled="@_saving"
+                                                                    title="Remove"
+                                                                    aria-label="Remove @player.MemberName"
+                                                                    @onclick="() => RemovePlayerAsync(game.Id, player.MemberId)">
+                                                                ✕
+                                                            </button>
+                                                        }
+                                                    }
+                                                </div>
+                                            }
+
+                                            @if (_isAdmin)
+                                            {
+                                                <div class="mt-2 d-flex align-items-center gap-2 flex-wrap" aria-label="Add player">
+                                                    <select class="form-select form-select-sm" style="max-width: 360px"
+                                                            value="@GetSelectedPlayer(game.Id)"
+                                                            @onchange="e => SetSelectedPlayer(game.Id, e.Value?.ToString())">
+                                                        <option value="">Add a member…</option>
+                                                        @foreach (var m in _allMembers)
+                                                        {
+                                                            <option value="@m.Id">@m.Name</option>
+                                                        }
+                                                    </select>
+                                                    <button type="button" class="btn btn-sm btn-outline-primary" disabled="@_saving" @onclick="() => AddSelectedPlayerAsync(game.Id)">
+                                                        Add
+                                                    </button>
+                                                </div>
+                                            }
+                                        </div>
+
+                                        @if (_isAdmin && _selected < _nextMonday)
+                                        {
+                                            <div class="mt-2" aria-label="Winner">
+                                                <div class="text-muted small mb-1">Winner</div>
+                                                <select class="form-select form-select-sm" style="max-width: 360px"
+                                                        value="@(game.Winner?.MemberId.ToString() ?? string.Empty)"
+                                                        disabled="@_saving"
+                                                        @onchange="e => SetWinnerAsync(game.Id, e.Value?.ToString())">
+                                                    <option value="">No winner</option>
+                                                    @foreach (var p in game.Players)
+                                                    {
+                                                        <option value="@p.MemberId">@p.MemberName</option>
+                                                    }
+                                                </select>
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        }
+
+                        @if (_isAdmin)
+                        {
+                            <div class="mt-2 d-flex align-items-center gap-2 flex-wrap">
+                                <select class="form-select form-select-sm" style="max-width: 360px" @bind="_selectedGameId">
+                                    <option value="">Add an existing game…</option>
+                                    @foreach (var g in _allGames)
+                                    {
+                                        <option value="@g.Id">@g.Name</option>
+                                    }
+                                </select>
+                                <button type="button" class="btn btn-sm btn-outline-primary" disabled="@_saving" @onclick="AddPlannedGameAsync">
+                                    Add
+                                </button>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</section>
+
+@code {
+    private const int PastCountAdmin = 8;
+    private const int UpcomingCount = 8;
+
+    private readonly List<MondayItem> _items = new();
+    private readonly List<GameOption> _allGames = new();
+    private readonly List<GameNightService.MemberOption> _allMembers = new();
+
+    private DateOnly _selected;
+    private DateOnly _nextMonday;
+
+    private bool _isAdmin;
+    private Guid? _memberId;
+
+    private GameNightService.GameNight? _selectedNight;
+    private bool _loading;
+    private bool _saving;
+    private string? _status;
+    private bool _amAttending;
+    private string? _selectedGameId;
+    private string? _selectedMemberId;
+    private readonly Dictionary<int, string?> _selectedPlayerByGameId = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        var mondayOnOrBeforeToday = GetMondayOnOrBefore(today);
+        _nextMonday = today.DayOfWeek == DayOfWeek.Monday
+            ? mondayOnOrBeforeToday
+            : mondayOnOrBeforeToday.AddDays(7);
+
+        var auth = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = auth.User;
+        _isAdmin = user.Identity?.IsAuthenticated == true && user.IsInRole("Admin");
+        _memberId = TryGetMemberId(user);
+
+        var pastCount = _isAdmin ? PastCountAdmin : 0;
+        var first = _nextMonday.AddDays(-7 * pastCount);
+        var last = _nextMonday.AddDays(7 * (UpcomingCount - 1));
+
+        for (var date = first; date <= last; date = date.AddDays(7))
+        {
+            var kind = date < _nextMonday ? "Past" : "Upcoming";
+            _items.Add(new MondayItem(date, kind));
+        }
+
+        // Populate game options (for planned games).
+        // Keep this simple for now: all games.
+        var games = await BoardGameService.GetAllAsync();
+        _allGames.AddRange(games.Select(g => new GameOption(g.Id, g.Name)));
+
+        // Member options for past-night attendance management.
+        _allMembers.AddRange(await GameNightService.GetAllMembersAsync());
+
+        _selected = _nextMonday;
+        await LoadSelectedAsync();
+    }
+
+    private async Task SelectAsync(DateOnly date)
+    {
+        _selected = date;
+        await LoadSelectedAsync();
+    }
+
+    private async Task LoadSelectedAsync()
+    {
+        _loading = true;
+        _status = null;
+        _selectedGameId = null;
+        try
+        {
+            _selectedNight = await GameNightService.GetByDateAsync(_selected);
+            _amAttending = _memberId is { } me && _selectedNight?.Attendees.Any(a => a.MemberId == me) == true;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task CreateNightAsync()
+    {
+        if (!_isAdmin)
+        {
+            return;
+        }
+
+        _saving = true;
+        _status = null;
+        try
+        {
+            _selectedNight = await GameNightService.CreateAsync(_selected);
+            _amAttending = _memberId is { } me && _selectedNight.Attendees.Any(a => a.MemberId == me);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task SetAttendingAsync(bool attending)
+    {
+        if (!_isAdmin || _selectedNight is null || _memberId is null)
+        {
+            return;
+        }
+
+        _saving = true;
+        _status = null;
+        try
+        {
+            var updated = await GameNightService.SetAttendingAsync(_selectedNight.Id, _memberId.Value, attending);
+            _selectedNight = updated;
+            _amAttending = attending;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task AddPlannedGameAsync()
+    {
+        if (!_isAdmin || _selectedNight is null)
+        {
+            return;
+        }
+
+        if (!Guid.TryParse(_selectedGameId, out var gameId))
+        {
+            return;
+        }
+
+        _saving = true;
+        _status = null;
+        try
+        {
+            var isPast = _selected < _nextMonday;
+            _selectedNight = await GameNightService.AddGameAsync(_selectedNight.Id, gameId, isPlayed: isPast);
+            _selectedGameId = null;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private string GetSelectedPlayer(int gameNightGameId)
+        => _selectedPlayerByGameId.TryGetValue(gameNightGameId, out var value) ? value ?? string.Empty : string.Empty;
+
+    private void SetSelectedPlayer(int gameNightGameId, string? value)
+    {
+        _selectedPlayerByGameId[gameNightGameId] = value;
+    }
+
+    private async Task AddSelectedPlayerAsync(int gameNightGameId)
+    {
+        if (!_isAdmin || _selectedNight is null)
+        {
+            return;
+        }
+
+        if (!_selectedPlayerByGameId.TryGetValue(gameNightGameId, out var raw) || !Guid.TryParse(raw, out var memberId))
+        {
+            return;
+        }
+
+        _saving = true;
+        _status = null;
+        try
+        {
+            _selectedNight = await GameNightService.AddPlayerAsync(_selectedNight.Id, gameNightGameId, memberId);
+            _selectedPlayerByGameId[gameNightGameId] = null;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task RemovePlayerAsync(int gameNightGameId, Guid memberId)
+    {
+        if (!_isAdmin || _selectedNight is null)
+        {
+            return;
+        }
+
+        _saving = true;
+        _status = null;
+        try
+        {
+            _selectedNight = await GameNightService.RemovePlayerAsync(_selectedNight.Id, gameNightGameId, memberId);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task SetWinnerAsync(int gameNightGameId, string? value)
+    {
+        if (!_isAdmin || _selectedNight is null)
+        {
+            return;
+        }
+
+        Guid? winnerId = null;
+        if (Guid.TryParse(value, out var parsed))
+        {
+            winnerId = parsed;
+        }
+
+        _saving = true;
+        _status = null;
+        try
+        {
+            _selectedNight = await GameNightService.SetWinnerAsync(_selectedNight.Id, gameNightGameId, winnerId);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task AddSelectedMemberAsync()
+    {
+        if (!_isAdmin || _selectedNight is null)
+        {
+            return;
+        }
+
+        if (!Guid.TryParse(_selectedMemberId, out var memberId))
+        {
+            return;
+        }
+
+        await SetMemberAttendanceAsync(memberId, true);
+        _selectedMemberId = null;
+    }
+
+    private async Task SetMemberAttendanceAsync(Guid memberId, bool attending)
+    {
+        if (!_isAdmin || _selectedNight is null)
+        {
+            return;
+        }
+
+        _saving = true;
+        _status = null;
+        try
+        {
+            _selectedNight = await GameNightService.SetAttendingAsync(_selectedNight.Id, memberId, attending);
+            _amAttending = _memberId is { } me && _selectedNight?.Attendees.Any(a => a.MemberId == me) == true;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private static Guid? TryGetMemberId(ClaimsPrincipal user)
+    {
+        var value = user.FindFirst("bgm:memberId")?.Value;
+        return Guid.TryParse(value, out var id) ? id : null;
+    }
+
+    private static DateOnly GetMondayOnOrBefore(DateOnly date)
+    {
+        // DayOfWeek: Sunday=0 ... Saturday=6
+        var delta = (7 + ((int)date.DayOfWeek - (int)DayOfWeek.Monday)) % 7;
+        return date.AddDays(-delta);
+    }
+
+    private static string FormatLongDate(DateOnly date)
+        => date.ToDateTime(TimeOnly.MinValue).ToString("dddd d MMMM yyyy");
+
+    private sealed record MondayItem(DateOnly Date, string Kind);
+
+    private sealed record GameOption(Guid Id, string Name);
+}
