@@ -175,6 +175,7 @@ public sealed class BoardGameService
             GameId = gameId,
             ReviewerId = reviewerId,
             Rating = review.Rating,
+            TimesPlayed = review.TimesPlayed,
             Description = review.Description,
             CreatedOn = review.CreatedOn
         };
@@ -184,6 +185,27 @@ public sealed class BoardGameService
         Changed?.Invoke();
 
         return await GetByIdAsync(gameId, ct);
+    }
+
+    public async Task<int?> IncrementReviewTimesPlayedAsync(Guid reviewId, CancellationToken ct = default)
+    {
+        var affected = await _db.Reviews
+            .Where(r => r.Id == reviewId)
+            .ExecuteUpdateAsync(setters => setters.SetProperty(r => r.TimesPlayed, r => r.TimesPlayed + 1), ct);
+
+        if (affected == 0)
+        {
+            return null;
+        }
+
+        var newValue = await _db.Reviews
+            .AsNoTracking()
+            .Where(r => r.Id == reviewId)
+            .Select(r => (int?)r.TimesPlayed)
+            .FirstOrDefaultAsync(ct);
+
+        Changed?.Invoke();
+        return newValue;
     }
 
     private async Task<Guid> GetOrCreateReviewerIdAsync(BgmMember member, CancellationToken ct)
@@ -217,7 +239,9 @@ public sealed class BoardGameService
                 reviewer: new PersistedBgmMember(r.Reviewer.Name, r.Reviewer.Email, r.Reviewer.Summary, r.Reviewer.AvatarUrl),
                 rating: r.Rating,
                 description: r.Description,
-                createdOn: r.CreatedOn))
+                timesPlayed: r.TimesPlayed,
+                createdOn: r.CreatedOn,
+                id: r.Id))
             .ToArray();
 
         return new BoardGame(

@@ -60,15 +60,26 @@
 
 .bgm-thoughtsSelected {
     display: flex;
-    align-items: center;
-    gap: 12px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
     margin: 8px 0 18px;
 }
 
+.bgm-thoughtsSelected__row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.bgm-thoughtsSelected__meta {
+    line-height: 1.1;
+}
+
 .bgm-thoughtsSelected__avatar {
-    width: 44px;
-    height: 44px;
-    border-radius: 12px;
+    width: 64px;
+    height: 64px;
+    border-radius: 16px;
     display: grid;
     place-items: center;
     font-weight: 800;
@@ -300,7 +311,21 @@
     }
 
     .bgm-thoughtsSelected {
+        align-items: center;
+    }
+
+    .bgm-thoughtsSelected__row {
         justify-content: center;
+    }
+
+    .bgm-thoughtsSelected__meta {
+        text-align: center;
+    }
+
+    .bgm-thoughtsSelected__avatar {
+        width: 56px;
+        height: 56px;
+        border-radius: 14px;
     }
 
     .bgm-review-switcher__button {

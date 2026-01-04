@@ -21,6 +21,9 @@ public sealed class ReviewEntity
     public double Rating { get; set; }
 
     [Required]
+    public int TimesPlayed { get; set; }
+
+    [Required]
     [MaxLength(4000)]
     public string Description { get; set; } = string.Empty;
 

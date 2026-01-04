@@ -1,6 +1,11 @@
 @page "/admin/games/{Id:guid}"
+@using Microsoft.AspNetCore.Components.Web
+@using static Microsoft.AspNetCore.Components.Web.RenderMode
+@rendermode InteractiveServer
+@using System.Linq
 @using BoardGameMondays.Core
 @using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components
 @using Microsoft.AspNetCore.Components.Forms
 @attribute [Authorize(Roles = "Admin")]
 @inject BoardGameService BoardGameService
@@ -25,7 +30,7 @@ else
 
         <div class="mb-3">
             <label class="form-label">Status</label>
-            <InputSelect class="form-select" @bind-Value="_model.Status">
+            <InputSelect class="form-select" TValue="GameStatus" @bind-Value="_model.Status">
                 <option value="@GameStatus.Decided">Decided</option>
                 <option value="@GameStatus.Playing">Playing</option>
                 <option value="@GameStatus.Queued">Queued</option>
@@ -55,7 +60,12 @@ else
 
     <h2 class="h4">Reviews</h2>
 
-    @if (_game.Reviews.Count == 0)
+    @if (!string.IsNullOrWhiteSpace(_playsStatus))
+    {
+        <div class="text-muted mb-2">@_playsStatus</div>
+    }
+
+    @if (!_game.Reviews.Any())
     {
         <p>No reviews yet.</p>
     }
@@ -65,9 +75,16 @@ else
             @foreach (var review in _game.Reviews)
             {
                 <div class="list-group-item">
-                    <div class="d-flex justify-content-between">
+                    <div class="d-flex justify-content-between align-items-start gap-2">
                         <div class="fw-semibold">@review.Reviewer.Name</div>
-                        <div class="text-muted">@review.Rating.ToString("0.0")</div>
+                        <div class="text-muted text-nowrap">@review.Rating.ToString("0.0")</div>
+                    </div>
+
+                    <div class="d-flex justify-content-between align-items-center gap-2 mt-1">
+                        <div class="text-muted">Played: @review.TimesPlayed</div>
+                        <button type="button"
+                                class="btn btn-sm btn-outline-secondary"
+                                @onclick="@EventCallback.Factory.Create(this, () => IncrementPlaysAsync(review.Id))">+1</button>
                     </div>
                     <div>@review.Description</div>
                 </div>
@@ -80,7 +97,7 @@ else
     <EditForm Model="_reviewModel" OnValidSubmit="AddReviewAsync">
         <div class="mb-3">
             <label class="form-label">Reviewer</label>
-            <InputSelect class="form-select" @bind-Value="_reviewModel.ReviewerName">
+            <InputSelect class="form-select" TValue="string" @bind-Value="_reviewModel.ReviewerName">
                 @foreach (var member in MemberDirectory.GetAll())
                 {
                     <option value="@member.Name">@member.Name</option>
@@ -90,7 +107,7 @@ else
 
         <div class="mb-3">
             <label class="form-label">Rating</label>
-            <InputNumber class="form-control" @bind-Value="_reviewModel.Rating" step="0.1" />
+            <InputNumber class="form-control" TValue="double" @bind-Value="_reviewModel.Rating" step="0.1" />
         </div>
 
         <div class="mb-3">
@@ -117,6 +134,7 @@ else
 
     private AddReviewModel _reviewModel = new();
     private string? _reviewStatus;
+    private string? _playsStatus;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -168,6 +186,41 @@ else
         _reviewStatus = updated is null ? "Game not found." : "Review added.";
 
         _reviewModel.Description = string.Empty;
+    }
+
+    private async Task IncrementPlaysAsync(Guid reviewId)
+    {
+        if (_game is null)
+        {
+            return;
+        }
+
+        _playsStatus = null;
+
+        if (reviewId == Guid.Empty)
+        {
+            _playsStatus = "This review can't be updated yet. Refresh the page and try again.";
+            return;
+        }
+
+        try
+        {
+            var newValue = await BoardGameService.IncrementReviewTimesPlayedAsync(reviewId);
+            if (newValue is null)
+            {
+                _playsStatus = "Review not found.";
+                return;
+            }
+
+            _game = await BoardGameService.GetByIdAsync(Id);
+            _playsStatus = $"Updated (now {newValue}).";
+
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            _playsStatus = $"Could not update: {ex.Message}";
+        }
     }
 
     private sealed class EditGameModel

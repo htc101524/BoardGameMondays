@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
+using System.Data;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -60,8 +61,56 @@ using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
     await db.Database.EnsureCreatedAsync();
+
+    await EnsureSqliteSchemaUpToDateAsync(db);
     
     await DataSeeder.SeedAsync(db);
+}
+
+static async Task EnsureSqliteSchemaUpToDateAsync(ApplicationDbContext db)
+{
+    if (!db.Database.IsSqlite())
+    {
+        return;
+    }
+
+    var connection = db.Database.GetDbConnection();
+    if (connection.State != ConnectionState.Open)
+    {
+        await connection.OpenAsync();
+    }
+
+    try
+    {
+        var hasTimesPlayed = false;
+
+        await using (var cmd = connection.CreateCommand())
+        {
+            cmd.CommandText = "PRAGMA table_info('Reviews');";
+            await using var reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                // PRAGMA table_info returns: cid, name, type, notnull, dflt_value, pk
+                var name = reader.GetString(1);
+                if (string.Equals(name, "TimesPlayed", StringComparison.OrdinalIgnoreCase))
+                {
+                    hasTimesPlayed = true;
+                    break;
+                }
+            }
+        }
+
+        if (!hasTimesPlayed)
+        {
+            await using var alter = connection.CreateCommand();
+            alter.CommandText = "ALTER TABLE Reviews ADD COLUMN TimesPlayed INTEGER NOT NULL DEFAULT 0;";
+            await alter.ExecuteNonQueryAsync();
+        }
+    }
+    finally
+    {
+        await connection.CloseAsync();
+    }
 }
 
 // Configure the HTTP request pipeline.
