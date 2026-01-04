@@ -1,3 +1,9 @@
+.bgm-mondaysSection {
+    background: var(--bs-tertiary-bg);
+    border-top: 1px solid var(--bs-border-color);
+    border-bottom: 1px solid var(--bs-border-color);
+}
+
 .bgm-mondaysScroller {
     display: flex;
     gap: 12px;
