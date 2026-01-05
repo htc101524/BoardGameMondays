@@ -1,0 +1,20 @@
+.bgm-blogCard {
+    border-radius: var(--bs-border-radius-lg);
+}
+
+.bgm-blogBody {
+    margin-top: 0.75rem;
+    white-space: pre-line;
+    color: var(--bs-body-color);
+
+    display: -webkit-box;
+    -webkit-line-clamp: 6;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.bgm-blogBody.is-expanded {
+    display: block;
+    -webkit-line-clamp: unset;
+    overflow: visible;
+}

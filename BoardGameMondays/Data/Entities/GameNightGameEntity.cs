@@ -21,11 +21,19 @@ public sealed class GameNightGameEntity
     [Required]
     public bool IsPlayed { get; set; }
 
+    // When confirmed, the players are locked and betting can open.
+    [Required]
+    public bool IsConfirmed { get; set; }
+
     public Guid? WinnerMemberId { get; set; }
 
     public MemberEntity? WinnerMember { get; set; }
 
     public List<GameNightGamePlayerEntity> Players { get; set; } = new();
+
+    public List<GameNightGameOddsEntity> Odds { get; set; } = new();
+
+    public List<GameNightGameBetEntity> Bets { get; set; } = new();
 
     [Required]
     public DateTimeOffset CreatedOn { get; set; }

@@ -28,6 +28,11 @@ public sealed class GameNightService
             .ThenInclude(p => p.Member)
             .Include(n => n.Games)
             .ThenInclude(g => g.WinnerMember)
+            .Include(n => n.Games)
+            .ThenInclude(g => g.Odds)
+            .ThenInclude(o => o.Member)
+            .Include(n => n.Games)
+            .ThenInclude(g => g.Bets)
             .FirstOrDefaultAsync(n => n.DateKey == dateKey, ct);
 
         return entity is null ? null : ToDomain(entity);
@@ -78,6 +83,11 @@ public sealed class GameNightService
             .ThenInclude(p => p.Member)
             .Include(n => n.Games)
             .ThenInclude(g => g.WinnerMember)
+            .Include(n => n.Games)
+            .ThenInclude(g => g.Odds)
+            .ThenInclude(o => o.Member)
+            .Include(n => n.Games)
+            .ThenInclude(g => g.Bets)
             .FirstOrDefaultAsync(n => n.Id == id, ct);
 
         return entity is null ? null : ToDomain(entity);
@@ -163,11 +173,16 @@ public sealed class GameNightService
 
     public async Task<GameNight?> AddPlayerAsync(Guid gameNightId, int gameNightGameId, Guid memberId, CancellationToken ct = default)
     {
-        var exists = await _db.GameNightGames
-            .AnyAsync(g => g.Id == gameNightGameId && g.GameNightId == gameNightId, ct);
-        if (!exists)
+        var game = await _db.GameNightGames
+            .FirstOrDefaultAsync(g => g.Id == gameNightGameId && g.GameNightId == gameNightId, ct);
+        if (game is null)
         {
             return null;
+        }
+
+        if (game.IsConfirmed)
+        {
+            return await GetByIdAsync(gameNightId, ct);
         }
 
         var already = await _db.GameNightGamePlayers
@@ -189,6 +204,19 @@ public sealed class GameNightService
 
     public async Task<GameNight?> RemovePlayerAsync(Guid gameNightId, int gameNightGameId, Guid memberId, CancellationToken ct = default)
     {
+        var game = await _db.GameNightGames
+            .FirstOrDefaultAsync(g => g.Id == gameNightGameId && g.GameNightId == gameNightId, ct);
+
+        if (game is null)
+        {
+            return null;
+        }
+
+        if (game.IsConfirmed)
+        {
+            return await GetByIdAsync(gameNightId, ct);
+        }
+
         var player = await _db.GameNightGamePlayers
             .FirstOrDefaultAsync(p => p.GameNightGameId == gameNightGameId && p.MemberId == memberId, ct);
 
@@ -196,8 +224,7 @@ public sealed class GameNightService
         {
             _db.GameNightGamePlayers.Remove(player);
 
-            var game = await _db.GameNightGames.FirstOrDefaultAsync(g => g.Id == gameNightGameId && g.GameNightId == gameNightId, ct);
-            if (game is not null && game.WinnerMemberId == memberId)
+            if (game.WinnerMemberId == memberId)
             {
                 game.WinnerMemberId = null;
             }
@@ -216,6 +243,15 @@ public sealed class GameNightService
         if (game is null)
         {
             return null;
+        }
+
+        // Once any bets have been resolved for this game, the winner is locked.
+        var isLocked = await _db.GameNightGameBets
+            .AsNoTracking()
+            .AnyAsync(b => b.GameNightGameId == gameNightGameId && b.IsResolved, ct);
+        if (isLocked)
+        {
+            return await GetByIdAsync(gameNightId, ct);
         }
 
         if (winnerMemberId is null)
@@ -242,9 +278,72 @@ public sealed class GameNightService
     public async Task<IReadOnlyList<MemberOption>> GetAllMembersAsync(CancellationToken ct = default)
         => await _db.Members
             .AsNoTracking()
+            .Where(m => m.IsBgmMember)
             .OrderBy(m => m.Name)
             .Select(m => new MemberOption(m.Id, m.Name))
             .ToListAsync(ct);
+
+    public async Task<GameNight?> ConfirmGameAsync(Guid gameNightId, int gameNightGameId, CancellationToken ct = default)
+    {
+        var game = await _db.GameNightGames
+            .FirstOrDefaultAsync(g => g.Id == gameNightGameId && g.GameNightId == gameNightId, ct);
+
+        if (game is null)
+        {
+            return null;
+        }
+
+        if (!game.IsConfirmed)
+        {
+            game.IsConfirmed = true;
+            await _db.SaveChangesAsync(ct);
+        }
+
+        return await GetByIdAsync(gameNightId, ct);
+    }
+
+    public async Task<GameNight?> SetOddsAsync(Guid gameNightId, int gameNightGameId, Guid memberId, int oddsTimes100, CancellationToken ct = default)
+    {
+        if (oddsTimes100 < 101 || oddsTimes100 > 10000)
+        {
+            return await GetByIdAsync(gameNightId, ct);
+        }
+
+        var gameExists = await _db.GameNightGames
+            .AnyAsync(g => g.Id == gameNightGameId && g.GameNightId == gameNightId, ct);
+        if (!gameExists)
+        {
+            return null;
+        }
+
+        var isPlayer = await _db.GameNightGamePlayers
+            .AnyAsync(p => p.GameNightGameId == gameNightGameId && p.MemberId == memberId, ct);
+        if (!isPlayer)
+        {
+            return await GetByIdAsync(gameNightId, ct);
+        }
+
+        var existing = await _db.GameNightGameOdds
+            .FirstOrDefaultAsync(o => o.GameNightGameId == gameNightGameId && o.MemberId == memberId, ct);
+
+        if (existing is null)
+        {
+            _db.GameNightGameOdds.Add(new GameNightGameOddsEntity
+            {
+                GameNightGameId = gameNightGameId,
+                MemberId = memberId,
+                OddsTimes100 = oddsTimes100,
+                CreatedOn = DateTimeOffset.UtcNow
+            });
+        }
+        else
+        {
+            existing.OddsTimes100 = oddsTimes100;
+        }
+
+        await _db.SaveChangesAsync(ct);
+        return await GetByIdAsync(gameNightId, ct);
+    }
 
     public async Task<IReadOnlyList<DateOnly>> GetRecentPastGameNightDatesAsync(DateOnly beforeDate, int take, CancellationToken ct = default)
     {
@@ -284,11 +383,18 @@ public sealed class GameNightService
                     .Select(p => new GameNightGamePlayer(p.MemberId, p.Member.Name))
                     .ToArray();
 
+                var odds = g.Odds
+                    .OrderBy(o => o.Member.Name)
+                    .Select(o => new GameNightGameOdds(o.MemberId, o.Member.Name, o.OddsTimes100))
+                    .ToArray();
+
                 var winner = g.WinnerMemberId is { } w && g.WinnerMember is not null
                     ? new GameNightWinner(w, g.WinnerMember.Name)
                     : null;
 
-                return new GameNightGame(g.Id, g.GameId, g.Game.Name, g.IsPlayed, players, winner);
+                var isSettled = g.Bets.Count == 0 || g.Bets.All(b => b.IsResolved);
+
+                return new GameNightGame(g.Id, g.GameId, g.Game.Name, g.IsPlayed, g.IsConfirmed, isSettled, players, odds, winner);
             })
             .ToArray();
 
@@ -310,9 +416,11 @@ public sealed class GameNightService
 
     public sealed record GameNightAttendee(Guid MemberId, string MemberName);
 
-    public sealed record GameNightGame(int Id, Guid GameId, string GameName, bool IsPlayed, IReadOnlyList<GameNightGamePlayer> Players, GameNightWinner? Winner);
+    public sealed record GameNightGame(int Id, Guid GameId, string GameName, bool IsPlayed, bool IsConfirmed, bool IsSettled, IReadOnlyList<GameNightGamePlayer> Players, IReadOnlyList<GameNightGameOdds> Odds, GameNightWinner? Winner);
 
     public sealed record GameNightGamePlayer(Guid MemberId, string MemberName);
+
+    public sealed record GameNightGameOdds(Guid MemberId, string MemberName, int OddsTimes100);
 
     public sealed record GameNightWinner(Guid MemberId, string MemberName);
 

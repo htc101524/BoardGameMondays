@@ -1,6 +1,10 @@
 ﻿@using Microsoft.AspNetCore.Components.Authorization
 @inject NavigationManager Navigation
 @inject IJSRuntime JS
+@inject AuthenticationStateProvider AuthStateProvider
+@inject BoardGameMondays.Core.BgmCoinService Coins
+
+@implements IDisposable
 
 <header class="bgm-header" role="banner">
     <div class="bgm-header__inner">
@@ -13,18 +17,26 @@
             <span class="bgm-brand__text">Board Game Mondays</span>
         </a>
 
-        <button class="bgm-menuButton"
-                type="button"
-                aria-label="Open menu"
-                aria-controls="bgm-popup"
-                aria-expanded="@_menuOpen"
-                @onclick="ToggleMenu">
-            <svg viewBox="0 0 48 48" class="bgm-menuIcon" aria-hidden="true" focusable="false">
-                <path d="M10 14 H38" />
-                <path d="M10 24 H38" />
-                <path d="M10 34 H38" />
-            </svg>
-        </button>
+        <div class="bgm-header__right">
+            <AuthorizeView>
+                <Authorized>
+                    <div class="bgm-coins" aria-label="BGM Coins">BGM Coins: @(_coins?.ToString() ?? "…")</div>
+                </Authorized>
+            </AuthorizeView>
+
+            <button class="bgm-menuButton"
+                    type="button"
+                    aria-label="Open menu"
+                    aria-controls="bgm-popup"
+                    aria-expanded="@_menuOpen"
+                    @onclick="ToggleMenu">
+                <svg viewBox="0 0 48 48" class="bgm-menuIcon" aria-hidden="true" focusable="false">
+                    <path d="M10 14 H38" />
+                    <path d="M10 24 H38" />
+                    <path d="M10 34 H38" />
+                </svg>
+            </button>
+        </div>
     </div>
 </header>
 
@@ -33,6 +45,7 @@
 <aside id="bgm-popup" class="bgm-popup @(_menuOpen ? "is-open" : "")" role="dialog" aria-modal="true">
     <nav class="bgm-popup__nav" aria-label="Menu">
         <a class="bgm-popup__link" href="/#games" @onclick="CloseMenu">Games</a>
+        <a class="bgm-popup__link" href="/#blog" @onclick="CloseMenu">Blog</a>
         <a class="bgm-popup__link" href="/#people" @onclick="CloseMenu">People</a>
 
         <AuthorizeView>
@@ -56,6 +69,60 @@
 
 @code {
     private bool _menuOpen;
+    private string? _userId;
+    private int? _coins;
+
+    protected override async Task OnInitializedAsync()
+    {
+        AuthStateProvider.AuthenticationStateChanged += OnAuthStateChanged;
+        Coins.Changed += OnCoinsChanged;
+        await RefreshCoinsAsync();
+    }
+
+    public void Dispose()
+    {
+        AuthStateProvider.AuthenticationStateChanged -= OnAuthStateChanged;
+        Coins.Changed -= OnCoinsChanged;
+    }
+
+    private void OnAuthStateChanged(Task<AuthenticationState> task)
+    {
+        _ = InvokeAsync(async () =>
+        {
+            await task;
+            await RefreshCoinsAsync();
+        });
+    }
+
+    private void OnCoinsChanged()
+    {
+        _ = InvokeAsync(RefreshCoinsAsync);
+    }
+
+    private async Task RefreshCoinsAsync()
+    {
+        var auth = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = auth.User;
+
+        if (user.Identity?.IsAuthenticated != true)
+        {
+            _userId = null;
+            _coins = null;
+            StateHasChanged();
+            return;
+        }
+
+        _userId = user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrWhiteSpace(_userId))
+        {
+            _coins = null;
+            StateHasChanged();
+            return;
+        }
+
+        _coins = await Coins.GetCoinsAsync(_userId);
+        StateHasChanged();
+    }
 
     private void ToggleMenu() => _menuOpen = !_menuOpen;
     private void CloseMenu() => _menuOpen = false;

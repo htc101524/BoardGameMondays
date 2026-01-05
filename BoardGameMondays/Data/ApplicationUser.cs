@@ -4,4 +4,5 @@ namespace BoardGameMondays.Data;
 
 public sealed class ApplicationUser : IdentityUser
 {
+	public int BgmCoins { get; set; } = 100;
 }

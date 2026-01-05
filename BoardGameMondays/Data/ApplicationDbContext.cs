@@ -22,6 +22,9 @@ public sealed class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<GameNightAttendeeEntity> GameNightAttendees => Set<GameNightAttendeeEntity>();
     public DbSet<GameNightGameEntity> GameNightGames => Set<GameNightGameEntity>();
     public DbSet<GameNightGamePlayerEntity> GameNightGamePlayers => Set<GameNightGamePlayerEntity>();
+    public DbSet<GameNightGameOddsEntity> GameNightGameOdds => Set<GameNightGameOddsEntity>();
+    public DbSet<GameNightGameBetEntity> GameNightGameBets => Set<GameNightGameBetEntity>();
+    public DbSet<BlogPostEntity> BlogPosts => Set<BlogPostEntity>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -58,6 +61,30 @@ public sealed class ApplicationDbContext : IdentityDbContext<ApplicationUser>
                 fromDb => new DateTimeOffset(new DateTime(fromDb, DateTimeKind.Utc)));
 
         builder.Entity<GameNightGamePlayerEntity>()
+            .Property(x => x.CreatedOn)
+            .HasConversion(
+                toDb => toDb.UtcDateTime.Ticks,
+                fromDb => new DateTimeOffset(new DateTime(fromDb, DateTimeKind.Utc)));
+
+        builder.Entity<GameNightGameOddsEntity>()
+            .Property(x => x.CreatedOn)
+            .HasConversion(
+                toDb => toDb.UtcDateTime.Ticks,
+                fromDb => new DateTimeOffset(new DateTime(fromDb, DateTimeKind.Utc)));
+
+        builder.Entity<GameNightGameBetEntity>()
+            .Property(x => x.CreatedOn)
+            .HasConversion(
+                toDb => toDb.UtcDateTime.Ticks,
+                fromDb => new DateTimeOffset(new DateTime(fromDb, DateTimeKind.Utc)));
+
+        builder.Entity<GameNightGameBetEntity>()
+            .Property(x => x.ResolvedOn)
+            .HasConversion(
+                toDb => toDb.HasValue ? toDb.Value.UtcDateTime.Ticks : (long?)null,
+                fromDb => fromDb.HasValue ? new DateTimeOffset(new DateTime(fromDb.Value, DateTimeKind.Utc)) : (DateTimeOffset?)null);
+
+        builder.Entity<BlogPostEntity>()
             .Property(x => x.CreatedOn)
             .HasConversion(
                 toDb => toDb.UtcDateTime.Ticks,
@@ -159,6 +186,42 @@ public sealed class ApplicationDbContext : IdentityDbContext<ApplicationUser>
 
         builder.Entity<GameNightGamePlayerEntity>()
             .HasIndex(x => new { x.GameNightGameId, x.MemberId })
+            .IsUnique();
+
+        builder.Entity<GameNightGameOddsEntity>()
+            .HasOne(x => x.GameNightGame)
+            .WithMany(x => x.Odds)
+            .HasForeignKey(x => x.GameNightGameId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Entity<GameNightGameOddsEntity>()
+            .HasOne(x => x.Member)
+            .WithMany()
+            .HasForeignKey(x => x.MemberId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Entity<GameNightGameOddsEntity>()
+            .HasIndex(x => new { x.GameNightGameId, x.MemberId })
+            .IsUnique();
+
+        builder.Entity<GameNightGameBetEntity>()
+            .HasOne(x => x.GameNightGame)
+            .WithMany(x => x.Bets)
+            .HasForeignKey(x => x.GameNightGameId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Entity<GameNightGameBetEntity>()
+            .HasOne(x => x.PredictedWinnerMember)
+            .WithMany()
+            .HasForeignKey(x => x.PredictedWinnerMemberId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.Entity<GameNightGameBetEntity>()
+            .HasIndex(x => new { x.GameNightGameId, x.UserId })
+            .IsUnique();
+
+        builder.Entity<BlogPostEntity>()
+            .HasIndex(x => x.Slug)
             .IsUnique();
     }
 }

@@ -1,9 +1,14 @@
 @using BoardGameMondays.Core
 @using Microsoft.AspNetCore.Components.Authorization
 @using System.Security.Claims
+@using System.Globalization
 @inject GameNightService GameNightService
 @inject BoardGameService BoardGameService
 @inject AuthenticationStateProvider AuthStateProvider
+@inject BettingService BettingService
+@inject BgmCoinService CoinService
+
+@implements IDisposable
 
 <section id="mondays" class="home-section bgm-mondaysSection" aria-label="Mondays">
     <div class="home-section__inner">
@@ -147,6 +152,23 @@
                                         <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
                                             <div class="fw-semibold">@game.GameName</div>
 
+                                            @if (_selected >= _nextMonday)
+                                            {
+                                                @if (game.IsConfirmed)
+                                                {
+                                                    <span class="badge text-bg-primary">Confirmed</span>
+                                                }
+                                                else if (_isAdmin)
+                                                {
+                                                    <button type="button"
+                                                            class="btn btn-sm btn-primary"
+                                                            disabled="@_saving"
+                                                            @onclick="() => ConfirmGameAsync(game.Id)">
+                                                        Confirm
+                                                    </button>
+                                                }
+                                            }
+
                                             @if (game.Winner is not null)
                                             {
                                                 <span class="badge text-bg-success">Winner: @game.Winner.MemberName</span>
@@ -167,7 +189,7 @@
                                                     {
                                                         <span class="badge text-bg-light">@player.MemberName</span>
 
-                                                        @if (_isAdmin)
+                                                        @if (_isAdmin && !game.IsConfirmed)
                                                         {
                                                             <button type="button"
                                                                     class="btn btn-sm btn-outline-danger"
@@ -182,7 +204,7 @@
                                                 </div>
                                             }
 
-                                            @if (_isAdmin)
+                                            @if (_isAdmin && !game.IsConfirmed)
                                             {
                                                 <div class="mt-2 d-flex align-items-center gap-2 flex-wrap" aria-label="Add player">
                                                     <select class="form-select form-select-sm" style="max-width: 360px"
@@ -201,20 +223,203 @@
                                             }
                                         </div>
 
+                                        @if (game.IsConfirmed && _selected >= _nextMonday)
+                                        {
+                                            <div class="mt-2" aria-label="Odds">
+                                                <div class="text-muted small mb-1">Odds</div>
+
+                                                @if (game.Players.Count == 0)
+                                                {
+                                                    <div class="text-muted">Add players first.</div>
+                                                }
+                                                else
+                                                {
+                                                    <div class="d-grid gap-1">
+                                                        @foreach (var p in game.Players)
+                                                        {
+                                                            var odds = game.Odds.FirstOrDefault(o => o.MemberId == p.MemberId)?.OddsTimes100;
+                                                            var key = (game.Id, p.MemberId);
+
+                                                            @if (_isAdmin)
+                                                            {
+                                                                <div class="d-flex align-items-center gap-2 flex-wrap">
+                                                                    <div class="text-truncate" style="min-width: 180px">@p.MemberName</div>
+
+                                                                    <div class="d-inline-flex align-items-center gap-1" aria-label="Fractional odds">
+                                                                        <input type="number"
+                                                                               class="form-control form-control-sm"
+                                                                               style="max-width: 84px"
+                                                                               min="1"
+                                                                               step="1"
+                                                                               value="@GetOddsNumerator(key, odds)"
+                                                                               disabled="@_saving"
+                                                                               @onchange="e => SetOddsNumerator(key, e.Value?.ToString())" />
+
+                                                                        <span class="text-muted">/</span>
+
+                                                                        <input type="number"
+                                                                               class="form-control form-control-sm"
+                                                                               style="max-width: 84px"
+                                                                               min="1"
+                                                                               step="1"
+                                                                               value="@GetOddsDenominator(key, odds)"
+                                                                               disabled="@_saving"
+                                                                               @onchange="e => SetOddsDenominator(key, e.Value?.ToString())" />
+                                                                    </div>
+
+                                                                    <button type="button"
+                                                                            class="btn btn-sm btn-outline-primary"
+                                                                            disabled="@_saving"
+                                                                            @onclick="() => SaveOddsAsync(game.Id, p.MemberId)">
+                                                                        Save
+                                                                    </button>
+
+                                                                    <span class="text-muted">@FormatFraction(odds)</span>
+                                                                </div>
+                                                            }
+                                                            else
+                                                            {
+                                                                <div class="d-flex justify-content-between align-items-center">
+                                                                    <div class="text-truncate">@p.MemberName</div>
+                                                                    <div class="text-muted">@FormatFraction(odds)</div>
+                                                                </div>
+                                                            }
+                                                        }
+                                                    </div>
+                                                }
+                                            </div>
+
+                                            <AuthorizeView>
+                                                <Authorized>
+                                                    <div class="mt-3" aria-label="Betting">
+                                                        @if (_userId is null)
+                                                        {
+                                                            <div class="text-muted">Log in to place a bet.</div>
+                                                        }
+                                                        else if (_myBets.TryGetValue(game.Id, out var bet))
+                                                        {
+                                                            <div class="text-muted">
+                                                                You bet @bet.Amount on @bet.WinnerMemberName (odds @FormatFraction(bet.OddsTimes100)).
+                                                                @{
+                                                                    var profit = ComputeProfit(bet.Amount, bet.OddsTimes100);
+                                                                    if (profit is not null)
+                                                                    {
+                                                                        <span>Potential winnings: +@profit (return @(bet.Amount + profit.Value)).</span>
+                                                                    }
+                                                                }
+                                                            </div>
+                                                        }
+                                                        else
+                                                        {
+                                                            <div class="d-flex align-items-center gap-2 flex-wrap">
+                                                                <span class="fw-semibold">Bet</span>
+
+                                                                <select class="form-select form-select-sm" style="max-width: 260px"
+                                                                        value="@GetSelectedBetWinner(game.Id)"
+                                                                        @onchange="e => SetSelectedBetWinner(game.Id, e.Value?.ToString())">
+                                                                    <option value="">Pick a winner…</option>
+                                                                    @foreach (var p in game.Players)
+                                                                    {
+                                                                        var hasOdds = game.Odds.Any(o => o.MemberId == p.MemberId);
+                                                                        <option value="@p.MemberId" disabled="@(!hasOdds)">
+                                                                            @p.MemberName@(hasOdds ? string.Empty : " (no odds)")
+                                                                        </option>
+                                                                    }
+                                                                </select>
+
+                                                                <input type="number"
+                                                                       class="form-control form-control-sm"
+                                                                       style="max-width: 120px"
+                                                                       min="1"
+                                                                       step="1"
+                                                                       value="@GetSelectedBetAmount(game.Id)"
+                                                                       disabled="@_saving"
+                                                                       @onchange="e => SetSelectedBetAmount(game.Id, e.Value?.ToString())" />
+
+                                                                <button type="button"
+                                                                        class="btn btn-sm btn-success"
+                                                                        disabled="@_saving"
+                                                                        @onclick="() => PlaceBetAsync(game.Id)">
+                                                                    Place bet
+                                                                </button>
+
+                                                                <span class="text-muted">Balance: @(_coins?.ToString() ?? "…")</span>
+
+                                                                @{
+                                                                    var profit = GetSelectedProfit(game);
+                                                                    if (profit is not null)
+                                                                    {
+                                                                        <span class="text-muted">Potential winnings: +@profit (return @((GetSelectedAmount(game.Id) + profit.Value))).</span>
+                                                                    }
+                                                                }
+
+                                                                @if (_betStatusByGameId.TryGetValue(game.Id, out var message) && !string.IsNullOrWhiteSpace(message))
+                                                                {
+                                                                    <span class="text-muted">@message</span>
+                                                                }
+                                                            </div>
+                                                        }
+                                                    </div>
+                                                </Authorized>
+                                            </AuthorizeView>
+                                        }
+
                                         @if (_isAdmin && _selected < _nextMonday)
                                         {
                                             <div class="mt-2" aria-label="Winner">
                                                 <div class="text-muted small mb-1">Winner</div>
-                                                <select class="form-select form-select-sm" style="max-width: 360px"
-                                                        value="@(game.Winner?.MemberId.ToString() ?? string.Empty)"
-                                                        disabled="@_saving"
-                                                        @onchange="e => SetWinnerAsync(game.Id, e.Value?.ToString())">
-                                                    <option value="">No winner</option>
-                                                    @foreach (var p in game.Players)
+                                                <div class="d-flex align-items-center gap-2 flex-wrap">
+                                                    <select class="form-select form-select-sm" style="max-width: 360px"
+                                                            value="@(game.Winner?.MemberId.ToString() ?? string.Empty)"
+                                                            disabled="@(_saving || game.IsSettled)"
+                                                            @onchange="e => SetWinnerAsync(game.Id, e.Value?.ToString())">
+                                                        <option value="">No winner</option>
+                                                        @foreach (var p in game.Players)
+                                                        {
+                                                            <option value="@p.MemberId">@p.MemberName</option>
+                                                        }
+                                                    </select>
+
+                                                    @if (game.Winner is not null)
                                                     {
-                                                        <option value="@p.MemberId">@p.MemberName</option>
+                                                        @if (game.IsSettled)
+                                                        {
+                                                            <span class="badge text-bg-success">Settled</span>
+                                                        }
+                                                        else
+                                                        {
+                                                            @if (_confirmWinnerPending.Contains(game.Id))
+                                                            {
+                                                                <button type="button"
+                                                                        class="btn btn-sm btn-danger"
+                                                                        disabled="@_saving"
+                                                                        @onclick="() => ConfirmWinnerAsync(game.Id)">
+                                                                    Are you sure?
+                                                                </button>
+                                                                <button type="button"
+                                                                        class="btn btn-sm btn-outline-secondary"
+                                                                        disabled="@_saving"
+                                                                        @onclick="() => CancelConfirmWinner(game.Id)">
+                                                                    Cancel
+                                                                </button>
+                                                            }
+                                                            else
+                                                            {
+                                                                <button type="button"
+                                                                        class="btn btn-sm btn-success"
+                                                                        disabled="@_saving"
+                                                                        @onclick="() => BeginConfirmWinner(game.Id)">
+                                                                    Confirm
+                                                                </button>
+                                                            }
+
+                                                            @if (_settleStatusByGameId.TryGetValue(game.Id, out var status) && !string.IsNullOrWhiteSpace(status))
+                                                            {
+                                                                <span class="text-muted">@status</span>
+                                                            }
+                                                        }
                                                     }
-                                                </select>
+                                                </div>
                                             </div>
                                         }
                                     </div>
@@ -256,6 +461,8 @@
     private DateOnly _nextMonday;
 
     private bool _isAdmin;
+    private string? _userId;
+    private int? _coins;
     private Guid? _memberId;
 
     private GameNightService.GameNight? _selectedNight;
@@ -266,6 +473,14 @@
     private string? _selectedGameId;
     private string? _selectedMemberId;
     private readonly Dictionary<int, string?> _selectedPlayerByGameId = new();
+    private readonly Dictionary<int, string?> _selectedBetWinnerByGameId = new();
+    private readonly Dictionary<int, int> _selectedBetAmountByGameId = new();
+    private readonly Dictionary<int, string?> _betStatusByGameId = new();
+    private readonly Dictionary<int, string?> _settleStatusByGameId = new();
+    private readonly HashSet<int> _confirmWinnerPending = new();
+    private readonly Dictionary<(int GameNightGameId, Guid MemberId), int> _oddsNumeratorByKey = new();
+    private readonly Dictionary<(int GameNightGameId, Guid MemberId), int> _oddsDenominatorByKey = new();
+    private IReadOnlyDictionary<int, BettingService.UserBet> _myBets = new Dictionary<int, BettingService.UserBet>();
 
     protected override async Task OnInitializedAsync()
     {
@@ -278,7 +493,11 @@
         var auth = await AuthStateProvider.GetAuthenticationStateAsync();
         var user = auth.User;
         _isAdmin = user.Identity?.IsAuthenticated == true && user.IsInRole("Admin");
+        _userId = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         _memberId = TryGetMemberId(user);
+
+        CoinService.Changed += OnCoinsChanged;
+        await RefreshCoinsAsync();
 
         var dates = new HashSet<DateOnly>();
 
@@ -323,6 +542,16 @@
         await LoadSelectedAsync();
     }
 
+    public void Dispose()
+    {
+        CoinService.Changed -= OnCoinsChanged;
+    }
+
+    private void OnCoinsChanged()
+    {
+        _ = InvokeAsync(RefreshCoinsAsync);
+    }
+
     private async Task SelectAsync(DateOnly date)
     {
         _selected = date;
@@ -338,11 +567,32 @@
         {
             _selectedNight = await GameNightService.GetByDateAsync(_selected);
             _amAttending = _memberId is { } me && _selectedNight?.Attendees.Any(a => a.MemberId == me) == true;
+
+            if (_selectedNight is not null && !string.IsNullOrWhiteSpace(_userId))
+            {
+                _myBets = await BettingService.GetUserBetsForNightAsync(_selectedNight.Id, _userId);
+            }
+            else
+            {
+                _myBets = new Dictionary<int, BettingService.UserBet>();
+            }
         }
         finally
         {
             _loading = false;
         }
+    }
+
+    private async Task RefreshCoinsAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_userId))
+        {
+            _coins = null;
+            return;
+        }
+
+        _coins = await CoinService.GetCoinsAsync(_userId);
+        StateHasChanged();
     }
 
     private async Task CreateNightAsync()
@@ -482,6 +732,52 @@
         try
         {
             _selectedNight = await GameNightService.SetWinnerAsync(_selectedNight.Id, gameNightGameId, winnerId);
+            _settleStatusByGameId[gameNightGameId] = null;
+            _confirmWinnerPending.Remove(gameNightGameId);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private void BeginConfirmWinner(int gameNightGameId)
+    {
+        _confirmWinnerPending.Add(gameNightGameId);
+        _settleStatusByGameId[gameNightGameId] = "This will pay out coins and lock the winner.";
+    }
+
+    private void CancelConfirmWinner(int gameNightGameId)
+    {
+        _confirmWinnerPending.Remove(gameNightGameId);
+        _settleStatusByGameId[gameNightGameId] = null;
+    }
+
+    private async Task ConfirmWinnerAsync(int gameNightGameId)
+    {
+        if (!_isAdmin || _selectedNight is null)
+        {
+            return;
+        }
+
+        _saving = true;
+        _settleStatusByGameId[gameNightGameId] = null;
+        try
+        {
+            var result = await BettingService.ResolveGameAsync(_selectedNight.Id, gameNightGameId);
+            _settleStatusByGameId[gameNightGameId] = result switch
+            {
+                BettingService.ResolveResult.Ok => "Winnings resolved.",
+                BettingService.ResolveResult.AlreadyResolved => "Already settled.",
+                BettingService.ResolveResult.MissingWinner => "Select a winner first.",
+                BettingService.ResolveResult.NotPast => "Can only settle past games.",
+                _ => "Couldn't settle."
+            };
+
+            _confirmWinnerPending.Remove(gameNightGameId);
+
+            // Refresh to reflect IsSettled.
+            await LoadSelectedAsync();
         }
         finally
         {
@@ -518,6 +814,236 @@
         {
             _selectedNight = await GameNightService.SetAttendingAsync(_selectedNight.Id, memberId, attending);
             _amAttending = _memberId is { } me && _selectedNight?.Attendees.Any(a => a.MemberId == me) == true;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task ConfirmGameAsync(int gameNightGameId)
+    {
+        if (!_isAdmin || _selectedNight is null)
+        {
+            return;
+        }
+
+        _saving = true;
+        _status = null;
+        try
+        {
+            _selectedNight = await GameNightService.ConfirmGameAsync(_selectedNight.Id, gameNightGameId);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private static (int Numerator, int Denominator)? ToFraction(int? oddsTimes100)
+    {
+        if (oddsTimes100 is null || oddsTimes100 <= 100)
+        {
+            return null;
+        }
+
+        var numerator = oddsTimes100.Value - 100;
+        var denominator = 100;
+        var gcd = Gcd(numerator, denominator);
+        return (numerator / gcd, denominator / gcd);
+    }
+
+    private static int Gcd(int a, int b)
+    {
+        a = Math.Abs(a);
+        b = Math.Abs(b);
+        while (b != 0)
+        {
+            var t = a % b;
+            a = b;
+            b = t;
+        }
+        return a == 0 ? 1 : a;
+    }
+
+    private static string FormatFraction(int? oddsTimes100)
+    {
+        var f = ToFraction(oddsTimes100);
+        return f is null ? "—" : $"{f.Value.Numerator}/{f.Value.Denominator}";
+    }
+
+    private string GetOddsNumerator((int GameNightGameId, Guid MemberId) key, int? oddsTimes100)
+    {
+        if (_oddsNumeratorByKey.TryGetValue(key, out var value))
+        {
+            return value.ToString(CultureInfo.InvariantCulture);
+        }
+
+        var f = ToFraction(oddsTimes100);
+        if (f is not null)
+        {
+            _oddsNumeratorByKey[key] = f.Value.Numerator;
+            _oddsDenominatorByKey[key] = f.Value.Denominator;
+            return f.Value.Numerator.ToString(CultureInfo.InvariantCulture);
+        }
+
+        return string.Empty;
+    }
+
+    private string GetOddsDenominator((int GameNightGameId, Guid MemberId) key, int? oddsTimes100)
+    {
+        if (_oddsDenominatorByKey.TryGetValue(key, out var value))
+        {
+            return value.ToString(CultureInfo.InvariantCulture);
+        }
+
+        var f = ToFraction(oddsTimes100);
+        if (f is not null)
+        {
+            _oddsNumeratorByKey[key] = f.Value.Numerator;
+            _oddsDenominatorByKey[key] = f.Value.Denominator;
+            return f.Value.Denominator.ToString(CultureInfo.InvariantCulture);
+        }
+
+        return string.Empty;
+    }
+
+    private void SetOddsNumerator((int GameNightGameId, Guid MemberId) key, string? raw)
+    {
+        if (int.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var n) && n > 0)
+        {
+            _oddsNumeratorByKey[key] = n;
+        }
+    }
+
+    private void SetOddsDenominator((int GameNightGameId, Guid MemberId) key, string? raw)
+    {
+        if (int.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var d) && d > 0)
+        {
+            _oddsDenominatorByKey[key] = d;
+        }
+    }
+
+    private async Task SaveOddsAsync(int gameNightGameId, Guid memberId)
+    {
+        if (!_isAdmin || _selectedNight is null)
+        {
+            return;
+        }
+
+        var key = (gameNightGameId, memberId);
+
+        if (!_oddsNumeratorByKey.TryGetValue(key, out var numerator) || numerator <= 0)
+        {
+            return;
+        }
+
+        if (!_oddsDenominatorByKey.TryGetValue(key, out var denominator) || denominator <= 0)
+        {
+            return;
+        }
+
+        var times100 = 100 + (int)Math.Round(100d * numerator / denominator);
+
+        _saving = true;
+        _status = null;
+        try
+        {
+            _selectedNight = await GameNightService.SetOddsAsync(_selectedNight.Id, gameNightGameId, memberId, times100);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private static int? ComputeProfit(int amount, int oddsTimes100)
+    {
+        var f = ToFraction(oddsTimes100);
+        if (f is null)
+        {
+            return null;
+        }
+
+        return (amount * f.Value.Numerator) / f.Value.Denominator;
+    }
+
+    private int GetSelectedAmount(int gameNightGameId)
+        => _selectedBetAmountByGameId.TryGetValue(gameNightGameId, out var value) ? value : 10;
+
+    private int? GetSelectedProfit(GameNightService.GameNightGame game)
+    {
+        if (!_selectedBetWinnerByGameId.TryGetValue(game.Id, out var rawWinner) || !Guid.TryParse(rawWinner, out var winnerId))
+        {
+            return null;
+        }
+
+        var odds = game.Odds.FirstOrDefault(o => o.MemberId == winnerId)?.OddsTimes100;
+        if (odds is null)
+        {
+            return null;
+        }
+
+        var amount = GetSelectedAmount(game.Id);
+        return ComputeProfit(amount, odds.Value);
+    }
+
+    private string GetSelectedBetWinner(int gameNightGameId)
+        => _selectedBetWinnerByGameId.TryGetValue(gameNightGameId, out var value) ? value ?? string.Empty : string.Empty;
+
+    private void SetSelectedBetWinner(int gameNightGameId, string? value)
+    {
+        _selectedBetWinnerByGameId[gameNightGameId] = value;
+        _betStatusByGameId[gameNightGameId] = null;
+    }
+
+    private string GetSelectedBetAmount(int gameNightGameId)
+        => _selectedBetAmountByGameId.TryGetValue(gameNightGameId, out var value) ? value.ToString(CultureInfo.InvariantCulture) : "10";
+
+    private void SetSelectedBetAmount(int gameNightGameId, string? raw)
+    {
+        if (int.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var amount))
+        {
+            _selectedBetAmountByGameId[gameNightGameId] = Math.Max(1, amount);
+        }
+        _betStatusByGameId[gameNightGameId] = null;
+    }
+
+    private async Task PlaceBetAsync(int gameNightGameId)
+    {
+        if (_selectedNight is null || string.IsNullOrWhiteSpace(_userId))
+        {
+            return;
+        }
+
+        if (!_selectedBetWinnerByGameId.TryGetValue(gameNightGameId, out var rawWinner) || !Guid.TryParse(rawWinner, out var winnerId))
+        {
+            _betStatusByGameId[gameNightGameId] = "Pick a winner.";
+            return;
+        }
+
+        if (!_selectedBetAmountByGameId.TryGetValue(gameNightGameId, out var amount))
+        {
+            amount = 10;
+        }
+
+        _saving = true;
+        _betStatusByGameId[gameNightGameId] = null;
+        try
+        {
+            var result = await BettingService.PlaceBetAsync(_selectedNight.Id, gameNightGameId, winnerId, amount, _userId);
+            _betStatusByGameId[gameNightGameId] = result switch
+            {
+                BettingService.PlaceBetResult.Ok => "Bet placed.",
+                BettingService.PlaceBetResult.NotEnoughCoins => "Not enough coins.",
+                BettingService.PlaceBetResult.MissingOdds => "Odds not set yet.",
+                BettingService.PlaceBetResult.NotConfirmed => "Not confirmed yet.",
+                BettingService.PlaceBetResult.AlreadyBet => "You already bet on this game.",
+                _ => "Couldn't place bet."
+            };
+
+            _myBets = await BettingService.GetUserBetsForNightAsync(_selectedNight.Id, _userId);
+            await RefreshCoinsAsync();
         }
         finally
         {

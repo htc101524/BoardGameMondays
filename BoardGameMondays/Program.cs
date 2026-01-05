@@ -57,6 +57,9 @@ builder.Services.AddScoped<BoardGameMondays.Core.BoardGameService>();
 builder.Services.AddScoped<BoardGameMondays.Core.TicketService>();
 builder.Services.AddScoped<BoardGameMondays.Core.AgreementService>();
 builder.Services.AddScoped<BoardGameMondays.Core.GameNightService>();
+builder.Services.AddScoped<BoardGameMondays.Core.BgmCoinService>();
+builder.Services.AddScoped<BoardGameMondays.Core.BettingService>();
+builder.Services.AddScoped<BoardGameMondays.Core.BlogService>();
 
 var app = builder.Build();
 
@@ -129,6 +132,30 @@ static async Task EnsureSqliteSchemaUpToDateAsync(ApplicationDbContext db)
 
     try
     {
+        // AspNetUsers.BgmCoins
+        var hasBgmCoins = false;
+        await using (var cmd = connection.CreateCommand())
+        {
+            cmd.CommandText = "PRAGMA table_info('AspNetUsers');";
+            await using var reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                var name = reader.GetString(1);
+                if (string.Equals(name, "BgmCoins", StringComparison.OrdinalIgnoreCase))
+                {
+                    hasBgmCoins = true;
+                    break;
+                }
+            }
+        }
+
+        if (!hasBgmCoins)
+        {
+            await using var alter = connection.CreateCommand();
+            alter.CommandText = "ALTER TABLE AspNetUsers ADD COLUMN BgmCoins INTEGER NOT NULL DEFAULT 100;";
+            await alter.ExecuteNonQueryAsync();
+        }
+
         // Members.IsBgmMember
         var hasIsBgmMember = false;
         await using (var cmd = connection.CreateCommand())
@@ -278,6 +305,7 @@ CREATE TABLE IF NOT EXISTS GameNightGames (
     GameNightId TEXT NOT NULL,
     GameId TEXT NOT NULL,
     IsPlayed INTEGER NOT NULL,
+    IsConfirmed INTEGER NOT NULL DEFAULT 0,
     WinnerMemberId TEXT NULL,
     CreatedOn INTEGER NOT NULL,
     FOREIGN KEY (GameNightId) REFERENCES GameNights(Id) ON DELETE CASCADE,
@@ -285,6 +313,29 @@ CREATE TABLE IF NOT EXISTS GameNightGames (
 );
 ";
             await createGameNightGames.ExecuteNonQueryAsync();
+        }
+
+        var hasIsConfirmed = false;
+        await using (var cmd = connection.CreateCommand())
+        {
+            cmd.CommandText = "PRAGMA table_info('GameNightGames');";
+            await using var reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                var name = reader.GetString(1);
+                if (string.Equals(name, "IsConfirmed", StringComparison.OrdinalIgnoreCase))
+                {
+                    hasIsConfirmed = true;
+                    break;
+                }
+            }
+        }
+
+        if (!hasIsConfirmed)
+        {
+            await using var alter = connection.CreateCommand();
+            alter.CommandText = "ALTER TABLE GameNightGames ADD COLUMN IsConfirmed INTEGER NOT NULL DEFAULT 0;";
+            await alter.ExecuteNonQueryAsync();
         }
 
         var hasWinnerMemberId = false;
@@ -325,6 +376,82 @@ CREATE TABLE IF NOT EXISTS GameNightGamePlayers (
             await createGameNightGamePlayers.ExecuteNonQueryAsync();
         }
 
+        // Betting odds + bets
+        await using (var createOdds = connection.CreateCommand())
+        {
+            createOdds.CommandText = @"
+CREATE TABLE IF NOT EXISTS GameNightGameOdds (
+    Id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    GameNightGameId INTEGER NOT NULL,
+    MemberId TEXT NOT NULL,
+    OddsTimes100 INTEGER NOT NULL,
+    CreatedOn INTEGER NOT NULL,
+    FOREIGN KEY (GameNightGameId) REFERENCES GameNightGames(Id) ON DELETE CASCADE,
+    FOREIGN KEY (MemberId) REFERENCES Members(Id) ON DELETE CASCADE
+);
+";
+            await createOdds.ExecuteNonQueryAsync();
+        }
+
+        await using (var createBets = connection.CreateCommand())
+        {
+            createBets.CommandText = @"
+CREATE TABLE IF NOT EXISTS GameNightGameBets (
+    Id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    GameNightGameId INTEGER NOT NULL,
+    UserId TEXT NOT NULL,
+    PredictedWinnerMemberId TEXT NOT NULL,
+    Amount INTEGER NOT NULL,
+    OddsTimes100 INTEGER NOT NULL,
+    IsResolved INTEGER NOT NULL DEFAULT 0,
+    Payout INTEGER NOT NULL DEFAULT 0,
+    ResolvedOn INTEGER NULL,
+    CreatedOn INTEGER NOT NULL,
+    FOREIGN KEY (GameNightGameId) REFERENCES GameNightGames(Id) ON DELETE CASCADE,
+    FOREIGN KEY (PredictedWinnerMemberId) REFERENCES Members(Id) ON DELETE RESTRICT
+);
+";
+            await createBets.ExecuteNonQueryAsync();
+        }
+
+        // If the table existed before settlement columns were added, patch it in.
+        var hasBetIsResolved = false;
+        var hasBetPayout = false;
+        var hasBetResolvedOn = false;
+        await using (var cmd = connection.CreateCommand())
+        {
+            cmd.CommandText = "PRAGMA table_info('GameNightGameBets');";
+            await using var reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                var name = reader.GetString(1);
+                if (string.Equals(name, "IsResolved", StringComparison.OrdinalIgnoreCase)) hasBetIsResolved = true;
+                if (string.Equals(name, "Payout", StringComparison.OrdinalIgnoreCase)) hasBetPayout = true;
+                if (string.Equals(name, "ResolvedOn", StringComparison.OrdinalIgnoreCase)) hasBetResolvedOn = true;
+            }
+        }
+
+        if (!hasBetIsResolved)
+        {
+            await using var alter = connection.CreateCommand();
+            alter.CommandText = "ALTER TABLE GameNightGameBets ADD COLUMN IsResolved INTEGER NOT NULL DEFAULT 0;";
+            await alter.ExecuteNonQueryAsync();
+        }
+
+        if (!hasBetPayout)
+        {
+            await using var alter = connection.CreateCommand();
+            alter.CommandText = "ALTER TABLE GameNightGameBets ADD COLUMN Payout INTEGER NOT NULL DEFAULT 0;";
+            await alter.ExecuteNonQueryAsync();
+        }
+
+        if (!hasBetResolvedOn)
+        {
+            await using var alter = connection.CreateCommand();
+            alter.CommandText = "ALTER TABLE GameNightGameBets ADD COLUMN ResolvedOn INTEGER NULL;";
+            await alter.ExecuteNonQueryAsync();
+        }
+
         await using (var createGameNightIndexes = connection.CreateCommand())
         {
             createGameNightIndexes.CommandText = @"
@@ -332,11 +459,40 @@ CREATE UNIQUE INDEX IF NOT EXISTS IX_GameNights_DateKey ON GameNights(DateKey);
 CREATE UNIQUE INDEX IF NOT EXISTS IX_GameNightAttendees_Night_Member ON GameNightAttendees(GameNightId, MemberId);
 CREATE UNIQUE INDEX IF NOT EXISTS IX_GameNightGames_Night_Game ON GameNightGames(GameNightId, GameId);
 CREATE UNIQUE INDEX IF NOT EXISTS IX_GameNightGamePlayers_NightGame_Member ON GameNightGamePlayers(GameNightGameId, MemberId);
+CREATE UNIQUE INDEX IF NOT EXISTS IX_GameNightGameOdds_NightGame_Member ON GameNightGameOdds(GameNightGameId, MemberId);
+CREATE UNIQUE INDEX IF NOT EXISTS IX_GameNightGameBets_NightGame_User ON GameNightGameBets(GameNightGameId, UserId);
 CREATE INDEX IF NOT EXISTS IX_GameNightAttendees_MemberId ON GameNightAttendees(MemberId);
 CREATE INDEX IF NOT EXISTS IX_GameNightGames_GameId ON GameNightGames(GameId);
 CREATE INDEX IF NOT EXISTS IX_GameNightGamePlayers_MemberId ON GameNightGamePlayers(MemberId);
+CREATE INDEX IF NOT EXISTS IX_GameNightGameOdds_MemberId ON GameNightGameOdds(MemberId);
+CREATE INDEX IF NOT EXISTS IX_GameNightGameBets_UserId ON GameNightGameBets(UserId);
 ";
             await createGameNightIndexes.ExecuteNonQueryAsync();
+        }
+
+        // Blog posts
+        await using (var createBlogPosts = connection.CreateCommand())
+        {
+            createBlogPosts.CommandText = @"
+CREATE TABLE IF NOT EXISTS BlogPosts (
+    Id TEXT NOT NULL PRIMARY KEY,
+    Title TEXT NOT NULL,
+    Slug TEXT NOT NULL,
+    Body TEXT NOT NULL,
+    CreatedOn INTEGER NOT NULL,
+    CreatedByUserId TEXT NULL
+);
+";
+            await createBlogPosts.ExecuteNonQueryAsync();
+        }
+
+        await using (var createBlogIndexes = connection.CreateCommand())
+        {
+            createBlogIndexes.CommandText = @"
+CREATE UNIQUE INDEX IF NOT EXISTS IX_BlogPosts_Slug ON BlogPosts(Slug);
+CREATE INDEX IF NOT EXISTS IX_BlogPosts_CreatedOn ON BlogPosts(CreatedOn);
+";
+            await createBlogIndexes.ExecuteNonQueryAsync();
         }
     }
     finally
