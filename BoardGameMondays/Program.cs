@@ -8,8 +8,10 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Http.Features;
 using System.Security.Claims;
 using System.Data;
+using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -28,12 +30,29 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
 
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
     {
-        // Dev-friendly defaults; tighten in production.
-        options.Password.RequiredLength = 6;
-        options.Password.RequireDigit = false;
-        options.Password.RequireLowercase = false;
-        options.Password.RequireUppercase = false;
-        options.Password.RequireNonAlphanumeric = false;
+        if (builder.Environment.IsDevelopment())
+        {
+            // Dev-friendly defaults.
+            options.Password.RequiredLength = 6;
+            options.Password.RequireDigit = false;
+            options.Password.RequireLowercase = false;
+            options.Password.RequireUppercase = false;
+            options.Password.RequireNonAlphanumeric = false;
+            options.Lockout.AllowedForNewUsers = false;
+        }
+        else
+        {
+            // Production defaults.
+            options.Password.RequiredLength = 12;
+            options.Password.RequireDigit = true;
+            options.Password.RequireLowercase = true;
+            options.Password.RequireUppercase = true;
+            options.Password.RequireNonAlphanumeric = false;
+
+            options.Lockout.AllowedForNewUsers = true;
+            options.Lockout.MaxFailedAccessAttempts = 5;
+            options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
+        }
 
         options.User.RequireUniqueEmail = false;
     })
@@ -45,10 +64,39 @@ builder.Services.ConfigureApplicationCookie(options =>
     options.LoginPath = "/login";
     options.AccessDeniedPath = "/login";
     options.Cookie.Name = "bgm.auth";
+    options.Cookie.HttpOnly = true;
+    options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+    options.Cookie.SameSite = SameSiteMode.Lax;
     options.SlidingExpiration = true;
 });
 
 builder.Services.AddAuthorization();
+
+// Guardrails for multipart/form-data (avatars, uploads).
+builder.Services.Configure<FormOptions>(options =>
+{
+    options.MultipartBodyLengthLimit = 10 * 1024 * 1024; // 10MB
+});
+
+// Basic rate limiting. This is not a substitute for a CDN/WAF, but it helps protect form endpoints.
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+    options.AddPolicy("account", httpContext =>
+    {
+        var ip = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        return RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: ip,
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 20,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0,
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst
+            });
+    });
+});
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<AuthenticationStateProvider, HttpContextAuthStateProvider>();
 builder.Services.AddScoped<BoardGameMondays.Core.BgmMemberService>();
@@ -609,6 +657,8 @@ if (!app.Environment.IsDevelopment())
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
 app.UseHttpsRedirection();
 
+app.UseRateLimiter();
+
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -620,7 +670,7 @@ app.MapPost("/account/logout", async (SignInManager<ApplicationUser> signInManag
 {
     await signInManager.SignOutAsync();
     http.Response.Redirect("/");
-}).DisableAntiforgery();
+}).RequireRateLimiting("account");
 
 app.MapPost("/account/register", async (
     [FromForm] RegisterRequest request,
@@ -637,9 +687,19 @@ app.MapPost("/account/register", async (
         return Results.Redirect($"/register?error={Uri.EscapeDataString("Username and password are required.")}");
     }
 
+    if (userName.Length > 64)
+    {
+        return Results.Redirect($"/register?error={Uri.EscapeDataString("Username is too long.")}");
+    }
+
     if (string.IsNullOrWhiteSpace(displayName))
     {
         return Results.Redirect($"/register?error={Uri.EscapeDataString("Name is required.")}");
+    }
+
+    if (displayName.Length > 80)
+    {
+        return Results.Redirect($"/register?error={Uri.EscapeDataString("Name is too long.")}");
     }
 
     if (!string.Equals(request.Password, request.ConfirmPassword, StringComparison.Ordinal))
@@ -676,13 +736,14 @@ app.MapPost("/account/register", async (
     await signInManager.SignInAsync(user, isPersistent: true);
     members.GetOrCreate(displayName);
     return Results.Redirect("/");
-}).DisableAntiforgery();
+}).RequireRateLimiting("account");
 
 app.MapPost("/account/login", async (
     [FromForm] LoginRequest request,
     SignInManager<ApplicationUser> signInManager,
     UserManager<ApplicationUser> userManager,
-    BoardGameMondays.Core.BgmMemberDirectoryService members) =>
+    BoardGameMondays.Core.BgmMemberDirectoryService members,
+    IWebHostEnvironment env) =>
 {
     var userName = request.UserName?.Trim();
     if (string.IsNullOrWhiteSpace(userName) || string.IsNullOrWhiteSpace(request.Password))
@@ -690,7 +751,13 @@ app.MapPost("/account/login", async (
         return Results.Redirect($"/login?error={Uri.EscapeDataString("Username and password are required.")}");
     }
 
-    var result = await signInManager.PasswordSignInAsync(userName, request.Password, request.RememberMe, lockoutOnFailure: false);
+    if (userName.Length > 64)
+    {
+        return Results.Redirect($"/login?error={Uri.EscapeDataString("Username is too long.")}");
+    }
+
+    var lockoutOnFailure = !env.IsDevelopment();
+    var result = await signInManager.PasswordSignInAsync(userName, request.Password, request.RememberMe, lockoutOnFailure);
     if (!result.Succeeded)
     {
         return Results.Redirect($"/login?error={Uri.EscapeDataString("Invalid username or password.")}");
@@ -706,7 +773,7 @@ app.MapPost("/account/login", async (
 
     members.GetOrCreate(displayName);
     return Results.Redirect("/");
-}).DisableAntiforgery();
+}).RequireRateLimiting("account");
 
 app.MapPost("/account/avatar", async (
     HttpContext http,
@@ -726,20 +793,20 @@ app.MapPost("/account/avatar", async (
         return Results.Redirect($"/people?avatarError={Uri.EscapeDataString("Image must be 2MB or smaller.")}");
     }
 
-    var contentType = avatar.ContentType?.ToLowerInvariant();
-    var extension = contentType switch
+    string? extension;
+    await using (var sniffStream = avatar.OpenReadStream())
     {
-        "image/jpeg" => ".jpg",
-        "image/jpg" => ".jpg",
-        "image/png" => ".png",
-        "image/webp" => ".webp",
-        "image/gif" => ".gif",
-        _ => null
-    };
+        extension = await ImageFileSniffer.DetectExtensionAsync(sniffStream);
+    }
 
-    if (extension is null)
+    if (string.IsNullOrWhiteSpace(extension))
     {
         return Results.Redirect($"/people?avatarError={Uri.EscapeDataString("Supported formats: JPG, PNG, WEBP, GIF.")}");
+    }
+
+    if (string.Equals(extension, ".jpeg", StringComparison.OrdinalIgnoreCase))
+    {
+        extension = ".jpg";
     }
 
     var userName = http.User?.Identity?.Name;
@@ -792,7 +859,8 @@ app.MapPost("/account/avatar", async (
     var filePath = Path.Combine(uploadsRoot, fileName);
     await using (var stream = File.Create(filePath))
     {
-        await avatar.CopyToAsync(stream);
+        await using var inStream = avatar.OpenReadStream();
+        await inStream.CopyToAsync(stream);
     }
 
     // Add a cache-buster so browsers refresh after re-upload.
@@ -800,7 +868,7 @@ app.MapPost("/account/avatar", async (
     await db.SaveChangesAsync();
 
     return Results.Redirect("/people?avatarUpdated=1");
-}).RequireAuthorization().DisableAntiforgery();
+}).RequireAuthorization().RequireRateLimiting("account");
 
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();

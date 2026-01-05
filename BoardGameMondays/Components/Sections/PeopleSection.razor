@@ -10,9 +10,10 @@
     <div class="home-section__inner">
         <h1>People</h1>
 
-        <AuthorizeView Roles="Admin">
+        <AuthorizeView>
             <Authorized>
                 <form class="mb-3" method="post" action="/account/avatar" enctype="multipart/form-data">
+                    <AntiforgeryToken />
                     <label class="form-label" for="avatar-file">Your avatar</label>
                     <div class="d-flex gap-2 align-items-center flex-wrap">
                         <input id="avatar-file" class="form-control" style="max-width: 420px" type="file" name="avatar" accept="image/*" required />
@@ -43,7 +44,11 @@
                         </div>
                         <div class="bgm-peopleCard__who">
                             <div class="bgm-peopleCard__name">@member.Name</div>
-                            <div class="bgm-peopleCard__email">@member.Email</div>
+                            <AuthorizeView Roles="Admin">
+                                <Authorized>
+                                    <div class="bgm-peopleCard__email">@member.Email</div>
+                                </Authorized>
+                            </AuthorizeView>
                         </div>
                     </div>
 

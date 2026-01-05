@@ -289,18 +289,28 @@ else
             return;
         }
 
-        var ext = Path.GetExtension(file.Name);
+        const long maxBytes = 5 * 1024 * 1024;
+        if (file.Size > maxBytes)
+        {
+            _imageStatus = "Image is too large (max 5 MB).";
+            return;
+        }
+
+        string? ext;
+        await using (var sniffStream = file.OpenReadStream(maxAllowedSize: maxBytes))
+        {
+            ext = await ImageFileSniffer.DetectExtensionAsync(sniffStream);
+        }
+
         if (string.IsNullOrWhiteSpace(ext) || !AllowedImageExtensions.Contains(ext))
         {
             _imageStatus = "Supported formats: png, jpg, webp, gif.";
             return;
         }
 
-        const long maxBytes = 5 * 1024 * 1024;
-        if (file.Size > maxBytes)
+        if (string.Equals(ext, ".jpeg", StringComparison.OrdinalIgnoreCase))
         {
-            _imageStatus = "Image is too large (max 5 MB).";
-            return;
+            ext = ".jpg";
         }
 
         try

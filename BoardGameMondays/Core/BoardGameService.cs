@@ -111,15 +111,15 @@ public sealed class BoardGameService
         string? boardGameGeekUrl = null,
         CancellationToken ct = default)
     {
-        if (string.IsNullOrWhiteSpace(name))
-        {
-            throw new ArgumentException("Name is required.", nameof(name));
-        }
+        name = InputGuards.RequireTrimmed(name, maxLength: 120, nameof(name), "Name is required.");
+        tagline = InputGuards.OptionalTrimToNull(tagline, maxLength: 200, nameof(tagline));
+        imageUrl = InputGuards.OptionalRootRelativeOrHttpUrl(imageUrl, maxLength: 500, nameof(imageUrl));
+        boardGameGeekUrl = InputGuards.OptionalHttpUrl(boardGameGeekUrl, maxLength: 500, nameof(boardGameGeekUrl));
 
         var entity = new BoardGameEntity
         {
             Id = Guid.NewGuid(),
-            Name = name.Trim(),
+            Name = name,
             Status = (int)status,
             Tagline = tagline,
             ImageUrl = imageUrl,
@@ -154,10 +154,10 @@ public sealed class BoardGameService
         string? boardGameGeekUrl,
         CancellationToken ct = default)
     {
-        if (string.IsNullOrWhiteSpace(name))
-        {
-            throw new ArgumentException("Name is required.", nameof(name));
-        }
+        name = InputGuards.RequireTrimmed(name, maxLength: 120, nameof(name), "Name is required.");
+        tagline = InputGuards.OptionalTrimToNull(tagline, maxLength: 200, nameof(tagline));
+        imageUrl = InputGuards.OptionalRootRelativeOrHttpUrl(imageUrl, maxLength: 500, nameof(imageUrl));
+        boardGameGeekUrl = InputGuards.OptionalHttpUrl(boardGameGeekUrl, maxLength: 500, nameof(boardGameGeekUrl));
 
         var entity = await _db.Games.FirstOrDefaultAsync(g => g.Id == id, ct);
         if (entity is null)
@@ -165,7 +165,7 @@ public sealed class BoardGameService
             return null;
         }
 
-        entity.Name = name.Trim();
+        entity.Name = name;
         entity.Status = (int)status;
         entity.Tagline = tagline;
         entity.ImageUrl = imageUrl;
@@ -191,6 +191,8 @@ public sealed class BoardGameService
             throw new ArgumentNullException(nameof(review));
         }
 
+        var description = InputGuards.RequireTrimmed(review.Description, maxLength: 4_000, nameof(review), "Description is required.");
+
         var gameExists = await _db.Games.AnyAsync(g => g.Id == gameId, ct);
         if (!gameExists)
         {
@@ -206,7 +208,7 @@ public sealed class BoardGameService
             ReviewerId = reviewerId,
             Rating = review.Rating,
             TimesPlayed = review.TimesPlayed,
-            Description = review.Description,
+            Description = description,
             CreatedOn = review.CreatedOn
         };
 

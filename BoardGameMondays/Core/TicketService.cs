@@ -28,17 +28,15 @@ public sealed class TicketService
         string? createdByUserId,
         CancellationToken ct = default)
     {
-        if (string.IsNullOrWhiteSpace(title))
-        {
-            throw new ArgumentException("Title is required.", nameof(title));
-        }
+        title = InputGuards.RequireTrimmed(title, maxLength: 120, nameof(title), "Title is required.");
+        description = InputGuards.OptionalTrimToNull(description, maxLength: 2_000, nameof(description));
 
         var entity = new TicketEntity
         {
             Id = Guid.NewGuid(),
             Type = (int)type,
-            Title = title.Trim(),
-            Description = string.IsNullOrWhiteSpace(description) ? null : description.Trim(),
+            Title = title,
+            Description = description,
             CreatedOn = DateTimeOffset.UtcNow,
             CreatedByUserId = string.IsNullOrWhiteSpace(createdByUserId) ? null : createdByUserId
         };

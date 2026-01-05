@@ -6,6 +6,15 @@
 # dotenv files
 .env
 
+# Local SQLite databases (dev)
+*.db
+*.db-wal
+*.db-shm
+*.db-journal
+
+# Runtime uploads
+BoardGameMondays/wwwroot/uploads/
+
 # User-specific files
 *.rsuser
 *.suo

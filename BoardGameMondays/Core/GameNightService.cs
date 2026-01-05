@@ -48,8 +48,8 @@ public sealed class GameNightService
             return null;
         }
 
-        recap = recap?.Trim();
-        entity.Recap = string.IsNullOrWhiteSpace(recap) ? null : recap;
+        recap = InputGuards.OptionalTrimToNull(recap, maxLength: 4_000, nameof(recap));
+        entity.Recap = recap;
         await _db.SaveChangesAsync(ct);
 
         return await GetByIdAsync(gameNightId, ct);

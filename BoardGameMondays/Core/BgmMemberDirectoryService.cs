@@ -26,12 +26,7 @@ public sealed class BgmMemberDirectoryService
 
     public Guid GetOrCreateMemberId(string name)
     {
-        if (string.IsNullOrWhiteSpace(name))
-        {
-            throw new ArgumentException("Name is required.", nameof(name));
-        }
-
-        var trimmed = name.Trim();
+        var trimmed = InputGuards.RequireTrimmed(name, maxLength: 80, nameof(name), "Name is required.");
         var existing = _db.Members.FirstOrDefault(m => m.Name.ToLower() == trimmed.ToLower());
         if (existing is not null)
         {
@@ -53,12 +48,7 @@ public sealed class BgmMemberDirectoryService
 
     public BgmMember GetOrCreate(string name)
     {
-        if (string.IsNullOrWhiteSpace(name))
-        {
-            throw new ArgumentException("Name is required.", nameof(name));
-        }
-
-        var trimmed = name.Trim();
+        var trimmed = InputGuards.RequireTrimmed(name, maxLength: 80, nameof(name), "Name is required.");
         var existing = _db.Members.FirstOrDefault(m => m.Name.ToLower() == trimmed.ToLower());
         if (existing is not null)
         {
@@ -85,14 +75,16 @@ public sealed class BgmMemberDirectoryService
             throw new ArgumentNullException(nameof(member));
         }
 
-        var existing = _db.Members.FirstOrDefault(m => m.Name.ToLower() == member.Name.ToLower());
+        var name = InputGuards.RequireTrimmed(member.Name, maxLength: 80, nameof(member), "Name is required.");
+
+        var existing = _db.Members.FirstOrDefault(m => m.Name.ToLower() == name.ToLower());
         if (existing is null)
         {
             _db.Members.Add(new MemberEntity
             {
                 Id = Guid.NewGuid(),
                 IsBgmMember = true,
-                Name = member.Name,
+                Name = name,
                 Email = member.Email,
                 Summary = member.Summary,
                 AvatarUrl = member.AvatarUrl

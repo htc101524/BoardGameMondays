@@ -60,6 +60,7 @@
                     </Authorized>
                 </AuthorizeView>
                 <form method="post" action="/account/logout">
+                    <AntiforgeryToken />
                     <button type="submit" class="bgm-popup__link bgm-popup__linkButton" @onclick="CloseMenu">Logout</button>
                 </form>
             </Authorized>

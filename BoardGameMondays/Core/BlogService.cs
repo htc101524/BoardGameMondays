@@ -33,18 +33,8 @@ public sealed class BlogService
 
     public async Task<BlogPost> AddAsync(string title, string body, string? createdByUserId, CancellationToken ct = default)
     {
-        title = (title ?? string.Empty).Trim();
-        body = (body ?? string.Empty).Trim();
-
-        if (string.IsNullOrWhiteSpace(title))
-        {
-            throw new ArgumentException("Title is required.", nameof(title));
-        }
-
-        if (string.IsNullOrWhiteSpace(body))
-        {
-            throw new ArgumentException("Body is required.", nameof(body));
-        }
+        title = InputGuards.RequireTrimmed(title, maxLength: 120, nameof(title), "Title is required.");
+        body = InputGuards.RequireTrimmed(body, maxLength: 20_000, nameof(body), "Body is required.");
 
         var slugBase = ToSlug(title);
         var slug = await EnsureUniqueSlugAsync(slugBase, ct);
