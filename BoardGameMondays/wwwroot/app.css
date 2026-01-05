@@ -55,8 +55,106 @@
     flex-wrap: wrap;
 }
 
-.bgm-thoughtsHeader__title {
+.bgm-thoughtsHero {
+    --bgm-c1-rgb: var(--bs-warning-rgb);
+    --bgm-c2-rgb: var(--bs-primary-rgb);
+    --bgm-c3-rgb: var(--bs-secondary-rgb);
+
+    position: relative;
+    width: 100%;
+    border: 1px solid var(--bs-border-color);
+    border-radius: var(--bs-border-radius-lg);
+    background: rgba(var(--bs-body-bg-rgb), 0.70);
+    overflow: hidden;
+    padding: 18px;
+
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 16px;
+    align-items: center;
+}
+
+.bgm-thoughtsHero.has-art::before {
+    content: "";
+    position: absolute;
+    inset: -38px;
+    background-image: var(--bgm-game-art);
+    background-size: cover;
+    background-position: center;
+    filter: blur(26px) saturate(1.1);
+    opacity: 0.18;
+    transform: scale(1.08);
+}
+
+.bgm-thoughtsHero::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background:
+        radial-gradient(780px 320px at 18% 22%, rgba(var(--bgm-c1-rgb), 0.14), transparent 60%),
+        radial-gradient(720px 300px at 86% 14%, rgba(var(--bgm-c2-rgb), 0.12), transparent 56%),
+        radial-gradient(800px 360px at 78% 90%, rgba(var(--bgm-c3-rgb), 0.10), transparent 62%),
+        linear-gradient(180deg, rgba(var(--bs-body-bg-rgb), 0.72), rgba(var(--bs-body-bg-rgb), 0.90));
+}
+
+.bgm-thoughtsHero > * {
+    position: relative;
+    z-index: 1;
+}
+
+.bgm-thoughtsHero__main {
+    min-width: 0;
+}
+
+.bgm-thoughtsHero.has-rating .bgm-thoughtsHero__main {
+    padding-right: 150px;
+}
+
+.bgm-thoughtsHero__kicker {
+    color: var(--bs-secondary-color);
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    font-size: 0.8rem;
+    margin-bottom: 6px;
+}
+
+.bgm-thoughtsHero__title {
     margin: 0;
+    line-height: 1.05;
+}
+
+.bgm-thoughtsHero__tagline {
+    margin-top: 10px;
+    max-width: 70ch;
+}
+
+.bgm-thoughtsHero__art {
+    width: 86px;
+    height: 86px;
+    border-radius: 16px;
+    overflow: hidden;
+    border: 1px solid rgba(var(--bs-emphasis-color-rgb), 0.18);
+    background: rgba(var(--bs-body-bg-rgb), 0.70);
+    box-shadow: 0 14px 40px rgba(0, 0, 0, 0.14);
+
+    margin-top: 12px;
+}
+
+.bgm-thoughtsHero__art img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.bgm-thoughtsHero__rating {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 6px;
 }
 
 .bgm-thoughtsSelected {
@@ -219,6 +317,26 @@
     }
 }
 
+.bgm-gameStatsCard {
+    background: rgba(var(--bgm-c1-rgb), 0.07);
+    border-color: rgba(var(--bgm-c1-rgb), 0.22);
+}
+
+.bgm-alignCard {
+    background: rgba(var(--bgm-c2-rgb), 0.06);
+    border-style: dashed;
+    border-color: rgba(var(--bgm-c2-rgb), 0.22);
+}
+
+.bgm-alignCard .list-group,
+.bgm-alignCard .list-group-item {
+    background: transparent;
+}
+
+.bgm-alignCard .list-group-item {
+    border-color: rgba(var(--bgm-c2-rgb), 0.18);
+}
+
 .bgm-thoughtsContent p {
     margin: 0;
 }
@@ -286,6 +404,25 @@
         flex-direction: column;
         align-items: flex-start;
         gap: 12px;
+    }
+
+    .bgm-thoughtsHero {
+        grid-template-columns: 1fr;
+        align-items: start;
+    }
+
+    .bgm-thoughtsHero__rating {
+        top: 12px;
+        right: 12px;
+    }
+
+    .bgm-thoughtsHero.has-rating .bgm-thoughtsHero__main {
+        padding-right: 120px;
+    }
+
+    .bgm-thoughtsHero__art {
+        width: 72px;
+        height: 72px;
     }
 
     .bgm-scoreSummary {

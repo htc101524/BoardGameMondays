@@ -51,6 +51,17 @@
                 ? thoughtsGame.Reviews.Average(r => r.Rating)
                 : (double?)null;
 
+            var heroArtUrl = thoughtsGame?.ImageUrl;
+            var hasHeroArt = !string.IsNullOrWhiteSpace(heroArtUrl);
+            var hasRating = avgScore is not null;
+            var heroClass = hasHeroArt ? "bgm-thoughtsHero has-art" : "bgm-thoughtsHero";
+            if (hasRating)
+            {
+                heroClass += " has-rating";
+            }
+            var safeHeroArtUrl = hasHeroArt ? heroArtUrl!.Replace("'", "\\'") : null;
+            var heroStyle = hasHeroArt ? $"--bgm-game-art: url('{safeHeroArtUrl}');" : null;
+
             var avgClass = string.Empty;
             var avgStyle = string.Empty;
             if (avgScore is { } avg)
@@ -70,17 +81,34 @@
         }
 
         <div class="bgm-thoughtsHeader">
-            <h1 class="bgm-thoughtsHeader__title">What we thought of @thoughtsGame?.Name</h1>
-            @if (avgScore is not null)
-            {
-                <div class="bgm-scoreSummary" aria-label="Scores">
-                    <div class="bgm-scoreSummary__label">BGM RATING:</div>
+            <div class="@heroClass" style="@heroStyle" aria-label="Game overview">
+                <div class="bgm-thoughtsHero__main">
+                    <div class="bgm-thoughtsHero__kicker">What we thought of</div>
+                    <h1 class="bgm-thoughtsHero__title">@thoughtsGame?.Name</h1>
 
-                    <div class="bgm-scoreBadges" aria-label="Average and reviewer scores">
-                        <div class="bgm-scoreBadge @avgClass" style="@avgStyle" aria-label="BGM rating">@FormatScore(avgScore.Value)</div>
-                    </div>
+                    @if (hasHeroArt)
+                    {
+                        <div class="bgm-thoughtsHero__art" aria-hidden="true">
+                            <img src="@heroArtUrl" alt="" />
+                        </div>
+                    }
+
+                    @if (!string.IsNullOrWhiteSpace(thoughtsGame?.Tagline))
+                    {
+                        <div class="bgm-thoughtsHero__tagline text-muted">@thoughtsGame.Tagline</div>
+                    }
                 </div>
-            }
+
+                @if (avgScore is not null)
+                {
+                    <div class="bgm-thoughtsHero__rating" aria-label="Scores">
+                        <div class="bgm-scoreSummary__label">BGM RATING:</div>
+                        <div class="bgm-scoreBadges" aria-label="Average score">
+                            <div class="bgm-scoreBadge @avgClass" style="@avgStyle" aria-label="BGM rating">@FormatScore(avgScore.Value)</div>
+                        </div>
+                    </div>
+                }
+            </div>
         </div>
 
         @if (_selectedReview is not null)
@@ -122,7 +150,7 @@
                     thoughtsGame.BoardGameGeekScore is not null ||
                     !string.IsNullOrWhiteSpace(thoughtsGame.BoardGameGeekUrl)))
                 {
-                    <div class="card" aria-label="Game stats">
+                    <div class="card bgm-gameStatsCard" aria-label="Game stats">
                         <div class="card-body">
                             <div class="fw-semibold mb-2">Game stats</div>
 
@@ -270,7 +298,7 @@
             <AuthorizeView>
                 <Authorized>
                     <aside class="bgm-thoughtsSide" aria-label="Alignment leaderboard">
-                        <div class="card">
+                        <div class="card bgm-alignCard">
                             <div class="card-body">
                                 <div class="fw-semibold mb-2">You align with</div>
 
@@ -312,6 +340,8 @@
     private BoardGame? _thoughtsGame;
     private Review? _selectedReview;
 
+    private string? _paletteImageUrl;
+
     private int? _myAgreement;
     private bool _savingAgreement;
     private string? _agreementStatus;
@@ -323,6 +353,42 @@
         BoardGameService.Changed += OnBoardGameServiceChanged;
         await RefreshFeaturedAsync(resetThoughts: true);
         await RefreshAgreementStateAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        var url = _thoughtsGame?.ImageUrl;
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            if (!string.IsNullOrWhiteSpace(_paletteImageUrl))
+            {
+                _paletteImageUrl = null;
+                try
+                {
+                    await JS.InvokeVoidAsync("bgm.clearPalette", "thoughts");
+                }
+                catch
+                {
+                }
+            }
+
+            return;
+        }
+
+        if (string.Equals(_paletteImageUrl, url, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        _paletteImageUrl = url;
+
+        try
+        {
+            await JS.InvokeVoidAsync("bgm.applyPaletteFromImage", "thoughts", url);
+        }
+        catch
+        {
+        }
     }
 
     private async Task RefreshFeaturedAsync(bool resetThoughts)
