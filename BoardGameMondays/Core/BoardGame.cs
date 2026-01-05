@@ -9,6 +9,13 @@ public sealed class BoardGame
         IEnumerable<Review>? reviews = null,
         string? tagline = null,
         string? imageUrl = null,
+        int? minPlayers = null,
+        int? maxPlayers = null,
+        int? runtimeMinutes = null,
+        int? firstPlayRuntimeMinutes = null,
+        double? complexity = null,
+        double? boardGameGeekScore = null,
+        string? boardGameGeekUrl = null,
         Guid? id = null)
     {
         Id = id ?? Guid.NewGuid();
@@ -18,6 +25,14 @@ public sealed class BoardGame
         Reviews = (reviews ?? Array.Empty<Review>()).ToArray();
         Tagline = tagline;
         ImageUrl = imageUrl;
+
+        MinPlayers = minPlayers;
+        MaxPlayers = maxPlayers;
+        RuntimeMinutes = runtimeMinutes;
+        FirstPlayRuntimeMinutes = firstPlayRuntimeMinutes;
+        Complexity = complexity;
+        BoardGameGeekScore = boardGameGeekScore;
+        BoardGameGeekUrl = boardGameGeekUrl;
     }
 
     public Guid Id { get; }
@@ -37,6 +52,21 @@ public sealed class BoardGame
     public string? Tagline { get; }
 
     public string? ImageUrl { get; }
+
+    // Optional stats for UI.
+    public int? MinPlayers { get; }
+
+    public int? MaxPlayers { get; }
+
+    public int? RuntimeMinutes { get; }
+
+    public int? FirstPlayRuntimeMinutes { get; }
+
+    public double? Complexity { get; }
+
+    public double? BoardGameGeekScore { get; }
+
+    public string? BoardGameGeekUrl { get; }
 }
 
 public enum GameStatus

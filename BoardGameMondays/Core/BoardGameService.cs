@@ -102,6 +102,13 @@ public sealed class BoardGameService
         GameStatus status,
         string? tagline = null,
         string? imageUrl = null,
+        int? minPlayers = null,
+        int? maxPlayers = null,
+        int? runtimeMinutes = null,
+        int? firstPlayRuntimeMinutes = null,
+        double? complexity = null,
+        double? boardGameGeekScore = null,
+        string? boardGameGeekUrl = null,
         CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(name))
@@ -115,7 +122,15 @@ public sealed class BoardGameService
             Name = name.Trim(),
             Status = (int)status,
             Tagline = tagline,
-            ImageUrl = imageUrl
+            ImageUrl = imageUrl,
+
+            MinPlayers = minPlayers,
+            MaxPlayers = maxPlayers,
+            RuntimeMinutes = runtimeMinutes,
+            FirstPlayRuntimeMinutes = firstPlayRuntimeMinutes,
+            Complexity = complexity,
+            BoardGameGeekScore = boardGameGeekScore,
+            BoardGameGeekUrl = boardGameGeekUrl
         };
 
         _db.Games.Add(entity);
@@ -130,6 +145,13 @@ public sealed class BoardGameService
         GameStatus status,
         string? tagline,
         string? imageUrl,
+        int? minPlayers,
+        int? maxPlayers,
+        int? runtimeMinutes,
+        int? firstPlayRuntimeMinutes,
+        double? complexity,
+        double? boardGameGeekScore,
+        string? boardGameGeekUrl,
         CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(name))
@@ -147,6 +169,14 @@ public sealed class BoardGameService
         entity.Status = (int)status;
         entity.Tagline = tagline;
         entity.ImageUrl = imageUrl;
+
+        entity.MinPlayers = minPlayers;
+        entity.MaxPlayers = maxPlayers;
+        entity.RuntimeMinutes = runtimeMinutes;
+        entity.FirstPlayRuntimeMinutes = firstPlayRuntimeMinutes;
+        entity.Complexity = complexity;
+        entity.BoardGameGeekScore = boardGameGeekScore;
+        entity.BoardGameGeekUrl = boardGameGeekUrl;
 
         await _db.SaveChangesAsync(ct);
         Changed?.Invoke();
@@ -251,6 +281,13 @@ public sealed class BoardGameService
             overview: EmptyOverview.Instance,
             reviews: reviews,
             tagline: entity.Tagline,
-            imageUrl: entity.ImageUrl);
+            imageUrl: entity.ImageUrl,
+            minPlayers: entity.MinPlayers,
+            maxPlayers: entity.MaxPlayers,
+            runtimeMinutes: entity.RuntimeMinutes,
+            firstPlayRuntimeMinutes: entity.FirstPlayRuntimeMinutes,
+            complexity: entity.Complexity,
+            boardGameGeekScore: entity.BoardGameGeekScore,
+            boardGameGeekUrl: entity.BoardGameGeekUrl);
     }
 }

@@ -204,6 +204,80 @@ static async Task EnsureSqliteSchemaUpToDateAsync(ApplicationDbContext db)
             await alter.ExecuteNonQueryAsync();
         }
 
+        // Games stats
+        var hasMinPlayers = false;
+        var hasMaxPlayers = false;
+        var hasRuntimeMinutes = false;
+        var hasFirstPlayRuntimeMinutes = false;
+        var hasComplexity = false;
+        var hasBggScore = false;
+        var hasBggUrl = false;
+        await using (var cmd = connection.CreateCommand())
+        {
+            cmd.CommandText = "PRAGMA table_info('Games');";
+            await using var reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                var name = reader.GetString(1);
+                if (string.Equals(name, "MinPlayers", StringComparison.OrdinalIgnoreCase)) hasMinPlayers = true;
+                if (string.Equals(name, "MaxPlayers", StringComparison.OrdinalIgnoreCase)) hasMaxPlayers = true;
+                if (string.Equals(name, "RuntimeMinutes", StringComparison.OrdinalIgnoreCase)) hasRuntimeMinutes = true;
+                if (string.Equals(name, "FirstPlayRuntimeMinutes", StringComparison.OrdinalIgnoreCase)) hasFirstPlayRuntimeMinutes = true;
+                if (string.Equals(name, "Complexity", StringComparison.OrdinalIgnoreCase)) hasComplexity = true;
+                if (string.Equals(name, "BoardGameGeekScore", StringComparison.OrdinalIgnoreCase)) hasBggScore = true;
+                if (string.Equals(name, "BoardGameGeekUrl", StringComparison.OrdinalIgnoreCase)) hasBggUrl = true;
+            }
+        }
+
+        if (!hasMinPlayers)
+        {
+            await using var alter = connection.CreateCommand();
+            alter.CommandText = "ALTER TABLE Games ADD COLUMN MinPlayers INTEGER NULL;";
+            await alter.ExecuteNonQueryAsync();
+        }
+
+        if (!hasMaxPlayers)
+        {
+            await using var alter = connection.CreateCommand();
+            alter.CommandText = "ALTER TABLE Games ADD COLUMN MaxPlayers INTEGER NULL;";
+            await alter.ExecuteNonQueryAsync();
+        }
+
+        if (!hasRuntimeMinutes)
+        {
+            await using var alter = connection.CreateCommand();
+            alter.CommandText = "ALTER TABLE Games ADD COLUMN RuntimeMinutes INTEGER NULL;";
+            await alter.ExecuteNonQueryAsync();
+        }
+
+        if (!hasFirstPlayRuntimeMinutes)
+        {
+            await using var alter = connection.CreateCommand();
+            alter.CommandText = "ALTER TABLE Games ADD COLUMN FirstPlayRuntimeMinutes INTEGER NULL;";
+            await alter.ExecuteNonQueryAsync();
+        }
+
+        if (!hasComplexity)
+        {
+            await using var alter = connection.CreateCommand();
+            alter.CommandText = "ALTER TABLE Games ADD COLUMN Complexity REAL NULL;";
+            await alter.ExecuteNonQueryAsync();
+        }
+
+        if (!hasBggScore)
+        {
+            await using var alter = connection.CreateCommand();
+            alter.CommandText = "ALTER TABLE Games ADD COLUMN BoardGameGeekScore REAL NULL;";
+            await alter.ExecuteNonQueryAsync();
+        }
+
+        if (!hasBggUrl)
+        {
+            await using var alter = connection.CreateCommand();
+            alter.CommandText = "ALTER TABLE Games ADD COLUMN BoardGameGeekUrl TEXT NULL;";
+            await alter.ExecuteNonQueryAsync();
+        }
+
         // Admin tickets + priorities.
         await using (var createTickets = connection.CreateCommand())
         {

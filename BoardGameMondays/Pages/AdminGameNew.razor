@@ -36,6 +36,54 @@
         <div class="form-text">Example: images/placeholder-game-cover.svg</div>
     </div>
 
+    <div class="mb-3">
+        <label class="form-label">Players</label>
+        <div class="d-flex gap-2 flex-wrap">
+            <div>
+                <div class="form-text">Min</div>
+                <InputNumber class="form-control" TValue="int?" @bind-Value="_model.MinPlayers" />
+            </div>
+            <div>
+                <div class="form-text">Max</div>
+                <InputNumber class="form-control" TValue="int?" @bind-Value="_model.MaxPlayers" />
+            </div>
+        </div>
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label">Runtime (minutes)</label>
+        <div class="d-flex gap-2 flex-wrap">
+            <div>
+                <div class="form-text">Estimated</div>
+                <InputNumber class="form-control" TValue="int?" @bind-Value="_model.RuntimeMinutes" />
+            </div>
+            <div>
+                <div class="form-text">First play</div>
+                <InputNumber class="form-control" TValue="int?" @bind-Value="_model.FirstPlayRuntimeMinutes" />
+            </div>
+        </div>
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label">Complexity</label>
+        <InputNumber class="form-control" TValue="double?" @bind-Value="_model.Complexity" step="0.1" />
+        <div class="form-text">Typical range is ~1–5.</div>
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label">BoardGameGeek</label>
+        <div class="d-flex gap-2 flex-wrap align-items-end">
+            <div style="min-width: 220px; flex: 1 1 220px;">
+                <div class="form-text">Score</div>
+                <InputNumber class="form-control" TValue="double?" @bind-Value="_model.BoardGameGeekScore" step="0.1" />
+            </div>
+            <div style="min-width: 260px; flex: 2 1 260px;">
+                <div class="form-text">Link</div>
+                <InputText class="form-control" @bind-Value="_model.BoardGameGeekUrl" />
+            </div>
+        </div>
+    </div>
+
     <button type="submit" class="btn btn-primary">Create</button>
     <a class="btn btn-link" href="/admin">Cancel</a>
 </EditForm>
@@ -49,7 +97,14 @@
             name: _model.Name,
             status: _model.Status,
             tagline: _model.Tagline,
-            imageUrl: _model.ImageUrl);
+            imageUrl: _model.ImageUrl,
+            minPlayers: _model.MinPlayers,
+            maxPlayers: _model.MaxPlayers,
+            runtimeMinutes: _model.RuntimeMinutes,
+            firstPlayRuntimeMinutes: _model.FirstPlayRuntimeMinutes,
+            complexity: _model.Complexity,
+            boardGameGeekScore: _model.BoardGameGeekScore,
+            boardGameGeekUrl: _model.BoardGameGeekUrl);
 
         Navigation.NavigateTo($"/admin/games/{created.Id}");
     }
@@ -60,5 +115,13 @@
         public GameStatus Status { get; set; } = GameStatus.Queued;
         public string? Tagline { get; set; }
         public string? ImageUrl { get; set; } = "images/placeholder-game-cover.svg";
+
+        public int? MinPlayers { get; set; }
+        public int? MaxPlayers { get; set; }
+        public int? RuntimeMinutes { get; set; }
+        public int? FirstPlayRuntimeMinutes { get; set; }
+        public double? Complexity { get; set; }
+        public double? BoardGameGeekScore { get; set; }
+        public string? BoardGameGeekUrl { get; set; }
     }
 }

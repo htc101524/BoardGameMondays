@@ -113,6 +113,85 @@
 
         <div class="bgm-thoughtsBody">
             <div class="bgm-thoughtsMain">
+                @if (thoughtsGame is not null && (
+                    thoughtsGame.MinPlayers is not null ||
+                    thoughtsGame.MaxPlayers is not null ||
+                    thoughtsGame.RuntimeMinutes is not null ||
+                    thoughtsGame.FirstPlayRuntimeMinutes is not null ||
+                    thoughtsGame.Complexity is not null ||
+                    thoughtsGame.BoardGameGeekScore is not null ||
+                    !string.IsNullOrWhiteSpace(thoughtsGame.BoardGameGeekUrl)))
+                {
+                    <div class="card" aria-label="Game stats">
+                        <div class="card-body">
+                            <div class="fw-semibold mb-2">Game stats</div>
+
+                            <div class="row g-2">
+                                @if (thoughtsGame.MinPlayers is not null || thoughtsGame.MaxPlayers is not null)
+                                {
+                                    <div class="col-12 col-sm-6">
+                                        <div class="text-muted small">Players</div>
+                                        <div class="fw-semibold">
+                                            @if (thoughtsGame.MinPlayers is { } minP && thoughtsGame.MaxPlayers is { } maxP)
+                                            {
+                                                <span>@minP–@maxP</span>
+                                            }
+                                            else if (thoughtsGame.MaxPlayers is { } onlyMax)
+                                            {
+                                                <span>Up to @onlyMax</span>
+                                            }
+                                            else
+                                            {
+                                                <span>@thoughtsGame.MinPlayers</span>
+                                            }
+                                        </div>
+                                    </div>
+                                }
+
+                                @if (thoughtsGame.RuntimeMinutes is not null)
+                                {
+                                    <div class="col-12 col-sm-6">
+                                        <div class="text-muted small">Runtime</div>
+                                        <div class="fw-semibold">@thoughtsGame.RuntimeMinutes min</div>
+                                    </div>
+                                }
+
+                                @if (thoughtsGame.FirstPlayRuntimeMinutes is not null)
+                                {
+                                    <div class="col-12 col-sm-6">
+                                        <div class="text-muted small">First play runtime</div>
+                                        <div class="fw-semibold">@thoughtsGame.FirstPlayRuntimeMinutes min</div>
+                                    </div>
+                                }
+
+                                @if (thoughtsGame.Complexity is not null)
+                                {
+                                    <div class="col-12 col-sm-6">
+                                        <div class="text-muted small">Complexity</div>
+                                        <div class="fw-semibold">@thoughtsGame.Complexity.Value.ToString("0.0")</div>
+                                    </div>
+                                }
+
+                                @if (thoughtsGame.BoardGameGeekScore is not null)
+                                {
+                                    <div class="col-12 col-sm-6">
+                                        <div class="text-muted small">BoardGameGeek score</div>
+                                        <div class="fw-semibold">@thoughtsGame.BoardGameGeekScore.Value.ToString("0.0")</div>
+                                    </div>
+                                }
+
+                                @if (!string.IsNullOrWhiteSpace(thoughtsGame.BoardGameGeekUrl))
+                                {
+                                    <div class="col-12 col-sm-6">
+                                        <div class="text-muted small">BoardGameGeek</div>
+                                        <a class="fw-semibold" href="@thoughtsGame.BoardGameGeekUrl" target="_blank" rel="noopener noreferrer">Open page</a>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                }
+
                 <div class="bgm-thoughtsContent">
                     @if (_selectedReview is not null)
                     {
