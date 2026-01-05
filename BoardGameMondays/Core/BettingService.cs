@@ -202,6 +202,56 @@ public sealed class BettingService
         return ResolveResult.Ok;
     }
 
+    public async Task<IReadOnlyList<NightNetResult>> GetNightNetResultsAsync(Guid gameNightId, CancellationToken ct = default)
+    {
+        var nets = await _db.GameNightGameBets
+            .AsNoTracking()
+            .Where(b => b.GameNightGame.GameNightId == gameNightId && b.IsResolved)
+            .GroupBy(b => b.UserId)
+            .Select(g => new
+            {
+                UserId = g.Key,
+                Net = g.Sum(b => b.Payout - b.Amount)
+            })
+            .ToListAsync(ct);
+
+        if (nets.Count == 0)
+        {
+            return Array.Empty<NightNetResult>();
+        }
+
+        var userIds = nets.Select(x => x.UserId).Distinct().ToHashSet(StringComparer.Ordinal);
+
+        var userNames = await _db.Users
+            .AsNoTracking()
+            .Where(u => userIds.Contains(u.Id))
+            .Select(u => new { u.Id, u.UserName })
+            .ToListAsync(ct);
+
+        var displayNameClaims = await _db.UserClaims
+            .AsNoTracking()
+            .Where(c => userIds.Contains(c.UserId) && c.ClaimType == BgmClaimTypes.DisplayName)
+            .Select(c => new { c.UserId, c.ClaimValue })
+            .ToListAsync(ct);
+
+        var displayNameByUserId = displayNameClaims
+            .Where(c => !string.IsNullOrWhiteSpace(c.ClaimValue))
+            .GroupBy(c => c.UserId)
+            .ToDictionary(g => g.Key, g => g.First().ClaimValue!.Trim(), StringComparer.Ordinal);
+
+        var userNameByUserId = userNames
+            .ToDictionary(x => x.Id, x => x.UserName ?? x.Id, StringComparer.Ordinal);
+
+        return nets
+            .Select(x =>
+            {
+                var name = displayNameByUserId.TryGetValue(x.UserId, out var dn) ? dn : userNameByUserId.GetValueOrDefault(x.UserId, x.UserId);
+                return new NightNetResult(x.UserId, name, x.Net);
+            })
+            .OrderByDescending(x => x.Net)
+            .ToArray();
+    }
+
     private static int ComputeProfit(int amount, int oddsTimes100)
     {
         // oddsTimes100 represents decimal odds (x100). Fractional profit odds are (decimal - 1).
@@ -255,4 +305,6 @@ public sealed class BettingService
     }
 
     public sealed record UserBet(int Amount, Guid WinnerMemberId, string WinnerMemberName, int OddsTimes100);
+
+    public sealed record NightNetResult(string UserId, string DisplayName, int Net);
 }

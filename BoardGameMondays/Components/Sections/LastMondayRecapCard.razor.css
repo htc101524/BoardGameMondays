@@ -1,0 +1,66 @@
+.bgm-recapFrame {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: stretch;
+    padding: 12px;
+    border-radius: 18px;
+    background: repeating-linear-gradient(
+        45deg,
+        rgba(191, 161, 74, 0.18) 0px,
+        rgba(191, 161, 74, 0.18) 12px,
+        rgba(255, 255, 255, 0.72) 12px,
+        rgba(255, 255, 255, 0.72) 24px
+    );
+    box-shadow: 0 10px 30px rgba(34, 24, 10, 0.10);
+    transition: box-shadow 140ms ease;
+}
+
+.bgm-recapFrame:hover {
+    box-shadow:
+        0 0 0 4px rgba(191, 161, 74, 0.18),
+        0 26px 78px rgba(34, 24, 10, 0.14);
+}
+
+.bgm-recapCard {
+    width: 100%;
+    height: 100%;
+    border: none;
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.72);
+}
+
+.bgm-mondayRecapTitle {
+    font-size: clamp(1.4rem, 2.2vw, 2rem);
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    line-height: 1.1;
+}
+
+.bgm-rankPill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 2.6rem;
+    padding: 0.15rem 0.5rem;
+    border-radius: 999px;
+    border: 1px solid rgba(75, 58, 26, 0.18);
+    background: rgba(191, 161, 74, 0.14);
+    color: rgba(34, 49, 28, 0.95);
+    font-weight: 700;
+    font-size: 0.9rem;
+    letter-spacing: 0.01em;
+}
+
+.bgm-coinLeaderboard {
+    border-radius: 14px;
+    overflow: hidden;
+    border: 1px solid rgba(75, 58, 26, 0.14);
+    background: rgba(255, 255, 255, 0.55);
+}
+
+.bgm-coinLeaderboard .list-group-item {
+    background: transparent;
+    padding: 10px 14px;
+}

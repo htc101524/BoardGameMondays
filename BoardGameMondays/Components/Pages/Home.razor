@@ -17,30 +17,45 @@
 
 
 <section id="latest" class="home-hero" aria-label="Latest reviewed game">
-    <div class="home-hero__center">
-        <div class="home-hero__kicker">Latest review</div>
-
+    <div class="home-hero__grid" aria-label="Highlights">
         @if (_latestReviewed is null)
         {
-            <h1 class="home-hero__title">No reviews yet</h1>
-            <p class="home-hero__subtitle">Add your first review to feature it here.</p>
+            <div class="home-hero__panel" aria-label="Latest reviewed game">
+                <div class="home-hero__kicker">Latest review</div>
+                <h1 class="home-hero__title">No reviews yet</h1>
+                <p class="home-hero__subtitle">Add your first review to feature it here.</p>
+            </div>
         }
         else
         {
-            <h1 class="home-hero__title">@_latestReviewed.Name</h1>
+            <button type="button"
+                    class="home-hero__panel home-hero__panelButton"
+                    aria-label="Jump to what we thought about @_latestReviewed.Name"
+                    @onclick="GoToLatestThoughtsAsync">
+                <div class="home-hero__kicker">Latest review</div>
 
-            @if (!string.IsNullOrWhiteSpace(_latestReviewed.Tagline))
-            {
-                <p class="home-hero__subtitle">@_latestReviewed.Tagline</p>
-            }
+                <h1 class="home-hero__title">@_latestReviewed.Name</h1>
 
-            @if (!string.IsNullOrWhiteSpace(_latestReviewed.ImageUrl))
-            {
-                <div class="home-hero__media">
-                    <img src="@_latestReviewed.ImageUrl" alt="@($"{_latestReviewed.Name} cover")" />
-                </div>
-            }
+                @if (!string.IsNullOrWhiteSpace(_latestReviewed.Tagline))
+                {
+                    <p class="home-hero__subtitle">@_latestReviewed.Tagline</p>
+                }
+
+                @if (!string.IsNullOrWhiteSpace(_latestReviewed.ImageUrl))
+                {
+                    <div class="home-hero__media">
+                        <img src="@_latestReviewed.ImageUrl" alt="@($"{_latestReviewed.Name} cover")" />
+                    </div>
+                }
+            </button>
         }
+
+        <button type="button"
+                class="home-hero__panel home-hero__panelButton home-hero__panel--recap"
+                aria-label="Jump to Mondays"
+                @onclick="GoToMondaysAsync">
+            <LastMondayRecapCard />
+        </button>
     </div>
 </section>
 
@@ -460,6 +475,24 @@
 
         await JS.InvokeVoidAsync("bgm.scrollToIdNextFrame", "thoughts", "smooth");
     }
+
+    private async Task GoToLatestThoughtsAsync()
+    {
+        if (_latestReviewed is null)
+        {
+            return;
+        }
+
+        _thoughtsGame = _latestReviewed;
+        _selectedReview = PickDefaultReview(_latestReviewed);
+
+        await RefreshAgreementStateAsync();
+
+        await JS.InvokeVoidAsync("bgm.scrollToIdNextFrame", "thoughts", "smooth");
+    }
+
+    private async Task GoToMondaysAsync()
+        => await JS.InvokeVoidAsync("bgm.scrollToIdNextFrame", "mondays", "smooth");
 
     private static Review? PickDefaultReview(BoardGame? game)
         => game?.Reviews?.OrderByDescending(r => r.CreatedOn).FirstOrDefault();

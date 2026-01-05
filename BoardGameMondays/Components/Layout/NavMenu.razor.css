@@ -7,10 +7,9 @@
     inset: 0 0 auto 0;
     height: var(--bgm-header-height);
     z-index: 50;
-    background: transparent;
-    backdrop-filter: none;
-    border-bottom: none;
-    box-shadow: none;
+    background: rgba(15, 46, 31, 0.98);
+    border-bottom: 1px solid rgba(191, 161, 74, 0.22);
+    box-shadow: 0 10px 26px rgba(0, 0, 0, 0.18);
 }
 
 .bgm-header__inner {
@@ -29,10 +28,10 @@
 }
 
 .bgm-coins {
-    color: #22311c;
+    color: rgba(255, 255, 255, 0.96);
     font-weight: 700;
     letter-spacing: 0.02em;
-    text-shadow: 1px 1px 8px rgba(34, 24, 10, 0.10);
+    text-shadow: 1px 1px 10px rgba(0, 0, 0, 0.25);
     white-space: nowrap;
 }
 
@@ -50,10 +49,10 @@
 }
 
 .bgm-brand__text {
-    color: #22311c;
+    color: rgba(255, 255, 255, 0.98);
     font-weight: 700;
     letter-spacing: 2.0px;
-    text-shadow: 1px 1px 8px rgba(34, 24, 10, 0.10);
+    text-shadow: 1px 1px 10px rgba(0, 0, 0, 0.25);
     font-size: 1.2rem;
 }
 
@@ -64,7 +63,7 @@
     background: transparent;
     border-radius: 0;
     padding: 0;
-    color: #22311c;
+    color: rgba(255, 255, 255, 0.98);
     display: grid;
     place-items: center;
 }
@@ -85,7 +84,7 @@
 
 .bgm-menuIcon path {
     fill: none;
-    stroke: rgba(34, 49, 28, 0.95);
+    stroke: rgba(255, 255, 255, 0.92);
     stroke-width: 3.2;
     stroke-linecap: round;
     stroke-linejoin: round;

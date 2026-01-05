@@ -60,4 +60,47 @@ public sealed class BgmCoinService
 
         return false;
     }
+
+    public async Task<IReadOnlyList<CoinLeaderboardItem>> GetLeaderboardAsync(int take, CancellationToken ct = default)
+    {
+        if (take <= 0)
+        {
+            return Array.Empty<CoinLeaderboardItem>();
+        }
+
+        var topUsers = await _db.Users
+            .AsNoTracking()
+            .OrderByDescending(u => u.BgmCoins)
+            .ThenBy(u => u.UserName)
+            .Select(u => new { u.Id, u.UserName, u.BgmCoins })
+            .Take(take)
+            .ToListAsync(ct);
+
+        if (topUsers.Count == 0)
+        {
+            return Array.Empty<CoinLeaderboardItem>();
+        }
+
+        var userIds = topUsers.Select(u => u.Id).ToHashSet(StringComparer.Ordinal);
+
+        var displayNameClaims = await _db.UserClaims
+            .AsNoTracking()
+            .Where(c => userIds.Contains(c.UserId) && c.ClaimType == BgmClaimTypes.DisplayName)
+            .Select(c => new { c.UserId, c.ClaimValue })
+            .ToListAsync(ct);
+
+        var displayNameByUserId = displayNameClaims
+            .Where(c => !string.IsNullOrWhiteSpace(c.ClaimValue))
+            .GroupBy(c => c.UserId)
+            .ToDictionary(g => g.Key, g => g.First().ClaimValue!.Trim(), StringComparer.Ordinal);
+
+        return topUsers
+            .Select(u => new CoinLeaderboardItem(
+                u.Id,
+                displayNameByUserId.TryGetValue(u.Id, out var dn) ? dn : (u.UserName ?? u.Id),
+                u.BgmCoins))
+            .ToArray();
+    }
+
+    public sealed record CoinLeaderboardItem(string UserId, string DisplayName, int Coins);
 }

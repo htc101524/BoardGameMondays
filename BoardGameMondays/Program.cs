@@ -350,10 +350,34 @@ CREATE INDEX IF NOT EXISTS IX_ReviewAgreements_UserId ON ReviewAgreements(UserId
             createGameNights.CommandText = @"
 CREATE TABLE IF NOT EXISTS GameNights (
     Id TEXT NOT NULL PRIMARY KEY,
-    DateKey INTEGER NOT NULL
+    DateKey INTEGER NOT NULL,
+    Recap TEXT NULL
 );
 ";
             await createGameNights.ExecuteNonQueryAsync();
+        }
+
+        var hasGameNightRecap = false;
+        await using (var cmd = connection.CreateCommand())
+        {
+            cmd.CommandText = "PRAGMA table_info('GameNights');";
+            await using var reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                var name = reader.GetString(1);
+                if (string.Equals(name, "Recap", StringComparison.OrdinalIgnoreCase))
+                {
+                    hasGameNightRecap = true;
+                    break;
+                }
+            }
+        }
+
+        if (!hasGameNightRecap)
+        {
+            await using var alter = connection.CreateCommand();
+            alter.CommandText = "ALTER TABLE GameNights ADD COLUMN Recap TEXT NULL;";
+            await alter.ExecuteNonQueryAsync();
         }
 
         await using (var createGameNightAttendees = connection.CreateCommand())

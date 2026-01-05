@@ -11,6 +11,8 @@ public sealed class GameNightEntity
     [Required]
     public int DateKey { get; set; }
 
+    public string? Recap { get; set; }
+
     public List<GameNightAttendeeEntity> Attendees { get; set; } = new();
 
     public List<GameNightGameEntity> Games { get; set; } = new();

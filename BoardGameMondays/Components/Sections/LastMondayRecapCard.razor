@@ -1,0 +1,190 @@
+@using BoardGameMondays.Core
+@inject GameNightService GameNightService
+@inject BettingService BettingService
+@inject BgmCoinService CoinService
+
+@if (_night is null)
+{
+    <div class="bgm-recapFrame" aria-label="Last Monday recap">
+        <div class="card bgm-recapCard">
+            <div class="card-body">
+                <div class="bgm-mondayRecapTitle">LAST MONDAY RECAP</div>
+                <div class="text-muted mt-2">No previous game night found yet.</div>
+            </div>
+        </div>
+    </div>
+}
+else
+{
+    <div class="bgm-recapFrame" aria-label="Last Monday recap">
+        <div class="card bgm-recapCard">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+                    <div>
+                        <div class="bgm-mondayRecapTitle">LAST MONDAY RECAP</div>
+                        <div class="text-muted small">@FormatLongDate(_night.Date)</div>
+                    </div>
+                </div>
+
+            @{
+                var played = _night.Games
+                    .Where(g => g.IsPlayed)
+                    .Select(g => g.GameName)
+                    .ToArray();
+                var playedText = played.Length > 0
+                    ? string.Join(", ", played)
+                    : string.Join(", ", _night.Games.Select(g => g.GameName));
+
+                var winners = _net
+                    .Where(x => x.Net > 0)
+                    .OrderByDescending(x => x.Net)
+                    .Take(3)
+                    .ToArray();
+
+                var losers = _net
+                    .Where(x => x.Net < 0)
+                    .OrderBy(x => x.Net)
+                    .Take(3)
+                    .ToArray();
+            }
+
+            @if (!string.IsNullOrWhiteSpace(playedText))
+            {
+                <div class="mt-2">
+                    <div class="text-muted small">Played</div>
+                    <div class="fw-semibold">@playedText</div>
+                </div>
+            }
+
+            @if (!string.IsNullOrWhiteSpace(_night.Recap))
+            {
+                <div class="mt-2">@_night.Recap</div>
+            }
+            else
+            {
+                <div class="text-muted mt-2">No recap yet.</div>
+            }
+
+                <div class="row g-3 mt-1">
+                <div class="col-12 col-md-6">
+                    <div class="fw-semibold mb-1">🏆 Biggest winners</div>
+                    @if (winners.Length == 0)
+                    {
+                        <div class="text-muted">No winning bets.</div>
+                    }
+                    else
+                    {
+                        <div class="list-group list-group-flush">
+                            @foreach (var item in winners)
+                            {
+                                <div class="list-group-item d-flex justify-content-between align-items-center px-0">
+                                    <div class="text-truncate">@item.DisplayName</div>
+                                    <div class="text-success text-nowrap">+@item.Net</div>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+
+                <div class="col-12 col-md-6">
+                    <div class="fw-semibold mb-1">😢 Biggest losers</div>
+                    @if (losers.Length == 0)
+                    {
+                        <div class="text-muted">No losing bets.</div>
+                    }
+                    else
+                    {
+                        <div class="list-group list-group-flush">
+                            @foreach (var item in losers)
+                            {
+                                <div class="list-group-item d-flex justify-content-between align-items-center px-0">
+                                    <div class="text-truncate">@item.DisplayName</div>
+                                    <div class="text-danger text-nowrap">@item.Net</div>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+
+                <div class="col-12">
+                    <div class="fw-semibold mb-1">BGM coin leaderboard</div>
+                    @if (_leaders.Count == 0)
+                    {
+                        <div class="text-muted">No coin data yet.</div>
+                    }
+                    else
+                    {
+                        <div class="bgm-coinLeaderboard">
+                            <div class="list-group list-group-flush">
+                            @for (var i = 0; i < _leaders.Count; i++)
+                            {
+                                var item = _leaders[i];
+                                <div class="list-group-item d-flex justify-content-between align-items-center">
+                                    <div class="d-flex align-items-center gap-2 text-truncate">
+                                        <span class="bgm-rankPill" aria-hidden="true">@ToOrdinal(i + 1)</span>
+                                        <span class="text-truncate">@item.DisplayName</span>
+                                    </div>
+                                    <div class="text-muted text-nowrap">@item.Coins</div>
+                                </div>
+                            }
+                            </div>
+                        </div>
+                    }
+                </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private GameNightService.GameNight? _night;
+    private IReadOnlyList<BettingService.NightNetResult> _net = Array.Empty<BettingService.NightNetResult>();
+    private IReadOnlyList<BgmCoinService.CoinLeaderboardItem> _leaders = Array.Empty<BgmCoinService.CoinLeaderboardItem>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        var mondayOnOrBeforeToday = GetMondayOnOrBefore(today);
+        var nextMonday = today.DayOfWeek == DayOfWeek.Monday
+            ? mondayOnOrBeforeToday
+            : mondayOnOrBeforeToday.AddDays(7);
+
+        var latestDates = await GameNightService.GetRecentPastGameNightDatesAsync(nextMonday, take: 1);
+        if (latestDates.Count > 0)
+        {
+            _night = await GameNightService.GetByDateAsync(latestDates[0]);
+            if (_night is not null)
+            {
+                _net = await BettingService.GetNightNetResultsAsync(_night.Id);
+            }
+        }
+
+        _leaders = await CoinService.GetLeaderboardAsync(take: 5);
+    }
+
+    private static DateOnly GetMondayOnOrBefore(DateOnly date)
+    {
+        var delta = ((int)date.DayOfWeek - (int)DayOfWeek.Monday + 7) % 7;
+        return date.AddDays(-delta);
+    }
+
+    private static string FormatLongDate(DateOnly date)
+        => date.ToString("dddd d MMMM yyyy");
+
+    private static string ToOrdinal(int value)
+    {
+        if (value % 100 is 11 or 12 or 13)
+        {
+            return value + "th";
+        }
+
+        return (value % 10) switch
+        {
+            1 => value + "st",
+            2 => value + "nd",
+            3 => value + "rd",
+            _ => value + "th"
+        };
+    }
+}

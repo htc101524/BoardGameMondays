@@ -4,6 +4,17 @@
     --bgm-home-section-min-height: 100vh;
     --bgm-home-section-padding-y: 56px;
 
+
+.bgm-gameCardButton,
+.bgm-mondayCube,
+.bgm-review-switcher__button,
+.bgm-popup__link,
+.bgm-brand,
+.bgm-menuButton {
+    -webkit-user-select: none;
+    user-select: none;
+    caret-color: transparent;
+}
     --bgm-home-section-bg-thoughts: transparent;
     --bgm-home-section-bg-games: rgba(34, 49, 28, 0.06);
     --bgm-home-section-bg-people: transparent;

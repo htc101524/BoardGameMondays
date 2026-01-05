@@ -18,9 +18,10 @@
             @foreach (var item in _items)
             {
                 var isSelected = item.Date == _selected;
+                var stateClass = GetMondayStateClass(item.Date);
 
                 <button type="button"
-                        class="bgm-mondayCube @(isSelected ? "is-selected" : "")"
+                        class="bgm-mondayCube @stateClass @(isSelected ? "is-selected" : "")"
                         role="listitem"
                         aria-pressed="@isSelected"
                         @onclick="() => SelectAsync(item.Date)">
@@ -32,12 +33,12 @@
             }
         </div>
 
-        <div class="card mt-3" aria-label="Selected Monday details">
+        <div class="card mt-3 bgm-mondayDetailsCard @GetMondayStateClass(_selected)" aria-label="Selected Monday details">
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
                     <div>
                         <div class="fw-semibold">@FormatLongDate(_selected)</div>
-                        <div class="text-muted small">@(_selected < _nextMonday ? "Past" : "Upcoming")</div>
+                        <div class="text-muted small">@GetMondayKind(_selected)</div>
                     </div>
 
                     @if (_isAdmin && _selectedNight is null && !_loading)
@@ -226,7 +227,9 @@
                                         @if (game.IsConfirmed && _selected >= _nextMonday)
                                         {
                                             <div class="mt-2" aria-label="Odds">
-                                                <div class="text-muted small mb-1">Odds</div>
+                                                <div class="text-muted small mb-1">
+                                                    <span role="img" aria-label="Money">💰</span> Markets
+                                                </div>
 
                                                 @if (game.Players.Count == 0)
                                                 {
@@ -234,7 +237,7 @@
                                                 }
                                                 else
                                                 {
-                                                    <div class="d-grid gap-1">
+                                                    <div class="d-grid gap-1 bgm-markets">
                                                         @foreach (var p in game.Players)
                                                         {
                                                             var odds = game.Odds.FirstOrDefault(o => o.MemberId == p.MemberId)?.OddsTimes100;
@@ -279,7 +282,7 @@
                                                             }
                                                             else
                                                             {
-                                                                <div class="d-flex justify-content-between align-items-center">
+                                                                <div class="d-flex justify-content-between align-items-center bgm-oddsSlipRow">
                                                                     <div class="text-truncate">@p.MemberName</div>
                                                                     <div class="text-muted">@FormatFraction(odds)</div>
                                                                 </div>
@@ -443,6 +446,33 @@
                             </div>
                         }
                     </div>
+
+                    @if (_selected < _nextMonday)
+                    {
+                        <div class="mt-3" aria-label="Recap">
+                            <div class="fw-semibold mb-1">Recap</div>
+
+                            @if (_isAdmin)
+                            {
+                                <textarea class="form-control" rows="3" placeholder="One sentence about what happened…" @bind="_recapEdit" disabled="@_savingRecap"></textarea>
+                                <div class="mt-2 d-flex align-items-center gap-2 flex-wrap">
+                                    <button type="button" class="btn btn-sm btn-outline-primary" disabled="@_savingRecap" @onclick="SaveRecapAsync">Save recap</button>
+                                    @if (!string.IsNullOrWhiteSpace(_recapStatus))
+                                    {
+                                        <span class="text-muted">@_recapStatus</span>
+                                    }
+                                </div>
+                            }
+                            else if (!string.IsNullOrWhiteSpace(_selectedNight.Recap))
+                            {
+                                <div>@_selectedNight.Recap</div>
+                            }
+                            else
+                            {
+                                <div class="text-muted">No recap yet.</div>
+                            }
+                        </div>
+                    }
                 }
             </div>
         </div>
@@ -464,6 +494,10 @@
     private string? _userId;
     private int? _coins;
     private Guid? _memberId;
+
+    private string _recapEdit = string.Empty;
+    private bool _savingRecap;
+    private string? _recapStatus;
 
     private GameNightService.GameNight? _selectedNight;
     private bool _loading;
@@ -526,7 +560,7 @@
 
         foreach (var date in dates.OrderBy(d => d))
         {
-            var kind = date < _nextMonday ? "Past" : "Upcoming";
+            var kind = GetMondayKind(date);
             _items.Add(new MondayItem(date, kind));
         }
 
@@ -567,6 +601,8 @@
         {
             _selectedNight = await GameNightService.GetByDateAsync(_selected);
             _amAttending = _memberId is { } me && _selectedNight?.Attendees.Any(a => a.MemberId == me) == true;
+            _recapEdit = _selectedNight?.Recap ?? string.Empty;
+            _recapStatus = null;
 
             if (_selectedNight is not null && !string.IsNullOrWhiteSpace(_userId))
             {
@@ -582,6 +618,46 @@
             _loading = false;
         }
     }
+
+    private async Task SaveRecapAsync()
+    {
+        if (!_isAdmin || _selectedNight is null)
+        {
+            return;
+        }
+
+        _savingRecap = true;
+        _recapStatus = null;
+        try
+        {
+            var updated = await GameNightService.SetRecapAsync(_selectedNight.Id, _recapEdit);
+            _selectedNight = updated;
+            _recapEdit = _selectedNight?.Recap ?? string.Empty;
+            _recapStatus = "Saved";
+        }
+        finally
+        {
+            _savingRecap = false;
+        }
+    }
+
+    private string GetMondayStateClass(DateOnly date)
+    {
+        if (date < _nextMonday)
+        {
+            return "is-past";
+        }
+
+        if (date == _nextMonday)
+        {
+            return "is-next";
+        }
+
+        return "is-future";
+    }
+
+    private string GetMondayKind(DateOnly date)
+        => date < _nextMonday ? "Past" : date == _nextMonday ? "Up next" : "Future";
 
     private async Task RefreshCoinsAsync()
     {

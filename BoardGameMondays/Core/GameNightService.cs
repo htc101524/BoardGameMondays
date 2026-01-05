@@ -38,6 +38,23 @@ public sealed class GameNightService
         return entity is null ? null : ToDomain(entity);
     }
 
+    public async Task<GameNight?> SetRecapAsync(Guid gameNightId, string? recap, CancellationToken ct = default)
+    {
+        var entity = await _db.GameNights
+            .FirstOrDefaultAsync(n => n.Id == gameNightId, ct);
+
+        if (entity is null)
+        {
+            return null;
+        }
+
+        recap = recap?.Trim();
+        entity.Recap = string.IsNullOrWhiteSpace(recap) ? null : recap;
+        await _db.SaveChangesAsync(ct);
+
+        return await GetByIdAsync(gameNightId, ct);
+    }
+
     public async Task<GameNight> CreateAsync(DateOnly date, CancellationToken ct = default)
     {
         var dateKey = ToDateKey(date);
@@ -398,7 +415,7 @@ public sealed class GameNightService
             })
             .ToArray();
 
-        return new GameNight(entity.Id, date, attendees, games);
+        return new GameNight(entity.Id, date, entity.Recap, attendees, games);
     }
 
     public static int ToDateKey(DateOnly date)
@@ -412,7 +429,7 @@ public sealed class GameNightService
         return new DateOnly(year, month, day);
     }
 
-    public sealed record GameNight(Guid Id, DateOnly Date, IReadOnlyList<GameNightAttendee> Attendees, IReadOnlyList<GameNightGame> Games);
+    public sealed record GameNight(Guid Id, DateOnly Date, string? Recap, IReadOnlyList<GameNightAttendee> Attendees, IReadOnlyList<GameNightGame> Games);
 
     public sealed record GameNightAttendee(Guid MemberId, string MemberName);
 
