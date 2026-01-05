@@ -20,7 +20,10 @@
         <div class="bgm-header__right">
             <AuthorizeView>
                 <Authorized>
-                    <div class="bgm-coins" aria-label="BGM Coins">BGM Coins: @(_coins?.ToString() ?? "…")</div>
+                    <div class="bgm-coins" aria-label="BGM Coins">
+                        <span class="bgm-coins__label">BGM Coins:</span>
+                        <span class="bgm-coins__value">@(_coins?.ToString() ?? "…")</span>
+                    </div>
                 </Authorized>
             </AuthorizeView>
 

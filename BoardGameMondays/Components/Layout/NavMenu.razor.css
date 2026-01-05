@@ -157,3 +157,21 @@
     font: inherit;
     border: 1px solid rgba(75, 58, 26, 0.14);
 }
+
+@media (max-width: 480px) {
+    .bgm-brand__text {
+        display: none;
+    }
+
+    .bgm-header__inner {
+        gap: 0.5rem;
+    }
+
+    .bgm-coins {
+        font-size: 0.95rem;
+    }
+
+    .bgm-coins__label {
+        display: none;
+    }
+}

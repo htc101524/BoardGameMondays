@@ -64,3 +64,14 @@
     font-size: 0.75rem;
     line-height: 1.1;
 }
+
+.bgm-oddsName {
+    min-width: 180px;
+}
+
+@media (max-width: 640px) {
+    .bgm-oddsName {
+        min-width: 0;
+        flex: 1 1 auto;
+    }
+}
