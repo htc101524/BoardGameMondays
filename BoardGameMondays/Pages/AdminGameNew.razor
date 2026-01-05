@@ -1,10 +1,14 @@
 @page "/admin/games/new"
+@using Microsoft.AspNetCore.Components.Web
+@using static Microsoft.AspNetCore.Components.Web.RenderMode
 @using BoardGameMondays.Core
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.AspNetCore.Components.Forms
 @attribute [Authorize(Roles = "Admin")]
+@rendermode InteractiveServer
 @inject BoardGameService BoardGameService
 @inject NavigationManager Navigation
+@inject IWebHostEnvironment Env
 
 <h1>Add game</h1>
 
@@ -31,9 +35,32 @@
     </div>
 
     <div class="mb-3">
-        <label class="form-label">Image URL</label>
-        <InputText class="form-control" @bind-Value="_model.ImageUrl" />
-        <div class="form-text">Example: images/placeholder-game-cover.svg</div>
+        <label class="form-label">Image</label>
+
+        <div class="d-flex gap-3 flex-wrap align-items-start">
+            <div style="min-width: 260px; flex: 1 1 260px;">
+                <div class="form-text">Upload</div>
+                <InputFile OnChange="UploadImageAsync" accept="image/*" />
+
+                @if (!string.IsNullOrWhiteSpace(_imageStatus))
+                {
+                    <div class="form-text">@_imageStatus</div>
+                }
+            </div>
+
+            <div style="min-width: 260px; flex: 2 1 260px;">
+                <div class="form-text">Or paste an Image URL</div>
+                <InputText class="form-control" @bind-Value="_model.ImageUrl" />
+                <div class="form-text">Example: images/placeholder-game-cover.svg</div>
+            </div>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(_model.ImageUrl))
+        {
+            <div class="mt-2">
+                <img src="@_model.ImageUrl" alt="Game image preview" style="max-width: 240px; height: auto; border-radius: var(--bs-border-radius); border: 1px solid var(--bs-border-color);" />
+            </div>
+        }
     </div>
 
     <div class="mb-3">
@@ -90,6 +117,67 @@
 
 @code {
     private NewGameModel _model = new();
+    private string? _imageStatus;
+
+    private static readonly HashSet<string> AllowedImageExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".png",
+        ".jpg",
+        ".jpeg",
+        ".webp",
+        ".gif"
+    };
+
+    private async Task UploadImageAsync(InputFileChangeEventArgs e)
+    {
+        _imageStatus = null;
+
+        var file = e.File;
+        if (file is null)
+        {
+            return;
+        }
+
+        if (!file.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+        {
+            _imageStatus = "Please upload an image file.";
+            return;
+        }
+
+        var ext = Path.GetExtension(file.Name);
+        if (string.IsNullOrWhiteSpace(ext) || !AllowedImageExtensions.Contains(ext))
+        {
+            _imageStatus = "Supported formats: png, jpg, webp, gif.";
+            return;
+        }
+
+        const long maxBytes = 5 * 1024 * 1024;
+        if (file.Size > maxBytes)
+        {
+            _imageStatus = "Image is too large (max 5 MB).";
+            return;
+        }
+
+        try
+        {
+            var fileName = $"{Guid.NewGuid():N}{ext.ToLowerInvariant()}";
+            var relativeUrl = $"images/games/{fileName}";
+            var absolutePath = Path.Combine(Env.WebRootPath, "images", "games", fileName);
+
+            Directory.CreateDirectory(Path.GetDirectoryName(absolutePath)!);
+
+            await using var stream = file.OpenReadStream(maxAllowedSize: maxBytes);
+            await using var outStream = File.Create(absolutePath);
+            await stream.CopyToAsync(outStream);
+
+            _model.ImageUrl = relativeUrl;
+            _imageStatus = "Uploaded.";
+        }
+        catch (Exception ex)
+        {
+            _imageStatus = $"Upload failed: {ex.Message}";
+        }
+    }
 
     private async Task CreateAsync()
     {

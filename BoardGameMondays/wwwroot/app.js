@@ -48,34 +48,91 @@ window.bgm.scrollToIdNextFrame = (id, behavior) => {
         return dr * dr + dg * dg + db * db;
     };
 
-    const pickDistinct = (candidates, count) => {
-        const chosen = [];
-        const minDist = 60 * 60; // squared distance
+    const rgbToHsl = (r, g, b) => {
+        const rn = r / 255;
+        const gn = g / 255;
+        const bn = b / 255;
 
-        for (const c of candidates) {
-            if (chosen.length === 0) {
-                chosen.push(c);
-                if (chosen.length === count) break;
-                continue;
+        const max = Math.max(rn, gn, bn);
+        const min = Math.min(rn, gn, bn);
+        const d = max - min;
+
+        let h = 0;
+        if (d !== 0) {
+            switch (max) {
+                case rn:
+                    h = ((gn - bn) / d) % 6;
+                    break;
+                case gn:
+                    h = (bn - rn) / d + 2;
+                    break;
+                default:
+                    h = (rn - gn) / d + 4;
+                    break;
             }
 
-            let ok = true;
-            for (const picked of chosen) {
-                if (distSq(c, picked) < minDist) {
-                    ok = false;
-                    break;
+            h *= 60;
+            if (h < 0) h += 360;
+        }
+
+        const l = (max + min) / 2;
+        const s = d === 0 ? 0 : d / (1 - Math.abs(2 * l - 1));
+        return { h, s, l };
+    };
+
+    const hueDistance = (a, b) => {
+        const d = Math.abs(a.h - b.h);
+        return Math.min(d, 360 - d);
+    };
+
+    const pickPalette = (buckets) => {
+        const candidates = buckets
+            .map(b => {
+                const hsl = rgbToHsl(b.r, b.g, b.b);
+                const satBoost = Math.pow(0.35 + hsl.s, 1.35);
+                const lightPenalty = 1 - Math.min(0.55, Math.abs(hsl.l - 0.55));
+                const score = b.weight * satBoost * lightPenalty;
+                return { ...b, ...hsl, score };
+            })
+            .sort((a, b) => b.score - a.score);
+
+        const filter = (minSat, minL, maxL) =>
+            candidates.filter(c => c.s >= minSat && c.l >= minL && c.l <= maxL);
+
+        let pool = filter(0.22, 0.16, 0.88);
+        if (pool.length < 3) pool = filter(0.14, 0.12, 0.92);
+        if (pool.length < 3) pool = candidates;
+
+        const chosen = [];
+        chosen.push(pool[0] || { r: 0, g: 0, b: 0, h: 0, s: 0, l: 0, score: 0 });
+
+        const pickNext = () => {
+            let best = null;
+            let bestScore = -Infinity;
+
+            for (const c of pool) {
+                if (chosen.includes(c)) continue;
+
+                let minHue = Infinity;
+                let minRgb = Infinity;
+                for (const p of chosen) {
+                    minHue = Math.min(minHue, hueDistance(c, p));
+                    minRgb = Math.min(minRgb, Math.sqrt(distSq(c, p)));
+                }
+
+                // Prefer hue separation strongly; then RGB separation; then intrinsic candidate score.
+                const sepScore = (minHue * 2.4) + (minRgb * 0.9) + (c.score * 0.02);
+                if (sepScore > bestScore) {
+                    bestScore = sepScore;
+                    best = c;
                 }
             }
 
-            if (ok) {
-                chosen.push(c);
-                if (chosen.length === count) break;
-            }
-        }
+            return best;
+        };
 
-        while (chosen.length < count) {
-            chosen.push(chosen[chosen.length - 1] || { r: 0, g: 0, b: 0 });
-        }
+        chosen.push(pickNext() || chosen[0]);
+        chosen.push(pickNext() || chosen[1]);
 
         return chosen;
     };
@@ -165,7 +222,7 @@ window.bgm.scrollToIdNextFrame = (id, behavior) => {
             return null;
         }
 
-        const chosen = pickDistinct(buckets, 3);
+        const chosen = pickPalette(buckets);
         const palette = {
             c1: toRgbString(chosen[0].r, chosen[0].g, chosen[0].b),
             c2: toRgbString(chosen[1].r, chosen[1].g, chosen[1].b),
@@ -182,13 +239,22 @@ window.bgm.scrollToIdNextFrame = (id, behavior) => {
         if (!el) return false;
         if (!imageUrl) return false;
 
-        const palette = await computePalette(imageUrl);
-        if (!palette) return false;
+        try {
+            const palette = await computePalette(imageUrl);
+            if (!palette) {
+                el.dataset.bgmPalette = "0";
+                return false;
+            }
 
-        el.style.setProperty("--bgm-c1-rgb", palette.c1);
-        el.style.setProperty("--bgm-c2-rgb", palette.c2);
-        el.style.setProperty("--bgm-c3-rgb", palette.c3);
-        return true;
+            el.style.setProperty("--bgm-c1-rgb", palette.c1);
+            el.style.setProperty("--bgm-c2-rgb", palette.c2);
+            el.style.setProperty("--bgm-c3-rgb", palette.c3);
+            el.dataset.bgmPalette = "1";
+            return true;
+        } catch {
+            el.dataset.bgmPalette = "0";
+            return false;
+        }
     };
 
     window.bgm.clearPalette = (elementId) => {
@@ -198,5 +264,6 @@ window.bgm.scrollToIdNextFrame = (id, behavior) => {
         el.style.removeProperty("--bgm-c1-rgb");
         el.style.removeProperty("--bgm-c2-rgb");
         el.style.removeProperty("--bgm-c3-rgb");
+        el.dataset.bgmPalette = "0";
     };
 })();

@@ -25,6 +25,16 @@
 
 #thoughts.home-section {
     background: var(--bgm-home-section-bg-thoughts, transparent);
+    --bgm-c1-rgb: var(--bs-warning-rgb);
+    --bgm-c2-rgb: var(--bs-primary-rgb);
+    --bgm-c3-rgb: var(--bs-secondary-rgb);
+}
+
+#thoughts .home-section__inner {
+    background: rgba(var(--bgm-c3-rgb), 0.08);
+    border: 2px solid rgba(var(--bgm-c3-rgb), 0.22);
+    border-radius: var(--bs-border-radius-xl);
+    padding: 18px;
 }
 
 #games.home-section {
@@ -56,15 +66,18 @@
 }
 
 .bgm-thoughtsHero {
-    --bgm-c1-rgb: var(--bs-warning-rgb);
-    --bgm-c2-rgb: var(--bs-primary-rgb);
-    --bgm-c3-rgb: var(--bs-secondary-rgb);
-
     position: relative;
     width: 100%;
-    border: 1px solid var(--bs-border-color);
+    border: 8px solid rgb(var(--bgm-c1-rgb));
     border-radius: var(--bs-border-radius-lg);
-    background: rgba(var(--bs-body-bg-rgb), 0.70);
+    background:
+        linear-gradient(135deg,
+            rgba(var(--bgm-c1-rgb), 0.10),
+            rgba(var(--bgm-c2-rgb), 0.06) 45%,
+            rgba(var(--bgm-c3-rgb), 0.08)
+        );
+    box-shadow:
+        inset 0 0 0 1px rgba(var(--bs-body-bg-rgb), 0.55);
     overflow: hidden;
     padding: 18px;
 
@@ -81,8 +94,8 @@
     background-image: var(--bgm-game-art);
     background-size: cover;
     background-position: center;
-    filter: blur(26px) saturate(1.1);
-    opacity: 0.18;
+    filter: blur(26px) saturate(1.25);
+    opacity: 0.30;
     transform: scale(1.08);
 }
 
@@ -91,9 +104,9 @@
     position: absolute;
     inset: 0;
     background:
-        radial-gradient(780px 320px at 18% 22%, rgba(var(--bgm-c1-rgb), 0.14), transparent 60%),
-        radial-gradient(720px 300px at 86% 14%, rgba(var(--bgm-c2-rgb), 0.12), transparent 56%),
-        radial-gradient(800px 360px at 78% 90%, rgba(var(--bgm-c3-rgb), 0.10), transparent 62%),
+        radial-gradient(780px 320px at 18% 22%, rgba(var(--bgm-c1-rgb), 0.32), transparent 60%),
+        radial-gradient(720px 300px at 86% 14%, rgba(var(--bgm-c2-rgb), 0.28), transparent 56%),
+        radial-gradient(800px 360px at 78% 90%, rgba(var(--bgm-c3-rgb), 0.24), transparent 62%),
         linear-gradient(180deg, rgba(var(--bs-body-bg-rgb), 0.72), rgba(var(--bs-body-bg-rgb), 0.90));
 }
 
@@ -155,7 +168,30 @@
     flex-direction: column;
     align-items: flex-end;
     gap: 6px;
+
+    padding: 10px 10px 8px;
+    border-radius: 14px;
+    background: rgba(var(--bs-body-bg-rgb), 0.78);
+    border: 1px solid rgba(var(--bs-emphasis-color-rgb), 0.12);
+    backdrop-filter: blur(8px);
 }
+
+.bgm-paletteDebug {
+    display: flex;
+    gap: 6px;
+    justify-content: flex-end;
+}
+
+.bgm-paletteSwatch {
+    width: 14px;
+    height: 14px;
+    border-radius: 4px;
+    border: 1px solid rgba(var(--bs-emphasis-color-rgb), 0.18);
+}
+
+.bgm-paletteSwatch--c1 { background: rgb(var(--bgm-c1-rgb)); }
+.bgm-paletteSwatch--c2 { background: rgb(var(--bgm-c2-rgb)); }
+.bgm-paletteSwatch--c3 { background: rgb(var(--bgm-c3-rgb)); }
 
 .bgm-thoughtsSelected {
     display: flex;
@@ -229,25 +265,29 @@
     font-size: 2.4rem;
     letter-spacing: 0.04em;
     text-shadow: 1px 1px 10px rgba(34, 24, 10, 0.10);
+
+    box-shadow:
+        0 12px 26px rgba(0, 0, 0, 0.10),
+        inset 0 0 0 1px rgba(var(--bs-body-bg-rgb), 0.60);
 }
 
 .bgm-scoreBadge--avg {
     --bgm-score-mix: 100%;
     background: color-mix(
         in srgb,
-        rgba(var(--bs-secondary-rgb), 0.22) calc(100% - var(--bgm-score-mix)),
-        rgba(var(--bs-warning-rgb), 0.42) var(--bgm-score-mix)
+        rgba(var(--bgm-c2-rgb), 0.22) calc(100% - var(--bgm-score-mix)),
+        rgba(var(--bgm-c1-rgb), 0.46) var(--bgm-score-mix)
     );
     border: 1px solid color-mix(
         in srgb,
-        rgba(var(--bs-secondary-rgb), 0.36) calc(100% - var(--bgm-score-mix)),
-        rgba(var(--bs-warning-rgb), 0.52) var(--bgm-score-mix)
+        rgba(var(--bgm-c2-rgb), 0.36) calc(100% - var(--bgm-score-mix)),
+        rgba(var(--bgm-c1-rgb), 0.56) var(--bgm-score-mix)
     );
 }
 
 .bgm-scoreBadge--bad {
-    background: rgba(var(--bs-danger-rgb), 0.20);
-    border: 1px solid rgba(var(--bs-danger-rgb), 0.38);
+    background: rgba(var(--bgm-c3-rgb), 0.18);
+    border: 1px solid rgba(var(--bgm-c3-rgb), 0.34);
 }
 
 .bgm-scoreBadge--secondary {
@@ -318,14 +358,14 @@
 }
 
 .bgm-gameStatsCard {
-    background: rgba(var(--bgm-c1-rgb), 0.07);
-    border-color: rgba(var(--bgm-c1-rgb), 0.22);
+    background: rgba(var(--bgm-c2-rgb), 0.22);
+    border: 0;
 }
 
 .bgm-alignCard {
-    background: rgba(var(--bgm-c2-rgb), 0.06);
-    border-style: dashed;
-    border-color: rgba(var(--bgm-c2-rgb), 0.22);
+    background: rgba(var(--bs-body-bg-rgb), 0.70);
+    border-style: solid;
+    border-color: var(--bs-border-color);
 }
 
 .bgm-alignCard .list-group,
@@ -334,7 +374,7 @@
 }
 
 .bgm-alignCard .list-group-item {
-    border-color: rgba(var(--bgm-c2-rgb), 0.18);
+    border-color: rgba(var(--bs-emphasis-color-rgb), 0.10);
 }
 
 .bgm-thoughtsContent p {
@@ -400,6 +440,10 @@
 }
 
 @media (max-width: 640px) {
+    #thoughts .home-section__inner {
+        padding: 14px;
+    }
+
     .bgm-thoughtsHeader {
         flex-direction: column;
         align-items: flex-start;

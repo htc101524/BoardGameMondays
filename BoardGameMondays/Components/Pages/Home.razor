@@ -11,6 +11,7 @@
 @inject AuthenticationStateProvider AuthStateProvider
 @inject IJSRuntime JS
 @inject NavigationManager Navigation
+@inject IWebHostEnvironment Env
 
 <PageTitle>Board Game Mondays</PageTitle>
 
@@ -106,6 +107,15 @@
                         <div class="bgm-scoreBadges" aria-label="Average score">
                             <div class="bgm-scoreBadge @avgClass" style="@avgStyle" aria-label="BGM rating">@FormatScore(avgScore.Value)</div>
                         </div>
+
+                        @if (Env.IsDevelopment())
+                        {
+                            <div class="bgm-paletteDebug" aria-label="Palette debug">
+                                <span class="bgm-paletteSwatch bgm-paletteSwatch--c1" title="c1"></span>
+                                <span class="bgm-paletteSwatch bgm-paletteSwatch--c2" title="c2"></span>
+                                <span class="bgm-paletteSwatch bgm-paletteSwatch--c3" title="c3"></span>
+                            </div>
+                        }
                     </div>
                 }
             </div>
