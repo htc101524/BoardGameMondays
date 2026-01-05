@@ -6,80 +6,107 @@
 
 @implements IDisposable
 
-<section id="blog" class="home-section" aria-label="Blog">
-    <div class="home-section__inner">
-        <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
-            <h1 class="mb-0">Blog</h1>
-            <div class="text-muted small">Articles about mechanics, design, and theory</div>
-        </div>
+@if (!_isAdmin && !_loading && _posts.Count == 0)
+{
+    
+}
+else
+{
+    <section id="blog" class="home-section" aria-label="Blog">
+        <div class="home-section__inner">
+            <div class="d-flex justify-content-between align-items-end flex-wrap gap-2">
+                <div>
+                    <h1 class="mb-0">Blog</h1>
+                    <div class="text-muted small">Articles about mechanics, design, and theory</div>
+                </div>
 
-        <div class="mt-3 d-grid gap-3" aria-label="Blog posts">
-            @if (_loading)
-            {
-                <div class="text-muted">Loading…</div>
-            }
-            else if (_posts.Count == 0)
-            {
-                <div class="text-muted">No posts yet.</div>
-            }
-            else
-            {
-                @foreach (var post in _posts)
+                @if (!_loading && _posts.Count > 0)
                 {
-                    var isExpanded = _expanded.Contains(post.Id);
+                    <div class="text-muted small">Page @(_pageIndex + 1) / @_posts.Count</div>
+                }
+            </div>
 
-                    <article class="card bgm-blogCard" aria-label="Blog post">
-                        <div class="card-body">
-                            <div class="d-flex justify-content-between align-items-start gap-2 flex-wrap">
-                                <div class="fw-semibold">@post.Title</div>
-                                <div class="text-muted small">@post.CreatedOn.LocalDateTime.ToString("d MMMM yyyy")</div>
+            <div class="mt-3" aria-label="Blog posts">
+                @if (_loading)
+                {
+                    <div class="text-muted">Loading…</div>
+                }
+                else if (_posts.Count == 0)
+                {
+                    <div class="text-muted">No posts yet.</div>
+                }
+                else
+                {
+                    var post = _posts[_pageIndex];
+
+                    <article class="bgm-newspaper" aria-label="Blog post">
+                        <header class="bgm-newspaper__header">
+                            <div class="bgm-newspaper__mast">Board Game Mondays</div>
+                            <div class="bgm-newspaper__rule"></div>
+                            <div class="bgm-newspaper__title">@post.Title</div>
+                            <div class="bgm-newspaper__byline text-muted">@post.CreatedOn.LocalDateTime.ToString("d MMMM yyyy")</div>
+                        </header>
+
+                        <div class="bgm-newspaper__body">@post.Body</div>
+
+                        <footer class="bgm-newspaper__footer">
+                            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                                <button type="button"
+                                        class="btn btn-sm btn-outline-secondary"
+                                        disabled="@(_pageIndex == 0)"
+                                        @onclick="Prev">
+                                    Previous page
+                                </button>
+
+                                <div class="text-muted small">@(_pageIndex + 1) / @_posts.Count</div>
+
+                                <button type="button"
+                                        class="btn btn-sm btn-outline-secondary"
+                                        disabled="@(_pageIndex >= _posts.Count - 1)"
+                                        @onclick="Next">
+                                    Turn page
+                                </button>
                             </div>
-
-                            <div class="bgm-blogBody @(isExpanded ? "is-expanded" : "")">@post.Body</div>
-
-                            <button type="button"
-                                    class="btn btn-sm btn-outline-secondary mt-2"
-                                    @onclick="() => Toggle(post.Id)">
-                                @(isExpanded ? "Hide" : "Read")
-                            </button>
-                        </div>
+                        </footer>
                     </article>
                 }
-            }
-        </div>
+            </div>
 
-        <AuthorizeView Roles="Admin">
-            <Authorized>
-                <div class="card mt-4" aria-label="Add blog post">
-                    <div class="card-body">
-                        <div class="fw-semibold mb-2">Add post</div>
+            <AuthorizeView Roles="Admin">
+                <Authorized>
+                    <div class="card mt-4" aria-label="Add blog post">
+                        <div class="card-body">
+                            <div class="fw-semibold mb-2">Add post</div>
 
-                        <div class="d-grid gap-2" style="max-width: 860px">
-                            <input class="form-control" placeholder="Title" @bind="_newTitle" />
-                            <textarea class="form-control" rows="8" placeholder="Write your post…" @bind="_newBody"></textarea>
+                            <div class="d-grid gap-2" style="max-width: 860px">
+                                <input class="form-control" placeholder="Title" @bind="_newTitle" />
+                                <textarea class="form-control" rows="8" placeholder="Write your post…" @bind="_newBody"></textarea>
 
-                            <div class="d-flex align-items-center gap-2 flex-wrap">
-                                <button type="button" class="btn btn-primary" disabled="@_saving" @onclick="AddAsync">Publish</button>
-                                @if (!string.IsNullOrWhiteSpace(_status))
-                                {
-                                    <span class="text-muted">@_status</span>
-                                }
+                                <div class="d-flex align-items-center gap-2 flex-wrap">
+                                    <button type="button" class="btn btn-primary" disabled="@_saving" @onclick="AddAsync">Publish</button>
+                                    @if (!string.IsNullOrWhiteSpace(_status))
+                                    {
+                                        <span class="text-muted">@_status</span>
+                                    }
+                                </div>
                             </div>
                         </div>
                     </div>
-                </div>
-            </Authorized>
-        </AuthorizeView>
-    </div>
-</section>
+                </Authorized>
+            </AuthorizeView>
+        </div>
+    </section>
+}
 
 @code {
     private readonly List<BlogService.BlogPost> _posts = new();
-    private readonly HashSet<Guid> _expanded = new();
 
-    private bool _loading;
+    private bool _loading = true;
     private bool _saving;
     private string? _status;
+
+    private bool _isAdmin;
+    private int _pageIndex;
 
     private string _newTitle = string.Empty;
     private string _newBody = string.Empty;
@@ -87,6 +114,8 @@
     protected override async Task OnInitializedAsync()
     {
         BlogService.Changed += OnChanged;
+        var auth = await AuthStateProvider.GetAuthenticationStateAsync();
+        _isAdmin = auth.User.Identity?.IsAuthenticated == true && auth.User.IsInRole("Admin");
         await RefreshAsync();
     }
 
@@ -101,7 +130,8 @@
         try
         {
             _posts.Clear();
-            _posts.AddRange(await BlogService.GetLatestAsync(take: 6));
+            _posts.AddRange(await BlogService.GetLatestAsync(take: 12));
+            _pageIndex = 0;
         }
         finally
         {
@@ -110,11 +140,19 @@
         }
     }
 
-    private void Toggle(Guid id)
+    private void Next()
     {
-        if (!_expanded.Add(id))
+        if (_pageIndex < _posts.Count - 1)
         {
-            _expanded.Remove(id);
+            _pageIndex++;
+        }
+    }
+
+    private void Prev()
+    {
+        if (_pageIndex > 0)
+        {
+            _pageIndex--;
         }
     }
 
