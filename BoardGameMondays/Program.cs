@@ -37,11 +37,17 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
         throw new InvalidOperationException("Missing connection string 'DefaultConnection'.");
     }
 
-    // If the connection string points at a .db file (or starts with Data Source=), treat it as SQLite.
-    // Otherwise default to SQL Server (Azure SQL).
+    // Treat the connection string as SQLite only when it clearly points at a local SQLite file.
+    // SQL Server connection strings often also contain "Data Source=", so don't use that as a signal.
     var cs = connectionString.Trim();
-    var isSqlite = cs.StartsWith("Data Source=", StringComparison.OrdinalIgnoreCase)
-        || cs.EndsWith(".db", StringComparison.OrdinalIgnoreCase);
+    var isSqlite = cs.Contains(":memory:", StringComparison.OrdinalIgnoreCase)
+        || cs.Contains("Filename=", StringComparison.OrdinalIgnoreCase)
+        || cs.EndsWith(".db", StringComparison.OrdinalIgnoreCase)
+        || cs.EndsWith(".sqlite", StringComparison.OrdinalIgnoreCase)
+        || cs.EndsWith(".sqlite3", StringComparison.OrdinalIgnoreCase)
+        || cs.Contains(".db;", StringComparison.OrdinalIgnoreCase)
+        || cs.Contains(".sqlite;", StringComparison.OrdinalIgnoreCase)
+        || cs.Contains(".sqlite3;", StringComparison.OrdinalIgnoreCase);
 
     if (isSqlite)
     {
@@ -222,8 +228,6 @@ var app = builder.Build();
 // Initialize the database.
 using (var scope = app.Services.CreateScope())
 {
-    await EnsureAdminRoleAssignmentsAsync(scope.ServiceProvider);
-
     var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
     if (db.Database.IsSqlite())
@@ -246,6 +250,9 @@ using (var scope = app.Services.CreateScope())
         // Production workflow (Azure SQL): use EF migrations.
         await db.Database.MigrateAsync();
     }
+
+    // Ensure identity tables exist before assigning roles.
+    await EnsureAdminRoleAssignmentsAsync(scope.ServiceProvider);
 }
 
 static async Task EnsureAdminRoleAssignmentsAsync(IServiceProvider services)
