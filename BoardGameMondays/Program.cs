@@ -6,6 +6,8 @@ using BoardGameMondays.Data;
 using BoardGameMondays.Data.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.DataProtection;
+using System.IO;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Http.Features;
@@ -173,6 +175,47 @@ builder.Services.AddScoped<BoardGameMondays.Core.GameNightService>();
 builder.Services.AddScoped<BoardGameMondays.Core.BgmCoinService>();
 builder.Services.AddScoped<BoardGameMondays.Core.BettingService>();
 builder.Services.AddScoped<BoardGameMondays.Core.BlogService>();
+
+// Persist Data Protection keys so auth cookies remain valid across instances/restarts on Azure App Service.
+// Preferred path resolution order:
+// 1. Configuration: DataProtection:Path
+// 2. Environment variable: DATA_PROTECTION_PATH
+// 3. Azure App Service home directory: %HOME%/DataProtection-Keys (D:\home on Windows-hosted App Service)
+{
+    var dpPath = builder.Configuration["DataProtection:Path"]
+        ?? Environment.GetEnvironmentVariable("DATA_PROTECTION_PATH");
+
+    if (string.IsNullOrEmpty(dpPath))
+    {
+        var home = Environment.GetEnvironmentVariable("HOME") ?? Environment.GetEnvironmentVariable("HOMEDRIVE") + Environment.GetEnvironmentVariable("HOMEPATH");
+        if (!string.IsNullOrWhiteSpace(home))
+        {
+            dpPath = Path.Combine(home, "DataProtection-Keys");
+        }
+    }
+
+    if (!string.IsNullOrWhiteSpace(dpPath))
+    {
+        try
+        {
+            Directory.CreateDirectory(dpPath);
+            builder.Services.AddDataProtection()
+                .PersistKeysToFileSystem(new DirectoryInfo(dpPath))
+                .SetApplicationName("BoardGameMondays");
+        }
+        catch
+        {
+            // If path creation or persistence fails, fall back to default in-memory keys.
+            builder.Services.AddDataProtection()
+                .SetApplicationName("BoardGameMondays");
+        }
+    }
+    else
+    {
+        builder.Services.AddDataProtection()
+            .SetApplicationName("BoardGameMondays");
+    }
+}
 
 var app = builder.Build();
 
