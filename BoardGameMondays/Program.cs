@@ -28,6 +28,19 @@ if (builder.Environment.IsDevelopment())
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection")));
 
+builder.Services.AddMemoryCache(options =>
+{
+    // Keeps the pwned-password cache bounded.
+    options.SizeLimit = 10_000;
+});
+
+builder.Services.AddHttpClient("pwned-passwords", client =>
+{
+    client.BaseAddress = new Uri("https://api.pwnedpasswords.com/");
+    client.Timeout = TimeSpan.FromSeconds(3);
+    client.DefaultRequestHeaders.UserAgent.ParseAdd("BoardGameMondays/1.0");
+});
+
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
     {
         if (builder.Environment.IsDevelopment())
@@ -47,7 +60,7 @@ builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
             options.Password.RequireDigit = true;
             options.Password.RequireLowercase = true;
             options.Password.RequireUppercase = true;
-            options.Password.RequireNonAlphanumeric = false;
+            options.Password.RequireNonAlphanumeric = true;
 
             options.Lockout.AllowedForNewUsers = true;
             options.Lockout.MaxFailedAccessAttempts = 5;
@@ -58,6 +71,18 @@ builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
     })
     .AddEntityFrameworkStores<ApplicationDbContext>()
     .AddDefaultTokenProviders();
+
+// Reject breached/common passwords (HIBP k-anonymity).
+builder.Services.AddScoped<IPasswordValidator<ApplicationUser>, PwnedPasswordValidator>();
+
+// Explicitly set password hashing strength (PBKDF2). Tune in production if needed.
+builder.Services.Configure<PasswordHasherOptions>(options =>
+{
+    options.CompatibilityMode = PasswordHasherCompatibilityMode.IdentityV3;
+
+    // Keep dev reasonably quick, prod stronger.
+    options.IterationCount = builder.Environment.IsDevelopment() ? 50_000 : 210_000;
+});
 
 builder.Services.ConfigureApplicationCookie(options =>
 {
@@ -687,6 +712,11 @@ app.MapPost("/account/register", async (
         return Results.Redirect($"/register?error={Uri.EscapeDataString("Username and password are required.")}");
     }
 
+    if (userName.Length < 3)
+    {
+        return Results.Redirect($"/register?error={Uri.EscapeDataString("Username must be at least 3 characters.")}");
+    }
+
     if (userName.Length > 64)
     {
         return Results.Redirect($"/register?error={Uri.EscapeDataString("Username is too long.")}");
@@ -749,6 +779,11 @@ app.MapPost("/account/login", async (
     if (string.IsNullOrWhiteSpace(userName) || string.IsNullOrWhiteSpace(request.Password))
     {
         return Results.Redirect($"/login?error={Uri.EscapeDataString("Username and password are required.")}");
+    }
+
+    if (userName.Length < 3)
+    {
+        return Results.Redirect($"/login?error={Uri.EscapeDataString("Username must be at least 3 characters.")}");
     }
 
     if (userName.Length > 64)
