@@ -12,6 +12,7 @@ using Microsoft.AspNetCore.Http.Features;
 using System.Security.Claims;
 using System.Data;
 using System.Threading.RateLimiting;
+using Microsoft.Extensions.Options;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -24,9 +25,31 @@ if (builder.Environment.IsDevelopment())
     builder.Services.Configure<CircuitOptions>(options => options.DetailedErrors = true);
 }
 
-// Database + Identity (dev: SQLite; prod later: swap provider/connection string).
+// Database + Identity.
+// Dev default is SQLite; production should use Azure SQL (SQL Server provider).
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection")));
+{
+    var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+    if (string.IsNullOrWhiteSpace(connectionString))
+    {
+        throw new InvalidOperationException("Missing connection string 'DefaultConnection'.");
+    }
+
+    // If the connection string points at a .db file (or starts with Data Source=), treat it as SQLite.
+    // Otherwise default to SQL Server (Azure SQL).
+    var cs = connectionString.Trim();
+    var isSqlite = cs.StartsWith("Data Source=", StringComparison.OrdinalIgnoreCase)
+        || cs.EndsWith(".db", StringComparison.OrdinalIgnoreCase);
+
+    if (isSqlite)
+    {
+        options.UseSqlite(connectionString);
+    }
+    else
+    {
+        options.UseSqlServer(connectionString);
+    }
+});
 
 builder.Services.AddMemoryCache(options =>
 {
@@ -39,6 +62,23 @@ builder.Services.AddHttpClient("pwned-passwords", client =>
     client.BaseAddress = new Uri("https://api.pwnedpasswords.com/");
     client.Timeout = TimeSpan.FromSeconds(3);
     client.DefaultRequestHeaders.UserAgent.ParseAdd("BoardGameMondays/1.0");
+});
+
+// Asset storage (uploads). Default is local filesystem; can be switched to Azure Blob Storage via config.
+builder.Services.Configure<StorageOptions>(builder.Configuration.GetSection("Storage"));
+builder.Services.AddSingleton<IAssetStorage>(sp =>
+{
+    var options = sp.GetRequiredService<IOptions<StorageOptions>>().Value;
+    var provider = (options.Provider ?? "Local").Trim();
+
+    if (provider.Equals("AzureBlob", StringComparison.OrdinalIgnoreCase)
+        || provider.Equals("Azure", StringComparison.OrdinalIgnoreCase)
+        || provider.Equals("Blob", StringComparison.OrdinalIgnoreCase))
+    {
+        return new AzureBlobAssetStorage(sp.GetRequiredService<IOptions<StorageOptions>>());
+    }
+
+    return new LocalAssetStorage(sp.GetRequiredService<IWebHostEnvironment>());
 });
 
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
@@ -136,21 +176,75 @@ builder.Services.AddScoped<BoardGameMondays.Core.BlogService>();
 
 var app = builder.Build();
 
-// Initialize the dev database.
+// Initialize the database.
 using (var scope = app.Services.CreateScope())
 {
+    await EnsureAdminRoleAssignmentsAsync(scope.ServiceProvider);
+
     var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-    await db.Database.EnsureCreatedAsync();
 
-    await EnsureSqliteSchemaUpToDateAsync(db);
-    
-    await DataSeeder.SeedAsync(db);
-
-    // Dev convenience: create a non-admin user for quickly checking the non-admin UX.
-    if (app.Environment.IsDevelopment())
+    if (db.Database.IsSqlite())
     {
-        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
-        await SeedDevNonAdminUserAsync(userManager, db);
+        // SQLite dev workflow (no EF migrations yet): keep the existing schema upgrader.
+        await db.Database.EnsureCreatedAsync();
+        await EnsureSqliteSchemaUpToDateAsync(db);
+
+        if (app.Environment.IsDevelopment())
+        {
+            await DataSeeder.SeedAsync(db);
+
+            // Dev convenience: create a non-admin user for quickly checking the non-admin UX.
+            var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+            await SeedDevNonAdminUserAsync(userManager, db);
+        }
+    }
+    else
+    {
+        // Production workflow (Azure SQL): use EF migrations.
+        await db.Database.MigrateAsync();
+    }
+}
+
+static async Task EnsureAdminRoleAssignmentsAsync(IServiceProvider services)
+{
+    var config = services.GetRequiredService<IConfiguration>();
+    var rawUserNames = config.GetSection("Security:Admins:UserNames").Get<string[]>() ?? [];
+    var userNames = rawUserNames
+        .Select(x => x?.Trim())
+        .Where(x => !string.IsNullOrWhiteSpace(x))
+        .Select(x => x!)
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .ToArray();
+
+    if (userNames.Length == 0)
+    {
+        return;
+    }
+
+    var roleManager = services.GetRequiredService<RoleManager<IdentityRole>>();
+    var userManager = services.GetRequiredService<UserManager<ApplicationUser>>();
+
+    if (!await roleManager.RoleExistsAsync("Admin"))
+    {
+        var created = await roleManager.CreateAsync(new IdentityRole("Admin"));
+        if (!created.Succeeded)
+        {
+            return;
+        }
+    }
+
+    foreach (var userName in userNames)
+    {
+        var user = await userManager.FindByNameAsync(userName);
+        if (user is null)
+        {
+            continue;
+        }
+
+        if (!await userManager.IsInRoleAsync(user, "Admin"))
+        {
+            await userManager.AddToRoleAsync(user, "Admin");
+        }
     }
 }
 
@@ -815,7 +909,7 @@ app.MapPost("/account/avatar", async (
     IFormFile? avatar,
     UserManager<ApplicationUser> userManager,
     ApplicationDbContext db,
-    IWebHostEnvironment env) =>
+    IAssetStorage storage) =>
 {
     if (avatar is null || avatar.Length == 0)
     {
@@ -887,19 +981,8 @@ app.MapPost("/account/avatar", async (
         await db.SaveChangesAsync();
     }
 
-    var uploadsRoot = Path.Combine(env.WebRootPath, "uploads", "avatars");
-    Directory.CreateDirectory(uploadsRoot);
-
-    var fileName = $"{member.Id}{extension}";
-    var filePath = Path.Combine(uploadsRoot, fileName);
-    await using (var stream = File.Create(filePath))
-    {
-        await using var inStream = avatar.OpenReadStream();
-        await inStream.CopyToAsync(stream);
-    }
-
-    // Add a cache-buster so browsers refresh after re-upload.
-    member.AvatarUrl = $"/uploads/avatars/{fileName}?v={DateTimeOffset.UtcNow.UtcTicks}";
+    await using var avatarStream = avatar.OpenReadStream();
+    member.AvatarUrl = await storage.SaveAvatarAsync(member.Id, avatarStream, extension);
     await db.SaveChangesAsync();
 
     return Results.Redirect("/people?avatarUpdated=1");

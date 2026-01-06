@@ -8,7 +8,7 @@
 @rendermode InteractiveServer
 @inject BoardGameService BoardGameService
 @inject NavigationManager Navigation
-@inject IWebHostEnvironment Env
+@inject IAssetStorage AssetStorage
 
 <h1>Add game</h1>
 
@@ -171,17 +171,8 @@
 
         try
         {
-            var fileName = $"{Guid.NewGuid():N}{ext.ToLowerInvariant()}";
-            var relativeUrl = $"images/games/{fileName}";
-            var absolutePath = Path.Combine(Env.WebRootPath, "images", "games", fileName);
-
-            Directory.CreateDirectory(Path.GetDirectoryName(absolutePath)!);
-
             await using var stream = file.OpenReadStream(maxAllowedSize: maxBytes);
-            await using var outStream = File.Create(absolutePath);
-            await stream.CopyToAsync(outStream);
-
-            _model.ImageUrl = relativeUrl;
+            _model.ImageUrl = await AssetStorage.SaveGameImageAsync(stream, ext);
             _imageStatus = "Uploaded.";
         }
         catch (Exception ex)
