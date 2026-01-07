@@ -4,7 +4,16 @@ public sealed class StorageOptions
 {
     public string Provider { get; set; } = "Local";
 
+    public LocalStorageOptions Local { get; set; } = new();
+
     public AzureBlobStorageOptions AzureBlob { get; set; } = new();
+
+    public sealed class LocalStorageOptions
+    {
+        // Optional override for where to store assets when Provider=Local.
+        // In production on Azure App Service, if unset, the app will prefer the persistent %HOME% directory.
+        public string? RootPath { get; set; }
+    }
 
     public sealed class AzureBlobStorageOptions
     {

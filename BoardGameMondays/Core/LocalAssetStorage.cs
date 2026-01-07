@@ -1,19 +1,45 @@
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
 
 namespace BoardGameMondays.Core;
 
 public sealed class LocalAssetStorage : IAssetStorage
 {
     private readonly IWebHostEnvironment _env;
+    private readonly StorageOptions _options;
 
-    public LocalAssetStorage(IWebHostEnvironment env)
+    public LocalAssetStorage(IWebHostEnvironment env, IOptions<StorageOptions> options)
     {
         _env = env;
+        _options = options.Value;
+    }
+
+    private string ResolveAssetsRoot()
+    {
+        var configured = _options.Local.RootPath?.Trim();
+        if (!string.IsNullOrWhiteSpace(configured))
+        {
+            return configured;
+        }
+
+        // On Azure App Service, %HOME% (Windows) or $HOME (Linux) is persistent across deployments.
+        if (!_env.IsDevelopment())
+        {
+            var home = Environment.GetEnvironmentVariable("HOME");
+            if (!string.IsNullOrWhiteSpace(home))
+            {
+                return Path.Combine(home, "bgm-assets");
+            }
+        }
+
+        // Dev/default: keep the assets in wwwroot so they're served by default static file middleware.
+        return _env.WebRootPath;
     }
 
     public async Task<string> SaveAvatarAsync(Guid memberId, Stream content, string extension, CancellationToken ct = default)
     {
-        var uploadsRoot = Path.Combine(_env.WebRootPath, "uploads", "avatars");
+        var uploadsRoot = Path.Combine(ResolveAssetsRoot(), "uploads", "avatars");
         Directory.CreateDirectory(uploadsRoot);
 
         var fileName = $"{memberId}{extension}";
@@ -31,7 +57,7 @@ public sealed class LocalAssetStorage : IAssetStorage
     public async Task<string> SaveGameImageAsync(Stream content, string extension, CancellationToken ct = default)
     {
         var fileName = $"{Guid.NewGuid():N}{extension.ToLowerInvariant()}";
-        var absolutePath = Path.Combine(_env.WebRootPath, "images", "games", fileName);
+        var absolutePath = Path.Combine(ResolveAssetsRoot(), "images", "games", fileName);
         Directory.CreateDirectory(Path.GetDirectoryName(absolutePath)!);
 
         await using (var outStream = File.Create(absolutePath))

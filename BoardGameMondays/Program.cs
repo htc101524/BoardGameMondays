@@ -14,6 +14,7 @@ using Microsoft.AspNetCore.Http.Features;
 using System.Security.Claims;
 using System.Data;
 using System.Threading.RateLimiting;
+using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Options;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -102,7 +103,9 @@ builder.Services.AddSingleton<IAssetStorage>(sp =>
         return new AzureBlobAssetStorage(sp.GetRequiredService<IOptions<StorageOptions>>());
     }
 
-    return new LocalAssetStorage(sp.GetRequiredService<IWebHostEnvironment>());
+    return new LocalAssetStorage(
+        sp.GetRequiredService<IWebHostEnvironment>(),
+        sp.GetRequiredService<IOptions<StorageOptions>>());
 });
 
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
@@ -853,6 +856,54 @@ if (!app.Environment.IsDevelopment())
 }
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
 app.UseHttpsRedirection();
+
+// If running on Azure App Service with Local storage, persist uploads under %HOME% (not wwwroot)
+// and serve them explicitly. This prevents uploaded images from being wiped during deployments.
+{
+    var storage = app.Services.GetRequiredService<IOptions<StorageOptions>>().Value;
+    var provider = (storage.Provider ?? "Local").Trim();
+
+    if (provider.Equals("Local", StringComparison.OrdinalIgnoreCase))
+    {
+        var localRoot = storage.Local.RootPath?.Trim();
+
+        if (string.IsNullOrWhiteSpace(localRoot) && !app.Environment.IsDevelopment())
+        {
+            var home = Environment.GetEnvironmentVariable("HOME");
+            if (!string.IsNullOrWhiteSpace(home))
+            {
+                localRoot = Path.Combine(home, "bgm-assets");
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(localRoot))
+        {
+            var fullLocalRoot = Path.GetFullPath(localRoot).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            var fullWebRoot = Path.GetFullPath(app.Environment.WebRootPath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+
+            if (!string.Equals(fullLocalRoot, fullWebRoot, StringComparison.OrdinalIgnoreCase))
+            {
+                var uploadsRoot = Path.Combine(fullLocalRoot, "uploads");
+                var imagesRoot = Path.Combine(fullLocalRoot, "images");
+
+                Directory.CreateDirectory(Path.Combine(uploadsRoot, "avatars"));
+                Directory.CreateDirectory(Path.Combine(imagesRoot, "games"));
+
+                app.UseStaticFiles(new StaticFileOptions
+                {
+                    FileProvider = new PhysicalFileProvider(uploadsRoot),
+                    RequestPath = "/uploads"
+                });
+
+                app.UseStaticFiles(new StaticFileOptions
+                {
+                    FileProvider = new PhysicalFileProvider(imagesRoot),
+                    RequestPath = "/images"
+                });
+            }
+        }
+    }
+}
 
 // Required for serving files written at runtime (e.g., uploaded avatars/covers).
 app.UseStaticFiles();
