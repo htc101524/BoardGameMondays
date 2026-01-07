@@ -6,6 +6,7 @@
 @using BoardGameMondays.Core
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.AspNetCore.Components
+@using Microsoft.AspNetCore.Components.Authorization
 @using Microsoft.AspNetCore.Components.Forms
 @attribute [Authorize(Roles = "Admin")]
 @inject BoardGameService BoardGameService
@@ -164,17 +165,13 @@ else
         </div>
     }
 
-    <h3 class="h5">Add review</h3>
+    <h3 class="h5">Your review</h3>
 
     <EditForm Model="_reviewModel" OnValidSubmit="AddReviewAsync">
         <div class="mb-3">
             <label class="form-label">Reviewer</label>
-            <InputSelect class="form-select" TValue="string" @bind-Value="_reviewModel.ReviewerName">
-                @foreach (var member in MemberDirectory.GetAll())
-                {
-                    <option value="@member.Name">@member.Name</option>
-                }
-            </InputSelect>
+            <div class="form-control" readonly>@(_currentReviewerName ?? "(not logged in)")</div>
+            <div class="form-text">You can only review as yourself.</div>
         </div>
 
         <div class="mb-3">
@@ -187,7 +184,7 @@ else
             <InputTextArea class="form-control" @bind-Value="_reviewModel.Description" />
         </div>
 
-        <button type="submit" class="btn btn-primary">Add review</button>
+        <button type="submit" class="btn btn-primary">Save review</button>
 
         @if (!string.IsNullOrWhiteSpace(_reviewStatus))
         {
@@ -199,6 +196,9 @@ else
 @code {
     [Parameter]
     public Guid Id { get; set; }
+
+    [CascadingParameter]
+    public Task<AuthenticationState> AuthenticationStateTask { get; set; } = default!;
 
     private BoardGame? _game;
     private EditGameModel _model = new();
@@ -217,6 +217,7 @@ else
     private AddReviewModel _reviewModel = new();
     private string? _reviewStatus;
     private string? _playsStatus;
+    private string? _currentReviewerName;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -224,6 +225,14 @@ else
         if (_game is null)
         {
             return;
+        }
+
+        var authState = await AuthenticationStateTask;
+        var user = authState.User;
+        _currentReviewerName = user.FindFirst("bgm:displayName")?.Value?.Trim();
+        if (string.IsNullOrWhiteSpace(_currentReviewerName))
+        {
+            _currentReviewerName = user.Identity?.Name?.Trim();
         }
 
         _model = new EditGameModel
@@ -241,10 +250,12 @@ else
             BoardGameGeekUrl = _game.BoardGameGeekUrl
         };
 
-        var members = MemberDirectory.GetAll();
-        _reviewModel.ReviewerName = members.FirstOrDefault()?.Name ?? string.Empty;
-        _reviewModel.Rating = 8;
-        _reviewModel.Description = string.Empty;
+        var existing = (!string.IsNullOrWhiteSpace(_currentReviewerName))
+            ? _game.Reviews.OfType<MemberReview>().FirstOrDefault(r => string.Equals(r.Reviewer.Name, _currentReviewerName, StringComparison.OrdinalIgnoreCase))
+            : null;
+
+        _reviewModel.Rating = existing?.Rating ?? 8;
+        _reviewModel.Description = existing?.Description ?? string.Empty;
     }
 
     private async Task SaveAsync()
@@ -332,12 +343,18 @@ else
             return;
         }
 
-        var reviewer = MemberDirectory.GetOrCreate(_reviewModel.ReviewerName);
+        if (string.IsNullOrWhiteSpace(_currentReviewerName))
+        {
+            _reviewStatus = "You must be logged in to review.";
+            return;
+        }
+
+        var reviewer = MemberDirectory.GetOrCreate(_currentReviewerName);
         var review = new MemberReview(reviewer, _reviewModel.Rating, _reviewModel.Description ?? string.Empty);
 
         var updated = await BoardGameService.AddReviewAsync(_game.Id, review);
         _game = updated;
-        _reviewStatus = updated is null ? "Game not found." : "Review added.";
+        _reviewStatus = updated is null ? "Game not found." : "Saved.";
 
         _reviewModel.Description = string.Empty;
     }
@@ -395,7 +412,6 @@ else
 
     private sealed class AddReviewModel
     {
-        public string ReviewerName { get; set; } = string.Empty;
         public double Rating { get; set; } = 8;
         public string? Description { get; set; }
     }

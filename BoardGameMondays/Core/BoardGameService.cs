@@ -214,18 +214,31 @@ public sealed class BoardGameService
 
         var reviewerId = await GetOrCreateReviewerIdAsync(db, review.Reviewer, ct);
 
-        var entity = new ReviewEntity
-        {
-            Id = Guid.NewGuid(),
-            GameId = gameId,
-            ReviewerId = reviewerId,
-            Rating = review.Rating,
-            TimesPlayed = review.TimesPlayed,
-            Description = description,
-            CreatedOn = review.CreatedOn
-        };
+        // One review per game per reviewer.
+        var existing = await db.Reviews
+            .FirstOrDefaultAsync(r => r.GameId == gameId && r.ReviewerId == reviewerId, ct);
 
-        db.Reviews.Add(entity);
+        if (existing is null)
+        {
+            var entity = new ReviewEntity
+            {
+                Id = Guid.NewGuid(),
+                GameId = gameId,
+                ReviewerId = reviewerId,
+                Rating = review.Rating,
+                TimesPlayed = review.TimesPlayed,
+                Description = description,
+                CreatedOn = DateTimeOffset.UtcNow
+            };
+
+            db.Reviews.Add(entity);
+        }
+        else
+        {
+            existing.Rating = review.Rating;
+            existing.Description = description;
+            existing.CreatedOn = DateTimeOffset.UtcNow;
+        }
         await db.SaveChangesAsync(ct);
         Changed?.Invoke();
 
