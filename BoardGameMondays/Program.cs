@@ -159,6 +159,9 @@ builder.Services.ConfigureApplicationCookie(options =>
     options.SlidingExpiration = true;
 });
 
+// Enforce Admin access from configuration (Azure env vars) rather than persisted DB roles.
+builder.Services.AddTransient<Microsoft.AspNetCore.Authentication.IClaimsTransformation, AdminRoleClaimsTransformation>();
+
 builder.Services.AddAuthorization();
 
 // Guardrails for multipart/form-data (avatars, uploads).
