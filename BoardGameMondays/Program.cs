@@ -55,7 +55,15 @@ void ConfigureDbContextOptions(DbContextOptionsBuilder options)
     }
     else
     {
-        options.UseSqlServer(connectionString);
+        // Azure SQL can occasionally return transient errors (e.g., serverless wake-ups, failovers).
+        // Enable built-in retry logic so startup migrations don't crash the app on a brief blip.
+        options.UseSqlServer(connectionString, sql =>
+        {
+            sql.EnableRetryOnFailure(
+                maxRetryCount: 10,
+                maxRetryDelay: TimeSpan.FromSeconds(30),
+                errorNumbersToAdd: null);
+        });
     }
 }
 
