@@ -187,9 +187,9 @@ builder.Services.AddRateLimiter(options =>
     });
 });
 builder.Services.AddHttpContextAccessor();
-// In Blazor Server interactive circuits, HttpContext is typically null after the initial request.
-// This provider captures HttpContext.User at circuit start so the UI correctly reflects auth state.
-builder.Services.AddScoped<AuthenticationStateProvider, CircuitAuthStateProvider>();
+// Use the built-in Blazor Server auth state plumbing. This ensures the circuit principal is
+// populated from the ASP.NET Core authentication middleware (cookies/Identity).
+builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddScoped<BoardGameMondays.Core.BgmMemberService>();
 builder.Services.AddScoped<BoardGameMondays.Core.BgmMemberDirectoryService>();
 builder.Services.AddScoped<BoardGameMondays.Core.BoardGameService>();
