@@ -226,8 +226,10 @@ builder.Services.AddScoped<BoardGameMondays.Core.BlogService>();
 var app = builder.Build();
 
 // Initialize the database.
-using (var scope = app.Services.CreateScope())
+// Wrap this block so Azure App Service startup failures always emit an actionable error to logs.
+try
 {
+    using var scope = app.Services.CreateScope();
     var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
     if (db.Database.IsSqlite())
@@ -253,6 +255,11 @@ using (var scope = app.Services.CreateScope())
 
     // Ensure identity tables exist before assigning roles.
     await EnsureAdminRoleAssignmentsAsync(scope.ServiceProvider);
+}
+catch (Exception ex)
+{
+    app.Logger.LogCritical(ex, "Fatal error during application startup.");
+    throw;
 }
 
 static async Task EnsureAdminRoleAssignmentsAsync(IServiceProvider services)
