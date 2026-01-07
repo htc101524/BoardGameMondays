@@ -77,7 +77,7 @@
     [Parameter]
     public EventCallback<BoardGameMondays.Core.BoardGame> OnGameSelected { get; set; }
 
-    private GamesMode _mode = GamesMode.Playing;
+    private GamesMode _mode = GamesMode.Decided;
     private IReadOnlyList<BoardGameMondays.Core.BoardGame> _games = Array.Empty<BoardGameMondays.Core.BoardGame>();
 
     protected override async Task OnInitializedAsync()
