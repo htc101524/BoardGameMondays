@@ -9,25 +9,29 @@ namespace BoardGameMondays.Core;
 /// </summary>
 public sealed class BgmMemberDirectoryService
 {
-    private readonly ApplicationDbContext _db;
+    private readonly IDbContextFactory<ApplicationDbContext> _dbFactory;
 
-    public BgmMemberDirectoryService(ApplicationDbContext db)
+    public BgmMemberDirectoryService(IDbContextFactory<ApplicationDbContext> dbFactory)
     {
-        _db = db;
+        _dbFactory = dbFactory;
     }
 
     public IReadOnlyList<BgmMember> GetAll()
-        => _db.Members
+    {
+        using var db = _dbFactory.CreateDbContext();
+        return db.Members
             .AsNoTracking()
             .Where(m => m.IsBgmMember)
             .OrderBy(m => m.Name)
             .Select(m => (BgmMember)new PersistedBgmMember(m.Name, m.Email, m.Summary, m.AvatarUrl))
             .ToArray();
+    }
 
     public Guid GetOrCreateMemberId(string name)
     {
+        using var db = _dbFactory.CreateDbContext();
         var trimmed = InputGuards.RequireTrimmed(name, maxLength: 80, nameof(name), "Name is required.");
-        var existing = _db.Members.FirstOrDefault(m => m.Name.ToLower() == trimmed.ToLower());
+        var existing = db.Members.FirstOrDefault(m => m.Name.ToLower() == trimmed.ToLower());
         if (existing is not null)
         {
             return existing.Id;
@@ -41,15 +45,16 @@ public sealed class BgmMemberDirectoryService
             Email = $"{trimmed.ToLowerInvariant()}@placeholder.com"
         };
 
-        _db.Members.Add(created);
-        _db.SaveChanges();
+        db.Members.Add(created);
+        db.SaveChanges();
         return created.Id;
     }
 
     public BgmMember GetOrCreate(string name)
     {
+        using var db = _dbFactory.CreateDbContext();
         var trimmed = InputGuards.RequireTrimmed(name, maxLength: 80, nameof(name), "Name is required.");
-        var existing = _db.Members.FirstOrDefault(m => m.Name.ToLower() == trimmed.ToLower());
+        var existing = db.Members.FirstOrDefault(m => m.Name.ToLower() == trimmed.ToLower());
         if (existing is not null)
         {
             return new PersistedBgmMember(existing.Name, existing.Email, existing.Summary, existing.AvatarUrl);
@@ -63,8 +68,8 @@ public sealed class BgmMemberDirectoryService
             Email = $"{trimmed.ToLowerInvariant()}@placeholder.com"
         };
 
-        _db.Members.Add(created);
-        _db.SaveChanges();
+        db.Members.Add(created);
+        db.SaveChanges();
         return new PersistedBgmMember(created.Name, created.Email, created.Summary, created.AvatarUrl);
     }
 
@@ -75,12 +80,13 @@ public sealed class BgmMemberDirectoryService
             throw new ArgumentNullException(nameof(member));
         }
 
+        using var db = _dbFactory.CreateDbContext();
         var name = InputGuards.RequireTrimmed(member.Name, maxLength: 80, nameof(member), "Name is required.");
 
-        var existing = _db.Members.FirstOrDefault(m => m.Name.ToLower() == name.ToLower());
+        var existing = db.Members.FirstOrDefault(m => m.Name.ToLower() == name.ToLower());
         if (existing is null)
         {
-            _db.Members.Add(new MemberEntity
+            db.Members.Add(new MemberEntity
             {
                 Id = Guid.NewGuid(),
                 IsBgmMember = true,
@@ -97,6 +103,6 @@ public sealed class BgmMemberDirectoryService
             existing.AvatarUrl = member.AvatarUrl;
         }
 
-        _db.SaveChanges();
+        db.SaveChanges();
     }
 }

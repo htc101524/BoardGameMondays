@@ -6,11 +6,11 @@ namespace BoardGameMondays.Core;
 
 public sealed class TicketService
 {
-    private readonly ApplicationDbContext _db;
+    private readonly IDbContextFactory<ApplicationDbContext> _dbFactory;
 
-    public TicketService(ApplicationDbContext db)
+    public TicketService(IDbContextFactory<ApplicationDbContext> dbFactory)
     {
-        _db = db;
+        _dbFactory = dbFactory;
     }
 
     public sealed record TicketListItem(
@@ -38,25 +38,28 @@ public sealed class TicketService
             Title = title,
             Description = description,
             CreatedOn = DateTimeOffset.UtcNow,
-            CreatedByUserId = string.IsNullOrWhiteSpace(createdByUserId) ? null : createdByUserId
+            CreatedByUserId = createdByUserId
         };
 
-        _db.Tickets.Add(entity);
-        await _db.SaveChangesAsync(ct);
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        db.Tickets.Add(entity);
+        await db.SaveChangesAsync(ct);
 
         return new TicketListItem(entity.Id, type, entity.Title, entity.Description, entity.CreatedOn, PriorityScore: 0);
     }
 
     public async Task<bool> DeleteAsync(Guid ticketId, CancellationToken ct = default)
     {
-        var entity = await _db.Tickets.FirstOrDefaultAsync(t => t.Id == ticketId, ct);
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+
+        var entity = await db.Tickets.FirstOrDefaultAsync(t => t.Id == ticketId, ct);
         if (entity is null)
         {
             return false;
         }
 
-        _db.Tickets.Remove(entity);
-        await _db.SaveChangesAsync(ct);
+        db.Tickets.Remove(entity);
+        await db.SaveChangesAsync(ct);
         return true;
     }
 
@@ -64,7 +67,9 @@ public sealed class TicketService
     {
         var typeInt = (int)type;
 
-        var tickets = await _db.Tickets
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+
+        var tickets = await db.Tickets
             .AsNoTracking()
             .Where(t => t.Type == typeInt)
             .ToListAsync(ct);
@@ -74,7 +79,7 @@ public sealed class TicketService
             return Array.Empty<TicketListItem>();
         }
 
-        var priorities = await _db.TicketPriorities
+        var priorities = await db.TicketPriorities
             .AsNoTracking()
             .Where(p => p.Type == typeInt)
             .ToListAsync(ct);
@@ -108,7 +113,8 @@ public sealed class TicketService
 
         var typeInt = (int)type;
 
-        var priorities = await _db.TicketPriorities
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        var priorities = await db.TicketPriorities
             .AsNoTracking()
             .Where(p => p.AdminUserId == adminUserId && p.Type == typeInt)
             .ToListAsync(ct);
@@ -143,8 +149,10 @@ public sealed class TicketService
 
         var typeInt = (int)type;
 
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+
         // Replace entire set for this admin+type.
-        await _db.TicketPriorities
+        await db.TicketPriorities
             .Where(p => p.AdminUserId == adminUserId && p.Type == typeInt)
             .ExecuteDeleteAsync(ct);
 
@@ -171,8 +179,8 @@ public sealed class TicketService
 
         if (toAdd.Count > 0)
         {
-            _db.TicketPriorities.AddRange(toAdd);
-            await _db.SaveChangesAsync(ct);
+            db.TicketPriorities.AddRange(toAdd);
+            await db.SaveChangesAsync(ct);
         }
     }
 
@@ -180,7 +188,8 @@ public sealed class TicketService
     {
         var typeInt = (int)type;
 
-        return await _db.Tickets
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        return await db.Tickets
             .AsNoTracking()
             .Where(t => t.Type == typeInt)
             .OrderBy(t => t.Title)

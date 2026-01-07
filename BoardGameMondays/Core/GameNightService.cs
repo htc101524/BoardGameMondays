@@ -6,19 +6,15 @@ namespace BoardGameMondays.Core;
 
 public sealed class GameNightService
 {
-    private readonly ApplicationDbContext _db;
+    private readonly IDbContextFactory<ApplicationDbContext> _dbFactory;
 
-    public GameNightService(ApplicationDbContext db)
+    public GameNightService(IDbContextFactory<ApplicationDbContext> dbFactory)
     {
-        _db = db;
+        _dbFactory = dbFactory;
     }
 
-    public async Task<GameNight?> GetByDateAsync(DateOnly date, CancellationToken ct = default)
-    {
-        var dateKey = ToDateKey(date);
-
-        var entity = await _db.GameNights
-            .AsNoTracking()
+    private static IQueryable<GameNightEntity> WithDetails(IQueryable<GameNightEntity> query)
+        => query
             .Include(n => n.Attendees)
             .ThenInclude(a => a.Member)
             .Include(n => n.Games)
@@ -32,7 +28,15 @@ public sealed class GameNightService
             .ThenInclude(g => g.Odds)
             .ThenInclude(o => o.Member)
             .Include(n => n.Games)
-            .ThenInclude(g => g.Bets)
+            .ThenInclude(g => g.Bets);
+
+    public async Task<GameNight?> GetByDateAsync(DateOnly date, CancellationToken ct = default)
+    {
+        var dateKey = ToDateKey(date);
+
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        var entity = await WithDetails(db.GameNights)
+            .AsNoTracking()
             .FirstOrDefaultAsync(n => n.DateKey == dateKey, ct);
 
         return entity is null ? null : ToDomain(entity);
@@ -40,7 +44,8 @@ public sealed class GameNightService
 
     public async Task<GameNight?> SetRecapAsync(Guid gameNightId, string? recap, CancellationToken ct = default)
     {
-        var entity = await _db.GameNights
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        var entity = await db.GameNights
             .FirstOrDefaultAsync(n => n.Id == gameNightId, ct);
 
         if (entity is null)
@@ -50,7 +55,7 @@ public sealed class GameNightService
 
         recap = InputGuards.OptionalTrimToNull(recap, maxLength: 4_000, nameof(recap));
         entity.Recap = recap;
-        await _db.SaveChangesAsync(ct);
+        await db.SaveChangesAsync(ct);
 
         return await GetByIdAsync(gameNightId, ct);
     }
@@ -59,7 +64,9 @@ public sealed class GameNightService
     {
         var dateKey = ToDateKey(date);
 
-        var existingId = await _db.GameNights
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+
+        var existingId = await db.GameNights
             .AsNoTracking()
             .Where(n => n.DateKey == dateKey)
             .Select(n => (Guid?)n.Id)
@@ -80,8 +87,8 @@ public sealed class GameNightService
             DateKey = dateKey
         };
 
-        _db.GameNights.Add(created);
-        await _db.SaveChangesAsync(ct);
+        db.GameNights.Add(created);
+        await db.SaveChangesAsync(ct);
 
         // Reload with includes for consistent return shape.
         return (await GetByIdAsync(created.Id, ct))!;
@@ -89,22 +96,9 @@ public sealed class GameNightService
 
     public async Task<GameNight?> GetByIdAsync(Guid id, CancellationToken ct = default)
     {
-        var entity = await _db.GameNights
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        var entity = await WithDetails(db.GameNights)
             .AsNoTracking()
-            .Include(n => n.Attendees)
-            .ThenInclude(a => a.Member)
-            .Include(n => n.Games)
-            .ThenInclude(g => g.Game)
-            .Include(n => n.Games)
-            .ThenInclude(g => g.Players)
-            .ThenInclude(p => p.Member)
-            .Include(n => n.Games)
-            .ThenInclude(g => g.WinnerMember)
-            .Include(n => n.Games)
-            .ThenInclude(g => g.Odds)
-            .ThenInclude(o => o.Member)
-            .Include(n => n.Games)
-            .ThenInclude(g => g.Bets)
             .FirstOrDefaultAsync(n => n.Id == id, ct);
 
         return entity is null ? null : ToDomain(entity);
@@ -112,35 +106,36 @@ public sealed class GameNightService
 
     public async Task<GameNight?> SetAttendingAsync(Guid gameNightId, Guid memberId, bool attending, CancellationToken ct = default)
     {
-        var exists = await _db.GameNights.AnyAsync(n => n.Id == gameNightId, ct);
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        var exists = await db.GameNights.AnyAsync(n => n.Id == gameNightId, ct);
         if (!exists)
         {
             return null;
         }
 
-        var existing = await _db.GameNightAttendees
+        var existing = await db.GameNightAttendees
             .FirstOrDefaultAsync(a => a.GameNightId == gameNightId && a.MemberId == memberId, ct);
 
         if (attending)
         {
             if (existing is null)
             {
-                _db.GameNightAttendees.Add(new GameNightAttendeeEntity
+                db.GameNightAttendees.Add(new GameNightAttendeeEntity
                 {
                     GameNightId = gameNightId,
                     MemberId = memberId,
                     CreatedOn = DateTimeOffset.UtcNow
                 });
 
-                await _db.SaveChangesAsync(ct);
+                await db.SaveChangesAsync(ct);
             }
         }
         else
         {
             if (existing is not null)
             {
-                _db.GameNightAttendees.Remove(existing);
-                await _db.SaveChangesAsync(ct);
+                db.GameNightAttendees.Remove(existing);
+                await db.SaveChangesAsync(ct);
             }
         }
 
@@ -149,18 +144,19 @@ public sealed class GameNightService
 
     public async Task<GameNight?> AddGameAsync(Guid gameNightId, Guid gameId, bool isPlayed, CancellationToken ct = default)
     {
-        var exists = await _db.GameNights.AnyAsync(n => n.Id == gameNightId, ct);
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        var exists = await db.GameNights.AnyAsync(n => n.Id == gameNightId, ct);
         if (!exists)
         {
             return null;
         }
 
-        var already = await _db.GameNightGames
+        var already = await db.GameNightGames
             .AnyAsync(g => g.GameNightId == gameNightId && g.GameId == gameId, ct);
 
         if (!already)
         {
-            _db.GameNightGames.Add(new GameNightGameEntity
+            db.GameNightGames.Add(new GameNightGameEntity
             {
                 GameNightId = gameNightId,
                 GameId = gameId,
@@ -168,17 +164,17 @@ public sealed class GameNightService
                 CreatedOn = DateTimeOffset.UtcNow
             });
 
-            await _db.SaveChangesAsync(ct);
+            await db.SaveChangesAsync(ct);
         }
         else if (isPlayed)
         {
-            var existing = await _db.GameNightGames
+            var existing = await db.GameNightGames
                 .FirstOrDefaultAsync(g => g.GameNightId == gameNightId && g.GameId == gameId, ct);
 
             if (existing is not null && !existing.IsPlayed)
             {
                 existing.IsPlayed = true;
-                await _db.SaveChangesAsync(ct);
+                await db.SaveChangesAsync(ct);
             }
         }
 
@@ -190,7 +186,8 @@ public sealed class GameNightService
 
     public async Task<GameNight?> AddPlayerAsync(Guid gameNightId, int gameNightGameId, Guid memberId, CancellationToken ct = default)
     {
-        var game = await _db.GameNightGames
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        var game = await db.GameNightGames
             .FirstOrDefaultAsync(g => g.Id == gameNightGameId && g.GameNightId == gameNightId, ct);
         if (game is null)
         {
@@ -202,18 +199,18 @@ public sealed class GameNightService
             return await GetByIdAsync(gameNightId, ct);
         }
 
-        var already = await _db.GameNightGamePlayers
+        var already = await db.GameNightGamePlayers
             .AnyAsync(p => p.GameNightGameId == gameNightGameId && p.MemberId == memberId, ct);
 
         if (!already)
         {
-            _db.GameNightGamePlayers.Add(new GameNightGamePlayerEntity
+            db.GameNightGamePlayers.Add(new GameNightGamePlayerEntity
             {
                 GameNightGameId = gameNightGameId,
                 MemberId = memberId,
                 CreatedOn = DateTimeOffset.UtcNow
             });
-            await _db.SaveChangesAsync(ct);
+            await db.SaveChangesAsync(ct);
         }
 
         return await GetByIdAsync(gameNightId, ct);
@@ -221,7 +218,8 @@ public sealed class GameNightService
 
     public async Task<GameNight?> RemovePlayerAsync(Guid gameNightId, int gameNightGameId, Guid memberId, CancellationToken ct = default)
     {
-        var game = await _db.GameNightGames
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        var game = await db.GameNightGames
             .FirstOrDefaultAsync(g => g.Id == gameNightGameId && g.GameNightId == gameNightId, ct);
 
         if (game is null)
@@ -234,19 +232,19 @@ public sealed class GameNightService
             return await GetByIdAsync(gameNightId, ct);
         }
 
-        var player = await _db.GameNightGamePlayers
+        var player = await db.GameNightGamePlayers
             .FirstOrDefaultAsync(p => p.GameNightGameId == gameNightGameId && p.MemberId == memberId, ct);
 
         if (player is not null)
         {
-            _db.GameNightGamePlayers.Remove(player);
+            db.GameNightGamePlayers.Remove(player);
 
             if (game.WinnerMemberId == memberId)
             {
                 game.WinnerMemberId = null;
             }
 
-            await _db.SaveChangesAsync(ct);
+            await db.SaveChangesAsync(ct);
         }
 
         return await GetByIdAsync(gameNightId, ct);
@@ -254,7 +252,8 @@ public sealed class GameNightService
 
     public async Task<GameNight?> SetWinnerAsync(Guid gameNightId, int gameNightGameId, Guid? winnerMemberId, CancellationToken ct = default)
     {
-        var game = await _db.GameNightGames
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        var game = await db.GameNightGames
             .FirstOrDefaultAsync(g => g.Id == gameNightGameId && g.GameNightId == gameNightId, ct);
 
         if (game is null)
@@ -263,7 +262,7 @@ public sealed class GameNightService
         }
 
         // Once any bets have been resolved for this game, the winner is locked.
-        var isLocked = await _db.GameNightGameBets
+        var isLocked = await db.GameNightGameBets
             .AsNoTracking()
             .AnyAsync(b => b.GameNightGameId == gameNightGameId && b.IsResolved, ct);
         if (isLocked)
@@ -274,11 +273,11 @@ public sealed class GameNightService
         if (winnerMemberId is null)
         {
             game.WinnerMemberId = null;
-            await _db.SaveChangesAsync(ct);
+            await db.SaveChangesAsync(ct);
             return await GetByIdAsync(gameNightId, ct);
         }
 
-        var isPlayer = await _db.GameNightGamePlayers
+        var isPlayer = await db.GameNightGamePlayers
             .AnyAsync(p => p.GameNightGameId == gameNightGameId && p.MemberId == winnerMemberId.Value, ct);
 
         if (!isPlayer)
@@ -288,21 +287,25 @@ public sealed class GameNightService
         }
 
         game.WinnerMemberId = winnerMemberId;
-        await _db.SaveChangesAsync(ct);
+        await db.SaveChangesAsync(ct);
         return await GetByIdAsync(gameNightId, ct);
     }
 
     public async Task<IReadOnlyList<MemberOption>> GetAllMembersAsync(CancellationToken ct = default)
-        => await _db.Members
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        return await db.Members
             .AsNoTracking()
             .Where(m => m.IsBgmMember)
             .OrderBy(m => m.Name)
             .Select(m => new MemberOption(m.Id, m.Name))
             .ToListAsync(ct);
+    }
 
     public async Task<GameNight?> ConfirmGameAsync(Guid gameNightId, int gameNightGameId, CancellationToken ct = default)
     {
-        var game = await _db.GameNightGames
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        var game = await db.GameNightGames
             .FirstOrDefaultAsync(g => g.Id == gameNightGameId && g.GameNightId == gameNightId, ct);
 
         if (game is null)
@@ -313,7 +316,7 @@ public sealed class GameNightService
         if (!game.IsConfirmed)
         {
             game.IsConfirmed = true;
-            await _db.SaveChangesAsync(ct);
+            await db.SaveChangesAsync(ct);
         }
 
         return await GetByIdAsync(gameNightId, ct);
@@ -326,26 +329,28 @@ public sealed class GameNightService
             return await GetByIdAsync(gameNightId, ct);
         }
 
-        var gameExists = await _db.GameNightGames
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+
+        var gameExists = await db.GameNightGames
             .AnyAsync(g => g.Id == gameNightGameId && g.GameNightId == gameNightId, ct);
         if (!gameExists)
         {
             return null;
         }
 
-        var isPlayer = await _db.GameNightGamePlayers
+        var isPlayer = await db.GameNightGamePlayers
             .AnyAsync(p => p.GameNightGameId == gameNightGameId && p.MemberId == memberId, ct);
         if (!isPlayer)
         {
             return await GetByIdAsync(gameNightId, ct);
         }
 
-        var existing = await _db.GameNightGameOdds
+        var existing = await db.GameNightGameOdds
             .FirstOrDefaultAsync(o => o.GameNightGameId == gameNightGameId && o.MemberId == memberId, ct);
 
         if (existing is null)
         {
-            _db.GameNightGameOdds.Add(new GameNightGameOddsEntity
+            db.GameNightGameOdds.Add(new GameNightGameOddsEntity
             {
                 GameNightGameId = gameNightGameId,
                 MemberId = memberId,
@@ -358,7 +363,7 @@ public sealed class GameNightService
             existing.OddsTimes100 = oddsTimes100;
         }
 
-        await _db.SaveChangesAsync(ct);
+        await db.SaveChangesAsync(ct);
         return await GetByIdAsync(gameNightId, ct);
     }
 
@@ -371,7 +376,9 @@ public sealed class GameNightService
 
         var beforeKey = ToDateKey(beforeDate);
 
-        var keys = await _db.GameNights
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+
+        var keys = await db.GameNights
             .AsNoTracking()
             .Where(n => n.DateKey < beforeKey)
             .OrderByDescending(n => n.DateKey)

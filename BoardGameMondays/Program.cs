@@ -29,7 +29,7 @@ if (builder.Environment.IsDevelopment())
 
 // Database + Identity.
 // Dev default is SQLite; production should use Azure SQL (SQL Server provider).
-builder.Services.AddDbContext<ApplicationDbContext>(options =>
+void ConfigureDbContextOptions(DbContextOptionsBuilder options)
 {
     var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
     if (string.IsNullOrWhiteSpace(connectionString))
@@ -57,7 +57,10 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
     {
         options.UseSqlServer(connectionString);
     }
-});
+}
+
+builder.Services.AddDbContext<ApplicationDbContext>(ConfigureDbContextOptions);
+builder.Services.AddDbContextFactory<ApplicationDbContext>(ConfigureDbContextOptions);
 
 builder.Services.AddMemoryCache(options =>
 {

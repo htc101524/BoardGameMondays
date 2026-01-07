@@ -5,11 +5,11 @@ namespace BoardGameMondays.Core;
 
 public sealed class AgreementService
 {
-    private readonly ApplicationDbContext _db;
+    private readonly IDbContextFactory<ApplicationDbContext> _dbFactory;
 
-    public AgreementService(ApplicationDbContext db)
+    public AgreementService(IDbContextFactory<ApplicationDbContext> dbFactory)
     {
-        _db = db;
+        _dbFactory = dbFactory;
     }
 
     public sealed record ReviewerAlignment(string ReviewerName, double AverageScore, int Ratings);
@@ -21,7 +21,8 @@ public sealed class AgreementService
             return null;
         }
 
-        return await _db.ReviewAgreements
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        return await db.ReviewAgreements
             .AsNoTracking()
             .Where(a => a.UserId == userId && a.ReviewId == reviewId)
             .Select(a => (int?)a.Score)
@@ -45,12 +46,13 @@ public sealed class AgreementService
             throw new ArgumentOutOfRangeException(nameof(score), "Score must be between 1 and 5.");
         }
 
-        var existing = await _db.ReviewAgreements
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        var existing = await db.ReviewAgreements
             .FirstOrDefaultAsync(a => a.UserId == userId && a.ReviewId == reviewId, ct);
 
         if (existing is null)
         {
-            _db.ReviewAgreements.Add(new Data.Entities.ReviewAgreementEntity
+            db.ReviewAgreements.Add(new Data.Entities.ReviewAgreementEntity
             {
                 UserId = userId,
                 ReviewId = reviewId,
@@ -63,7 +65,7 @@ public sealed class AgreementService
             existing.Score = score;
         }
 
-        await _db.SaveChangesAsync(ct);
+        await db.SaveChangesAsync(ct);
     }
 
     public async Task<IReadOnlyList<ReviewerAlignment>> GetAlignmentAsync(string userId, int take = 5, CancellationToken ct = default)
@@ -78,9 +80,11 @@ public sealed class AgreementService
             return Array.Empty<ReviewerAlignment>();
         }
 
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+
         // SQLite + GUID joins can be finicky for translation depending on provider/runtime.
         // This query is naturally bounded per-user, so we load the minimal shape and aggregate in-memory.
-        var rows = await _db.ReviewAgreements
+        var rows = await db.ReviewAgreements
             .AsNoTracking()
             .Where(a => a.UserId == userId)
             .Include(a => a.Review)

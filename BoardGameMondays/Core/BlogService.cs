@@ -7,11 +7,11 @@ namespace BoardGameMondays.Core;
 
 public sealed class BlogService
 {
-    private readonly ApplicationDbContext _db;
+    private readonly IDbContextFactory<ApplicationDbContext> _dbFactory;
 
-    public BlogService(ApplicationDbContext db)
+    public BlogService(IDbContextFactory<ApplicationDbContext> dbFactory)
     {
-        _db = db;
+        _dbFactory = dbFactory;
     }
 
     public event Action? Changed;
@@ -23,7 +23,8 @@ public sealed class BlogService
             return Array.Empty<BlogPost>();
         }
 
-        return await _db.BlogPosts
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        return await db.BlogPosts
             .AsNoTracking()
             .OrderByDescending(p => p.CreatedOn)
             .Take(take)
@@ -37,7 +38,8 @@ public sealed class BlogService
         body = InputGuards.RequireTrimmed(body, maxLength: 20_000, nameof(body), "Body is required.");
 
         var slugBase = ToSlug(title);
-        var slug = await EnsureUniqueSlugAsync(slugBase, ct);
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        var slug = await EnsureUniqueSlugAsync(db, slugBase, ct);
 
         var entity = new BlogPostEntity
         {
@@ -49,20 +51,20 @@ public sealed class BlogService
             CreatedByUserId = createdByUserId
         };
 
-        _db.BlogPosts.Add(entity);
-        await _db.SaveChangesAsync(ct);
+        db.BlogPosts.Add(entity);
+        await db.SaveChangesAsync(ct);
 
         Changed?.Invoke();
 
         return new BlogPost(entity.Id, entity.Title, entity.Slug, entity.Body, entity.CreatedOn);
     }
 
-    private async Task<string> EnsureUniqueSlugAsync(string slugBase, CancellationToken ct)
+    private static async Task<string> EnsureUniqueSlugAsync(ApplicationDbContext db, string slugBase, CancellationToken ct)
     {
         var slug = slugBase;
         var i = 2;
 
-        while (await _db.BlogPosts.AsNoTracking().AnyAsync(p => p.Slug == slug, ct))
+        while (await db.BlogPosts.AsNoTracking().AnyAsync(p => p.Slug == slug, ct))
         {
             slug = $"{slugBase}-{i}";
             i++;

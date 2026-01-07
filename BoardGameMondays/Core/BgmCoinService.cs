@@ -5,21 +5,24 @@ namespace BoardGameMondays.Core;
 
 public sealed class BgmCoinService
 {
-    private readonly ApplicationDbContext _db;
+    private readonly IDbContextFactory<ApplicationDbContext> _dbFactory;
 
-    public BgmCoinService(ApplicationDbContext db)
+    public BgmCoinService(IDbContextFactory<ApplicationDbContext> dbFactory)
     {
-        _db = db;
+        _dbFactory = dbFactory;
     }
 
     public event Action? Changed;
 
     public async Task<int?> GetCoinsAsync(string userId, CancellationToken ct = default)
-        => await _db.Users
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        return await db.Users
             .AsNoTracking()
             .Where(u => u.Id == userId)
             .Select(u => (int?)u.BgmCoins)
             .FirstOrDefaultAsync(ct);
+    }
 
     public async Task<bool> TrySpendAsync(string userId, int amount, CancellationToken ct = default)
     {
@@ -28,7 +31,18 @@ public sealed class BgmCoinService
             return false;
         }
 
-        var affected = await _db.Users
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        return await TrySpendAsync(db, userId, amount, ct);
+    }
+
+    public async Task<bool> TrySpendAsync(ApplicationDbContext db, string userId, int amount, CancellationToken ct = default)
+    {
+        if (amount <= 0)
+        {
+            return false;
+        }
+
+        var affected = await db.Users
             .Where(u => u.Id == userId && u.BgmCoins >= amount)
             .ExecuteUpdateAsync(setters => setters.SetProperty(u => u.BgmCoins, u => u.BgmCoins - amount), ct);
 
@@ -48,7 +62,18 @@ public sealed class BgmCoinService
             return false;
         }
 
-        var affected = await _db.Users
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        return await TryAddAsync(db, userId, amount, ct);
+    }
+
+    public async Task<bool> TryAddAsync(ApplicationDbContext db, string userId, int amount, CancellationToken ct = default)
+    {
+        if (amount <= 0)
+        {
+            return false;
+        }
+
+        var affected = await db.Users
             .Where(u => u.Id == userId)
             .ExecuteUpdateAsync(setters => setters.SetProperty(u => u.BgmCoins, u => u.BgmCoins + amount), ct);
 
@@ -68,7 +93,9 @@ public sealed class BgmCoinService
             return Array.Empty<CoinLeaderboardItem>();
         }
 
-        var topUsers = await _db.Users
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+
+        var topUsers = await db.Users
             .AsNoTracking()
             .OrderByDescending(u => u.BgmCoins)
             .ThenBy(u => u.UserName)
@@ -83,7 +110,7 @@ public sealed class BgmCoinService
 
         var userIds = topUsers.Select(u => u.Id).ToHashSet(StringComparer.Ordinal);
 
-        var displayNameClaims = await _db.UserClaims
+        var displayNameClaims = await db.UserClaims
             .AsNoTracking()
             .Where(c => userIds.Contains(c.UserId) && c.ClaimType == BgmClaimTypes.DisplayName)
             .Select(c => new { c.UserId, c.ClaimValue })

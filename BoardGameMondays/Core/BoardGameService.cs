@@ -6,19 +6,20 @@ namespace BoardGameMondays.Core;
 
 public sealed class BoardGameService
 {
-    private readonly ApplicationDbContext _db;
+    private readonly IDbContextFactory<ApplicationDbContext> _dbFactory;
 
     public event Action? Changed;
 
-    public BoardGameService(ApplicationDbContext db)
+    public BoardGameService(IDbContextFactory<ApplicationDbContext> dbFactory)
     {
-        _db = db;
+        _dbFactory = dbFactory;
     }
 
     public async Task<BoardGame?> GetLatestReviewedAsync(CancellationToken ct = default)
     {
         // SQLite can't translate Max(DateTimeOffset). Instead, find the newest review and take its game.
-        var latestGameId = await _db.Reviews
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        var latestGameId = await db.Reviews
             .AsNoTracking()
             .OrderByDescending(r => r.CreatedOn)
             .Select(r => (Guid?)r.GameId)
@@ -46,24 +47,30 @@ public sealed class BoardGameService
 
     public async Task SetFeaturedGameAsync(Guid? gameId, CancellationToken ct = default)
     {
-        var state = await _db.FeaturedState.FirstOrDefaultAsync(x => x.Id == 1, ct);
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+
+        var state = await db.FeaturedState.FirstOrDefaultAsync(x => x.Id == 1, ct);
         if (state is null)
         {
             state = new FeaturedStateEntity { Id = 1 };
-            _db.FeaturedState.Add(state);
+            db.FeaturedState.Add(state);
         }
 
         state.FeaturedGameId = gameId;
-        await _db.SaveChangesAsync(ct);
+        await db.SaveChangesAsync(ct);
         Changed?.Invoke();
     }
 
     public async Task<Guid?> GetFeaturedGameIdAsync(CancellationToken ct = default)
-        => (await _db.FeaturedState.AsNoTracking().FirstOrDefaultAsync(x => x.Id == 1, ct))?.FeaturedGameId;
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        return (await db.FeaturedState.AsNoTracking().FirstOrDefaultAsync(x => x.Id == 1, ct))?.FeaturedGameId;
+    }
 
     public async Task<IReadOnlyList<BoardGame>> GetAllAsync(CancellationToken ct = default)
     {
-        var games = await _db.Games
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        var games = await db.Games
             .AsNoTracking()
             .Include(g => g.Reviews)
             .ThenInclude(r => r.Reviewer)
@@ -75,7 +82,8 @@ public sealed class BoardGameService
 
     public async Task<BoardGame?> GetByIdAsync(Guid id, CancellationToken ct = default)
     {
-        var game = await _db.Games
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        var game = await db.Games
             .AsNoTracking()
             .Include(g => g.Reviews)
             .ThenInclude(r => r.Reviewer)
@@ -86,7 +94,8 @@ public sealed class BoardGameService
 
     public async Task<IReadOnlyList<BoardGame>> GetByStatusAsync(GameStatus status, CancellationToken ct = default)
     {
-        var games = await _db.Games
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        var games = await db.Games
             .AsNoTracking()
             .Include(g => g.Reviews)
             .ThenInclude(r => r.Reviewer)
@@ -116,6 +125,7 @@ public sealed class BoardGameService
         imageUrl = InputGuards.OptionalRootRelativeOrHttpUrl(imageUrl, maxLength: 500, nameof(imageUrl));
         boardGameGeekUrl = InputGuards.OptionalHttpUrl(boardGameGeekUrl, maxLength: 500, nameof(boardGameGeekUrl));
 
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
         var entity = new BoardGameEntity
         {
             Id = Guid.NewGuid(),
@@ -133,8 +143,8 @@ public sealed class BoardGameService
             BoardGameGeekUrl = boardGameGeekUrl
         };
 
-        _db.Games.Add(entity);
-        await _db.SaveChangesAsync(ct);
+        db.Games.Add(entity);
+        await db.SaveChangesAsync(ct);
         Changed?.Invoke();
         return ToDomain(entity);
     }
@@ -159,7 +169,8 @@ public sealed class BoardGameService
         imageUrl = InputGuards.OptionalRootRelativeOrHttpUrl(imageUrl, maxLength: 500, nameof(imageUrl));
         boardGameGeekUrl = InputGuards.OptionalHttpUrl(boardGameGeekUrl, maxLength: 500, nameof(boardGameGeekUrl));
 
-        var entity = await _db.Games.FirstOrDefaultAsync(g => g.Id == id, ct);
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        var entity = await db.Games.FirstOrDefaultAsync(g => g.Id == id, ct);
         if (entity is null)
         {
             return null;
@@ -178,7 +189,7 @@ public sealed class BoardGameService
         entity.BoardGameGeekScore = boardGameGeekScore;
         entity.BoardGameGeekUrl = boardGameGeekUrl;
 
-        await _db.SaveChangesAsync(ct);
+        await db.SaveChangesAsync(ct);
         Changed?.Invoke();
 
         return await GetByIdAsync(id, ct);
@@ -193,13 +204,15 @@ public sealed class BoardGameService
 
         var description = InputGuards.RequireTrimmed(review.Description, maxLength: 4_000, nameof(review), "Description is required.");
 
-        var gameExists = await _db.Games.AnyAsync(g => g.Id == gameId, ct);
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+
+        var gameExists = await db.Games.AnyAsync(g => g.Id == gameId, ct);
         if (!gameExists)
         {
             return null;
         }
 
-        var reviewerId = await GetOrCreateReviewerIdAsync(review.Reviewer, ct);
+        var reviewerId = await GetOrCreateReviewerIdAsync(db, review.Reviewer, ct);
 
         var entity = new ReviewEntity
         {
@@ -212,8 +225,8 @@ public sealed class BoardGameService
             CreatedOn = review.CreatedOn
         };
 
-        _db.Reviews.Add(entity);
-        await _db.SaveChangesAsync(ct);
+        db.Reviews.Add(entity);
+        await db.SaveChangesAsync(ct);
         Changed?.Invoke();
 
         return await GetByIdAsync(gameId, ct);
@@ -221,7 +234,8 @@ public sealed class BoardGameService
 
     public async Task<int?> IncrementReviewTimesPlayedAsync(Guid reviewId, CancellationToken ct = default)
     {
-        var affected = await _db.Reviews
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        var affected = await db.Reviews
             .Where(r => r.Id == reviewId)
             .ExecuteUpdateAsync(setters => setters.SetProperty(r => r.TimesPlayed, r => r.TimesPlayed + 1), ct);
 
@@ -230,7 +244,7 @@ public sealed class BoardGameService
             return null;
         }
 
-        var newValue = await _db.Reviews
+        var newValue = await db.Reviews
             .AsNoTracking()
             .Where(r => r.Id == reviewId)
             .Select(r => (int?)r.TimesPlayed)
@@ -240,11 +254,11 @@ public sealed class BoardGameService
         return newValue;
     }
 
-    private async Task<Guid> GetOrCreateReviewerIdAsync(BgmMember member, CancellationToken ct)
+    private static async Task<Guid> GetOrCreateReviewerIdAsync(ApplicationDbContext db, BgmMember member, CancellationToken ct)
     {
         var name = member.Name.Trim();
 
-        var existing = await _db.Members.FirstOrDefaultAsync(m => m.Name == name, ct);
+        var existing = await db.Members.FirstOrDefaultAsync(m => m.Name == name, ct);
         if (existing is not null)
         {
             return existing.Id;
@@ -258,8 +272,8 @@ public sealed class BoardGameService
             Summary = member.Summary
         };
 
-        _db.Members.Add(created);
-        await _db.SaveChangesAsync(ct);
+        db.Members.Add(created);
+        await db.SaveChangesAsync(ct);
         return created.Id;
     }
 

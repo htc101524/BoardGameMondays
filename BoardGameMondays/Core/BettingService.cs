@@ -6,18 +6,19 @@ namespace BoardGameMondays.Core;
 
 public sealed class BettingService
 {
-    private readonly ApplicationDbContext _db;
+    private readonly IDbContextFactory<ApplicationDbContext> _dbFactory;
     private readonly BgmCoinService _coins;
 
-    public BettingService(ApplicationDbContext db, BgmCoinService coins)
+    public BettingService(IDbContextFactory<ApplicationDbContext> dbFactory, BgmCoinService coins)
     {
-        _db = db;
+        _dbFactory = dbFactory;
         _coins = coins;
     }
 
     public async Task<IReadOnlyDictionary<int, UserBet>> GetUserBetsForNightAsync(Guid gameNightId, string userId, CancellationToken ct = default)
     {
-        var bets = await _db.GameNightGameBets
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        var bets = await db.GameNightGameBets
             .AsNoTracking()
             .Where(b => b.GameNightGame.GameNightId == gameNightId && b.UserId == userId)
             .Select(b => new
@@ -42,7 +43,9 @@ public sealed class BettingService
             return PlaceBetResult.InvalidAmount;
         }
 
-        var game = await _db.GameNightGames
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+
+        var game = await db.GameNightGames
             .AsNoTracking()
             .Include(g => g.GameNight)
             .FirstOrDefaultAsync(g => g.Id == gameNightGameId && g.GameNightId == gameNightId, ct);
@@ -63,7 +66,7 @@ public sealed class BettingService
             return PlaceBetResult.PastDate;
         }
 
-        var already = await _db.GameNightGameBets
+        var already = await db.GameNightGameBets
             .AsNoTracking()
             .AnyAsync(b => b.GameNightGameId == gameNightGameId && b.UserId == userId, ct);
 
@@ -72,7 +75,7 @@ public sealed class BettingService
             return PlaceBetResult.AlreadyBet;
         }
 
-        var isPlayer = await _db.GameNightGamePlayers
+        var isPlayer = await db.GameNightGamePlayers
             .AsNoTracking()
             .AnyAsync(p => p.GameNightGameId == gameNightGameId && p.MemberId == predictedWinnerMemberId, ct);
 
@@ -81,7 +84,7 @@ public sealed class BettingService
             return PlaceBetResult.InvalidWinner;
         }
 
-        var oddsTimes100 = await _db.GameNightGameOdds
+        var oddsTimes100 = await db.GameNightGameOdds
             .AsNoTracking()
             .Where(o => o.GameNightGameId == gameNightGameId && o.MemberId == predictedWinnerMemberId)
             .Select(o => (int?)o.OddsTimes100)
@@ -92,15 +95,15 @@ public sealed class BettingService
             return PlaceBetResult.MissingOdds;
         }
 
-        await using var tx = await _db.Database.BeginTransactionAsync(ct);
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
 
-        var spent = await _coins.TrySpendAsync(userId, amount, ct);
+        var spent = await _coins.TrySpendAsync(db, userId, amount, ct);
         if (!spent)
         {
             return PlaceBetResult.NotEnoughCoins;
         }
 
-        _db.GameNightGameBets.Add(new GameNightGameBetEntity
+        db.GameNightGameBets.Add(new GameNightGameBetEntity
         {
             GameNightGameId = gameNightGameId,
             UserId = userId,
@@ -113,7 +116,7 @@ public sealed class BettingService
             CreatedOn = DateTimeOffset.UtcNow
         });
 
-        await _db.SaveChangesAsync(ct);
+        await db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
 
         return PlaceBetResult.Ok;
@@ -122,7 +125,8 @@ public sealed class BettingService
     public async Task<ResolveResult> ResolveGameAsync(Guid gameNightId, int gameNightGameId, CancellationToken ct = default)
     {
         // Only resolve for past nights where a winner has been selected.
-        var game = await _db.GameNightGames
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        var game = await db.GameNightGames
             .AsNoTracking()
             .Include(g => g.GameNight)
             .FirstOrDefaultAsync(g => g.Id == gameNightGameId && g.GameNightId == gameNightId, ct);
@@ -144,7 +148,7 @@ public sealed class BettingService
         }
 
         // Fast path: nothing unresolved.
-        var hasUnresolved = await _db.GameNightGameBets
+        var hasUnresolved = await db.GameNightGameBets
             .AsNoTracking()
             .AnyAsync(b => b.GameNightGameId == gameNightGameId && !b.IsResolved, ct);
 
@@ -154,7 +158,7 @@ public sealed class BettingService
         }
 
         // Load unresolved bets to compute payouts.
-        var unresolved = await _db.GameNightGameBets
+        var unresolved = await db.GameNightGameBets
             .Where(b => b.GameNightGameId == gameNightGameId && !b.IsResolved)
             .ToListAsync(ct);
 
@@ -163,7 +167,7 @@ public sealed class BettingService
             return ResolveResult.AlreadyResolved;
         }
 
-        await using var tx = await _db.Database.BeginTransactionAsync(ct);
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
 
         var winnerId = game.WinnerMemberId.Value;
         var userPayouts = new Dictionary<string, int>(StringComparer.Ordinal);
@@ -193,10 +197,10 @@ public sealed class BettingService
 
         foreach (var kvp in userPayouts)
         {
-            await _coins.TryAddAsync(kvp.Key, kvp.Value, ct);
+            await _coins.TryAddAsync(db, kvp.Key, kvp.Value, ct);
         }
 
-        await _db.SaveChangesAsync(ct);
+        await db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
 
         return ResolveResult.Ok;
@@ -204,7 +208,9 @@ public sealed class BettingService
 
     public async Task<IReadOnlyList<NightNetResult>> GetNightNetResultsAsync(Guid gameNightId, CancellationToken ct = default)
     {
-        var nets = await _db.GameNightGameBets
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+
+        var nets = await db.GameNightGameBets
             .AsNoTracking()
             .Where(b => b.GameNightGame.GameNightId == gameNightId && b.IsResolved)
             .GroupBy(b => b.UserId)
@@ -222,13 +228,13 @@ public sealed class BettingService
 
         var userIds = nets.Select(x => x.UserId).Distinct().ToHashSet(StringComparer.Ordinal);
 
-        var userNames = await _db.Users
+        var userNames = await db.Users
             .AsNoTracking()
             .Where(u => userIds.Contains(u.Id))
             .Select(u => new { u.Id, u.UserName })
             .ToListAsync(ct);
 
-        var displayNameClaims = await _db.UserClaims
+        var displayNameClaims = await db.UserClaims
             .AsNoTracking()
             .Where(c => userIds.Contains(c.UserId) && c.ClaimType == BgmClaimTypes.DisplayName)
             .Select(c => new { c.UserId, c.ClaimValue })
