@@ -60,7 +60,12 @@ void ConfigureDbContextOptions(DbContextOptionsBuilder options)
 }
 
 builder.Services.AddDbContext<ApplicationDbContext>(ConfigureDbContextOptions);
-builder.Services.AddDbContextFactory<ApplicationDbContext>(ConfigureDbContextOptions);
+// IMPORTANT: We also register a factory so UI services can create short-lived DbContext instances
+// (avoids Blazor Server concurrent-use issues). Since AddDbContext registers DbContextOptions as scoped,
+// the factory must also be scoped; otherwise DI will reject a singleton factory consuming scoped options.
+builder.Services.AddDbContextFactory<ApplicationDbContext>(
+    ConfigureDbContextOptions,
+    lifetime: Microsoft.Extensions.DependencyInjection.ServiceLifetime.Scoped);
 
 builder.Services.AddMemoryCache(options =>
 {
