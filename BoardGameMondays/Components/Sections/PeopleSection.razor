@@ -12,7 +12,7 @@
     <div class="home-section__inner">
         <h1>People</h1>
 
-        <AuthorizeView>
+        <AuthorizeView Roles="Admin">
             <Authorized>
                 <form class="mb-3" method="post" action="/account/avatar" enctype="multipart/form-data">
                     <AntiforgeryToken />
@@ -30,7 +30,7 @@
         </AuthorizeView>
 
         <div class="bgm-peopleGrid" role="list" aria-label="Members">
-            @foreach (var member in MemberDirectory.GetAll())
+            @foreach (var member in MemberDirectory.GetAdmins())
             {
                 <article class="bgm-peopleCard" role="listitem" aria-label="@member.Name">
                     <div class="bgm-peopleCard__top">

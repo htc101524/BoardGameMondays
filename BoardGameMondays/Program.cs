@@ -1118,7 +1118,9 @@ app.MapPost("/account/avatar", async (
     await db.SaveChangesAsync();
 
     return Results.Redirect("/people?avatarUpdated=1");
-}).RequireAuthorization().RequireRateLimiting("account");
+})
+.RequireAuthorization(new Microsoft.AspNetCore.Authorization.AuthorizeAttribute { Roles = "Admin" })
+.RequireRateLimiting("account");
 
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
