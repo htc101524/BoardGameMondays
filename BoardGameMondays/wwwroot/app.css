@@ -3,7 +3,22 @@
 :root {
     --bgm-home-section-min-height: 100vh;
     --bgm-home-section-padding-y: 56px;
+    --bgm-home-section-bg-thoughts: transparent;
+    --bgm-home-section-bg-games: rgba(34, 49, 28, 0.06);
+    --bgm-home-section-bg-people: transparent;
+}
 
+/* Hide caret browsing cursor outside of actual text inputs */
+html,
+body {
+    caret-color: transparent;
+}
+
+input,
+textarea,
+[contenteditable="true"] {
+    caret-color: auto;
+}
 
 .bgm-gameCardButton,
 .bgm-mondayCube,
@@ -14,10 +29,6 @@
     -webkit-user-select: none;
     user-select: none;
     caret-color: transparent;
-}
-    --bgm-home-section-bg-thoughts: transparent;
-    --bgm-home-section-bg-games: rgba(34, 49, 28, 0.06);
-    --bgm-home-section-bg-people: transparent;
 }
 
 .home-section {
