@@ -857,6 +857,33 @@ if (!app.Environment.IsDevelopment())
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
 app.UseHttpsRedirection();
 
+// Friendly handling for multipart upload limits (e.g., very large avatar uploads).
+// These exceptions can occur before the endpoint delegate is invoked.
+app.Use(async (context, next) =>
+{
+    try
+    {
+        await next();
+    }
+    catch (Exception ex) when (IsMultipartBodyLengthLimitExceeded(ex))
+    {
+        if (context.Response.HasStarted)
+        {
+            throw;
+        }
+
+        if (HttpMethods.IsPost(context.Request.Method)
+            && string.Equals(context.Request.Path, "/account/avatar", StringComparison.OrdinalIgnoreCase))
+        {
+            context.Response.Clear();
+            context.Response.Redirect($"/?avatarError={Uri.EscapeDataString("Image must be 10MB or smaller.")}#people");
+            return;
+        }
+
+        throw;
+    }
+});
+
 // If running on Azure App Service with Local storage, persist uploads under %HOME% (not wwwroot)
 // and serve them explicitly. This prevents uploaded images from being wiped during deployments.
 {
@@ -1045,13 +1072,13 @@ app.MapPost("/account/avatar", async (
 {
     if (avatar is null || avatar.Length == 0)
     {
-        return Results.Redirect($"/people?avatarError={Uri.EscapeDataString("Please choose an image.")}");
+        return Results.Redirect($"/?avatarError={Uri.EscapeDataString("Please choose an image.")}#people");
     }
 
     const long maxBytes = 2 * 1024 * 1024; // 2MB
     if (avatar.Length > maxBytes)
     {
-        return Results.Redirect($"/people?avatarError={Uri.EscapeDataString("Image must be 2MB or smaller.")}");
+        return Results.Redirect($"/?avatarError={Uri.EscapeDataString("Image must be 2MB or smaller.")}#people");
     }
 
     string? extension;
@@ -1062,7 +1089,7 @@ app.MapPost("/account/avatar", async (
 
     if (string.IsNullOrWhiteSpace(extension))
     {
-        return Results.Redirect($"/people?avatarError={Uri.EscapeDataString("Supported formats: JPG, PNG, WEBP, GIF.")}");
+        return Results.Redirect($"/?avatarError={Uri.EscapeDataString("Supported formats: JPG, PNG, WEBP, GIF.")}#people");
     }
 
     if (string.Equals(extension, ".jpeg", StringComparison.OrdinalIgnoreCase))
@@ -1073,13 +1100,13 @@ app.MapPost("/account/avatar", async (
     var userName = http.User?.Identity?.Name;
     if (string.IsNullOrWhiteSpace(userName))
     {
-        return Results.Redirect($"/people?avatarError={Uri.EscapeDataString("You must be logged in.")}");
+        return Results.Redirect($"/?avatarError={Uri.EscapeDataString("You must be logged in.")}#people");
     }
 
     var user = await userManager.FindByNameAsync(userName);
     if (user is null)
     {
-        return Results.Redirect($"/people?avatarError={Uri.EscapeDataString("You must be logged in.")}");
+        return Results.Redirect($"/?avatarError={Uri.EscapeDataString("You must be logged in.")}#people");
     }
 
     var claims = await userManager.GetClaimsAsync(user);
@@ -1117,7 +1144,7 @@ app.MapPost("/account/avatar", async (
     member.AvatarUrl = await storage.SaveAvatarAsync(member.Id, avatarStream, extension);
     await db.SaveChangesAsync();
 
-    return Results.Redirect("/people?avatarUpdated=1");
+    return Results.Redirect("/?avatarUpdated=1#people");
 })
 .RequireAuthorization(new Microsoft.AspNetCore.Authorization.AuthorizeAttribute { Roles = "Admin" })
 .RequireRateLimiting("account");
@@ -1126,6 +1153,25 @@ app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 
 app.Run();
+
+static bool IsMultipartBodyLengthLimitExceeded(Exception ex)
+{
+    // Depending on runtime/provider, this can be InvalidDataException directly or wrapped.
+    for (Exception? current = ex; current is not null; current = current.InnerException)
+    {
+        if (current is InvalidDataException && current.Message.Contains("Multipart body length limit", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if (current is BadHttpRequestException && current.Message.Contains("Multipart body length limit", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
 
 internal sealed record RegisterRequest(string UserName, string DisplayName, string Password, string ConfirmPassword);
 internal sealed class LoginRequest
