@@ -59,7 +59,7 @@
                         <a class="bgm-popup__link" href="/admin" @onclick="CloseMenu">Admin</a>
                     </Authorized>
                 </AuthorizeView>
-                <form method="post" action="/account/logout">
+                <form method="post" action="/account/logout" data-enhance="false">
                     <AntiforgeryToken />
                     <button type="submit" class="bgm-popup__link bgm-popup__linkButton" @onclick="CloseMenu">Logout</button>
                 </form>
