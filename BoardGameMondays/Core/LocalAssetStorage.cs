@@ -39,7 +39,6 @@ public sealed class LocalAssetStorage : IAssetStorage
             await content.CopyToAsync(outStream, ct);
         }
 
-        // Keep existing convention (relative path without leading slash).
-        return $"images/games/{fileName}";
+        return $"/images/games/{fileName}";
     }
 }

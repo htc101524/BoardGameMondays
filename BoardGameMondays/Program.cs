@@ -851,6 +851,9 @@ if (!app.Environment.IsDevelopment())
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
 app.UseHttpsRedirection();
 
+// Required for serving files written at runtime (e.g., uploaded avatars/covers).
+app.UseStaticFiles();
+
 app.UseRateLimiter();
 
 app.UseAuthentication();
