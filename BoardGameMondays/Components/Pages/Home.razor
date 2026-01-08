@@ -254,17 +254,24 @@
                                         <div class="d-flex align-items-center gap-2 flex-wrap">
                                             <span class="fw-semibold">How much do you agree with @_selectedReview.Reviewer.Name?</span>
 
-                                            <div class="btn-group" role="group" aria-label="Rate agreement">
-                                                @for (var score = 1; score <= 5; score++)
-                                                {
-                                                    var s = score;
-                                                    var isActive = _myAgreement == s;
-                                                    <button type="button"
-                                                            class="btn btn-sm @(isActive ? "btn-success" : "btn-outline-secondary")"
-                                                            disabled="@_savingAgreement"
-                                                            @onclick="() => SetAgreementAsync(s)">@s</button>
-                                                }
-                                            </div>
+                                            @if (!_canAgreeWithSelectedReview)
+                                            {
+                                                <span class="text-muted">You can't rate agreement with yourself.</span>
+                                            }
+                                            else
+                                            {
+                                                <div class="btn-group" role="group" aria-label="Rate agreement">
+                                                    @for (var score = 1; score <= 5; score++)
+                                                    {
+                                                        var s = score;
+                                                        var isActive = _myAgreement == s;
+                                                        <button type="button"
+                                                                class="btn btn-sm @(isActive ? "btn-success" : "btn-outline-secondary")"
+                                                                disabled="@_savingAgreement"
+                                                                @onclick="() => SetAgreementAsync(s)">@s</button>
+                                                    }
+                                                </div>
+                                            }
 
                                             @if (!string.IsNullOrWhiteSpace(_agreementStatus))
                                             {
@@ -368,6 +375,7 @@
     private bool _savingAgreement;
     private string? _agreementStatus;
     private List<AgreementService.ReviewerAlignment> _alignment = new();
+    private bool _canAgreeWithSelectedReview = true;
 
     protected override async Task OnInitializedAsync()
     {
@@ -502,6 +510,7 @@
         _agreementStatus = null;
         _myAgreement = null;
         _alignment.Clear();
+        _canAgreeWithSelectedReview = true;
 
         if (_selectedReview is null || _selectedReview.Id == Guid.Empty)
         {
@@ -515,6 +524,8 @@
             return;
         }
 
+        _canAgreeWithSelectedReview = await AgreementService.CanUserAgreeAsync(userId, _selectedReview.Id);
+
         _myAgreement = await AgreementService.GetUserAgreementAsync(userId, _selectedReview.Id);
         _alignment = (await AgreementService.GetAlignmentAsync(userId, take: 5)).ToList();
     }
@@ -523,6 +534,12 @@
     {
         if (_selectedReview is null || _selectedReview.Id == Guid.Empty)
         {
+            return;
+        }
+
+        if (!_canAgreeWithSelectedReview)
+        {
+            _agreementStatus = "You can't rate agreement with your own review.";
             return;
         }
 

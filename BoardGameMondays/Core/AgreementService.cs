@@ -7,6 +7,8 @@ public sealed class AgreementService
 {
     private readonly IDbContextFactory<ApplicationDbContext> _dbFactory;
 
+    private const string MemberIdClaimType = "bgm:memberId";
+
     public AgreementService(IDbContextFactory<ApplicationDbContext> dbFactory)
     {
         _dbFactory = dbFactory;
@@ -47,6 +49,30 @@ public sealed class AgreementService
         }
 
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
+
+        // Prevent users from rating agreement with their own review.
+        var reviewerId = await db.Reviews
+            .AsNoTracking()
+            .Where(r => r.Id == reviewId)
+            .Select(r => (Guid?)r.ReviewerId)
+            .FirstOrDefaultAsync(ct);
+
+        if (reviewerId is null)
+        {
+            throw new ArgumentException("Review was not found.", nameof(reviewId));
+        }
+
+        var memberIdValue = await db.UserClaims
+            .AsNoTracking()
+            .Where(c => c.UserId == userId && c.ClaimType == MemberIdClaimType)
+            .Select(c => c.ClaimValue)
+            .FirstOrDefaultAsync(ct);
+
+        if (Guid.TryParse(memberIdValue, out var memberId) && memberId == reviewerId.Value)
+        {
+            throw new InvalidOperationException("You can't rate agreement with your own review.");
+        }
+
         var existing = await db.ReviewAgreements
             .FirstOrDefaultAsync(a => a.UserId == userId && a.ReviewId == reviewId, ct);
 
@@ -66,6 +92,36 @@ public sealed class AgreementService
         }
 
         await db.SaveChangesAsync(ct);
+    }
+
+    public async Task<bool> CanUserAgreeAsync(string userId, Guid reviewId, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(userId) || reviewId == Guid.Empty)
+        {
+            return false;
+        }
+
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+
+        var reviewerId = await db.Reviews
+            .AsNoTracking()
+            .Where(r => r.Id == reviewId)
+            .Select(r => (Guid?)r.ReviewerId)
+            .FirstOrDefaultAsync(ct);
+
+        if (reviewerId is null)
+        {
+            return false;
+        }
+
+        var memberIdValue = await db.UserClaims
+            .AsNoTracking()
+            .Where(c => c.UserId == userId && c.ClaimType == MemberIdClaimType)
+            .Select(c => c.ClaimValue)
+            .FirstOrDefaultAsync(ct);
+
+        // If we can't determine memberId for the current user, default to allowing agreement.
+        return !Guid.TryParse(memberIdValue, out var memberId) || memberId != reviewerId.Value;
     }
 
     public async Task<IReadOnlyList<ReviewerAlignment>> GetAlignmentAsync(string userId, int take = 5, CancellationToken ct = default)
