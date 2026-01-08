@@ -37,19 +37,22 @@ public sealed class BgmMemberDirectoryService
         // Admins are defined via configuration (see AdminRoleClaimsTransformation). In development,
         // the role may also be persisted via Identity; we fall back to DB roles if no config is set.
         var configuredUserNames = _configuration.GetSection("Security:Admins:UserNames").Get<string[]>() ?? [];
+        // IMPORTANT: Keep this as a List<string> to avoid overload resolution choosing
+        // MemoryExtensions.Contains(ReadOnlySpan<string>, ...) which introduces ref-struct types
+        // into EF expression trees (can crash at runtime).
         var normalizedConfigured = configuredUserNames
             .Select(x => x?.Trim())
             .Where(x => !string.IsNullOrWhiteSpace(x))
-            .Select(x => x!.ToLowerInvariant())
-            .Distinct()
-            .ToArray();
+            .Select(x => x!.ToUpperInvariant())
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
 
         List<string> adminUserIds;
-        if (normalizedConfigured.Length > 0)
+        if (normalizedConfigured.Count > 0)
         {
             adminUserIds = db.Users
                 .AsNoTracking()
-                .Where(u => u.UserName != null && normalizedConfigured.Contains(u.UserName.ToLower()))
+            .Where(u => u.NormalizedUserName != null && normalizedConfigured.Contains(u.NormalizedUserName))
                 .Select(u => u.Id)
                 .ToList();
         }
