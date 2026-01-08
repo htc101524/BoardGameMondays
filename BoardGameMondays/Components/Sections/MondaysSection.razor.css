@@ -36,12 +36,23 @@
     background: rgba(34, 49, 28, 0.06);
 }
 
-.bgm-mondayCube.is-next {
+.bgm-mondayCube.is-last {
     border-color: rgba(191, 161, 74, 0.70);
     background: repeating-linear-gradient(
         45deg,
         rgba(191, 161, 74, 0.18) 0px,
         rgba(191, 161, 74, 0.18) 10px,
+        rgba(255, 255, 255, 0.80) 10px,
+        rgba(255, 255, 255, 0.80) 20px
+    );
+}
+
+.bgm-mondayCube.is-next {
+    border-color: rgba(var(--bs-info-rgb), 0.70);
+    background: repeating-linear-gradient(
+        45deg,
+        rgba(var(--bs-info-rgb), 0.14) 0px,
+        rgba(var(--bs-info-rgb), 0.14) 10px,
         rgba(255, 255, 255, 0.80) 10px,
         rgba(255, 255, 255, 0.80) 20px
     );

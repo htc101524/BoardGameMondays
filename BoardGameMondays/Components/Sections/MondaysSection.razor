@@ -489,6 +489,7 @@
 
     private DateOnly _selected;
     private DateOnly _nextMonday;
+    private DateOnly? _lastPastMonday;
 
     private bool _isAdmin;
     private string? _userId;
@@ -557,6 +558,9 @@
         {
             dates.Add(date);
         }
+
+        var pastDates = dates.Where(d => d < _nextMonday).ToList();
+        _lastPastMonday = pastDates.Count == 0 ? null : pastDates.Max();
 
         foreach (var date in dates.OrderBy(d => d))
         {
@@ -645,6 +649,11 @@
     {
         if (date < _nextMonday)
         {
+            if (_lastPastMonday is { } lastPast && date == lastPast)
+            {
+                return "is-last";
+            }
+
             return "is-past";
         }
 
@@ -657,7 +666,14 @@
     }
 
     private string GetMondayKind(DateOnly date)
-        => date < _nextMonday ? "Past" : date == _nextMonday ? "Up next" : "Future";
+    {
+        if (_lastPastMonday is { } last && date == last)
+        {
+            return "Last Monday";
+        }
+
+        return date < _nextMonday ? "Past" : date == _nextMonday ? "Up next" : "Future";
+    }
 
     private async Task RefreshCoinsAsync()
     {
