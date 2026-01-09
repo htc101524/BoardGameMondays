@@ -134,3 +134,103 @@
         flex: 1 1 auto;
     }
 }
+
+.bgm-teamsGrid {
+    display: grid;
+    gap: 12px;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+@media (min-width: 1200px) {
+    .bgm-teamsGrid {
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+    }
+}
+
+.bgm-teamBubble {
+    border: 1px solid var(--bs-border-color);
+    border-radius: var(--bs-border-radius-lg);
+    background: var(--bs-body-bg);
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-height: 220px;
+}
+
+.bgm-teamBubble__header {
+    line-height: 1.1;
+}
+
+.bgm-teamBubble__players {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    flex: 1 1 auto;
+}
+
+.bgm-teamBubble__playerRow {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.bgm-teamBubble__footer {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.bgm-teamBubble__footer select {
+    flex: 1 1 auto;
+}
+
+.bgm-teamBubble--add {
+    border-style: dashed;
+    background: var(--bs-tertiary-bg);
+    justify-content: center;
+}
+
+.bgm-teamBubble__addButton {
+    width: 100%;
+    border: 1px dashed var(--bs-border-color);
+    border-radius: var(--bs-border-radius-lg);
+    background: var(--bs-body-bg);
+    padding: 18px 12px;
+    font-size: 2rem;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.bgm-teamBubble__addButton:hover {
+    background: var(--bs-tertiary-bg);
+}
+
+.bgm-teamBubble__addButton:disabled {
+    opacity: 0.6;
+}
+
+.bgm-teamBubble__odds {
+    border-top: 1px solid var(--bs-border-color);
+    padding-top: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.bgm-teamBubble__oddsRow {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr auto;
+    gap: 8px;
+    align-items: center;
+}
+
+/* Remove number input spinners for odds inputs */
+.bgm-teamBubble__oddsRow input[type="number"]::-webkit-outer-spin-button,
+.bgm-teamBubble__oddsRow input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+.bgm-teamBubble__oddsRow input[type="number"] {
+    -moz-appearance: textfield;
+}

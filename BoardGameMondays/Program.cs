@@ -662,6 +662,8 @@ CREATE TABLE IF NOT EXISTS GameNightGames (
         }
 
         var hasIsConfirmed = false;
+        var hasWinnerMemberId = false;
+        var hasWinnerTeamName = false;
         await using (var cmd = connection.CreateCommand())
         {
             cmd.CommandText = "PRAGMA table_info('GameNightGames');";
@@ -672,7 +674,16 @@ CREATE TABLE IF NOT EXISTS GameNightGames (
                 if (string.Equals(name, "IsConfirmed", StringComparison.OrdinalIgnoreCase))
                 {
                     hasIsConfirmed = true;
-                    break;
+                }
+
+                if (string.Equals(name, "WinnerMemberId", StringComparison.OrdinalIgnoreCase))
+                {
+                    hasWinnerMemberId = true;
+                }
+
+                if (string.Equals(name, "WinnerTeamName", StringComparison.OrdinalIgnoreCase))
+                {
+                    hasWinnerTeamName = true;
                 }
             }
         }
@@ -684,26 +695,17 @@ CREATE TABLE IF NOT EXISTS GameNightGames (
             await alter.ExecuteNonQueryAsync();
         }
 
-        var hasWinnerMemberId = false;
-        await using (var cmd = connection.CreateCommand())
-        {
-            cmd.CommandText = "PRAGMA table_info('GameNightGames');";
-            await using var reader = await cmd.ExecuteReaderAsync();
-            while (await reader.ReadAsync())
-            {
-                var name = reader.GetString(1);
-                if (string.Equals(name, "WinnerMemberId", StringComparison.OrdinalIgnoreCase))
-                {
-                    hasWinnerMemberId = true;
-                    break;
-                }
-            }
-        }
-
         if (!hasWinnerMemberId)
         {
             await using var alter = connection.CreateCommand();
             alter.CommandText = "ALTER TABLE GameNightGames ADD COLUMN WinnerMemberId TEXT NULL;";
+            await alter.ExecuteNonQueryAsync();
+        }
+
+        if (!hasWinnerTeamName)
+        {
+            await using var alter = connection.CreateCommand();
+            alter.CommandText = "ALTER TABLE GameNightGames ADD COLUMN WinnerTeamName TEXT NULL;";
             await alter.ExecuteNonQueryAsync();
         }
 
@@ -715,11 +717,35 @@ CREATE TABLE IF NOT EXISTS GameNightGamePlayers (
     GameNightGameId INTEGER NOT NULL,
     MemberId TEXT NOT NULL,
     CreatedOn INTEGER NOT NULL,
+    TeamName TEXT NULL,
     FOREIGN KEY (GameNightGameId) REFERENCES GameNightGames(Id) ON DELETE CASCADE,
     FOREIGN KEY (MemberId) REFERENCES Members(Id) ON DELETE CASCADE
 );
 ";
             await createGameNightGamePlayers.ExecuteNonQueryAsync();
+        }
+
+        var hasPlayerTeamName = false;
+        await using (var cmd = connection.CreateCommand())
+        {
+            cmd.CommandText = "PRAGMA table_info('GameNightGamePlayers');";
+            await using var reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                var name = reader.GetString(1);
+                if (string.Equals(name, "TeamName", StringComparison.OrdinalIgnoreCase))
+                {
+                    hasPlayerTeamName = true;
+                    break;
+                }
+            }
+        }
+
+        if (!hasPlayerTeamName)
+        {
+            await using var alter = connection.CreateCommand();
+            alter.CommandText = "ALTER TABLE GameNightGamePlayers ADD COLUMN TeamName TEXT NULL;";
+            await alter.ExecuteNonQueryAsync();
         }
 
         // Betting odds + bets

@@ -376,11 +376,14 @@
     private string? _agreementStatus;
     private List<AgreementService.ReviewerAlignment> _alignment = new();
     private bool _canAgreeWithSelectedReview = true;
+    private string? _userId;
 
     protected override async Task OnInitializedAsync()
     {
         Navigation.LocationChanged += OnLocationChanged;
         BoardGameService.Changed += OnBoardGameServiceChanged;
+        var auth = await AuthStateProvider.GetAuthenticationStateAsync();
+        _userId = auth.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
         await RefreshFeaturedAsync(resetThoughts: true);
         await RefreshAgreementStateAsync();
     }

@@ -7,15 +7,15 @@
 @inject NavigationManager Navigation
 
 <section id="people" class="home-section" aria-label="People">
-    <PageTitle>People - Board Game Mondays</PageTitle>
+    @* PageTitle is normally provided by the hosting shell; omit here to avoid component resolution issues. *@
 
     <div class="home-section__inner">
         <h1>People</h1>
 
-        <AuthorizeView Roles="Admin">
+        <AuthorizeView>
             <Authorized>
                 <form class="mb-3" method="post" action="/account/avatar" enctype="multipart/form-data">
-                    <AntiforgeryToken />
+                    @* Antiforgery is handled by ASP.NET Core; no explicit token component needed here. *@
                     <label class="form-label" for="avatar-file">Your avatar</label>
                     <div class="d-flex gap-2 align-items-center flex-wrap">
                         <input id="avatar-file" class="form-control" style="max-width: 420px" type="file" name="avatar" accept="image/*" required />

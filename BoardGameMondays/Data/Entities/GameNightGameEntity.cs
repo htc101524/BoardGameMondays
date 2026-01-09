@@ -29,6 +29,10 @@ public sealed class GameNightGameEntity
 
     public MemberEntity? WinnerMember { get; set; }
 
+    // Optional: for team-based games, the winning team name.
+    [MaxLength(64)]
+    public string? WinnerTeamName { get; set; }
+
     public List<GameNightGamePlayerEntity> Players { get; set; } = new();
 
     public List<GameNightGameOddsEntity> Odds { get; set; } = new();

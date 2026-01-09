@@ -142,7 +142,8 @@ public sealed class BettingService
             return ResolveResult.NotPast;
         }
 
-        if (game.WinnerMemberId is null)
+        var winnerHasTeam = !string.IsNullOrWhiteSpace(game.WinnerTeamName);
+        if (!winnerHasTeam && game.WinnerMemberId is null)
         {
             return ResolveResult.MissingWinner;
         }
@@ -169,13 +170,37 @@ public sealed class BettingService
 
         await using var tx = await db.Database.BeginTransactionAsync(ct);
 
-        var winnerId = game.WinnerMemberId.Value;
+        var winnerId = game.WinnerMemberId;
+        Dictionary<Guid, string?> playerTeams = new();
+        if (winnerHasTeam)
+        {
+            playerTeams = await db.GameNightGamePlayers
+                .AsNoTracking()
+                .Where(p => p.GameNightGameId == gameNightGameId)
+                .ToDictionaryAsync(p => p.MemberId, p => p.TeamName, ct);
+        }
         var userPayouts = new Dictionary<string, int>(StringComparer.Ordinal);
 
         foreach (var bet in unresolved)
         {
             var payout = 0;
-            if (bet.PredictedWinnerMemberId == winnerId)
+            var isWinningBet = false;
+
+            if (winnerHasTeam)
+            {
+                if (playerTeams.TryGetValue(bet.PredictedWinnerMemberId, out var teamName)
+                    && !string.IsNullOrWhiteSpace(teamName)
+                    && string.Equals(teamName, game.WinnerTeamName, StringComparison.OrdinalIgnoreCase))
+                {
+                    isWinningBet = true;
+                }
+            }
+            else if (winnerId is Guid memberWinner && bet.PredictedWinnerMemberId == memberWinner)
+            {
+                isWinningBet = true;
+            }
+
+            if (isWinningBet)
             {
                 var profit = ComputeProfit(bet.Amount, bet.OddsTimes100);
                 payout = bet.Amount + profit;

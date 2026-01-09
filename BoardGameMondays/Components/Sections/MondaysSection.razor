@@ -172,16 +172,200 @@
 
                                             @if (game.Winner is not null)
                                             {
-                                                <span class="badge text-bg-success">Winner: @game.Winner.MemberName</span>
+                                                <span class="badge text-bg-success">Winner: @game.Winner.Name</span>
                                             }
                                         </div>
 
                                         <div class="mt-2" aria-label="Players">
-                                            <div class="text-muted small mb-1">Players</div>
+                                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                                <div class="text-muted small">Players</div>
+                                                @if (_isAdmin && !game.IsConfirmed && !IsTeamMode(game))
+                                                {
+                                                    <button type="button"
+                                                            class="btn btn-sm btn-outline-secondary"
+                                                            disabled="@_saving"
+                                                            title="Switch this game to team-based mode (players will be cleared so you can add them into teams)"
+                                                            @onclick="() => EnableTeamModeAsync(game.Id)">
+                                                        Set as Team-Based
+                                                    </button>
+                                                }
+                                            </div>
 
-                                            @if (game.Players.Count == 0)
+                                            @if (!IsTeamMode(game) && game.Players.Count == 0)
                                             {
                                                 <div class="text-muted">No players yet.</div>
+                                            }
+                                            else if (IsTeamMode(game))
+                                            {
+                                                <div class="bgm-teamsGrid" aria-label="Teams">
+                                                    @foreach (var team in GetTeams(game).Concat(_clientTeams.TryGetValue(game.Id, out var _ct) ? _ct : Enumerable.Empty<string>()))
+                                                    {
+                                                        var teamPlayers = game.Players.Where(p => string.Equals(p.TeamName, team, StringComparison.OrdinalIgnoreCase)).ToArray();
+                                                        if (teamPlayers.Length == 0)
+                                                        {
+                                                            // show empty client-side teams even if there are no players
+                                                            if (!(_clientTeams.TryGetValue(game.Id, out var ct) && ct.Contains(team)))
+                                                            {
+                                                                continue;
+                                                            }
+                                                        }
+
+                                                        <div class="bgm-teamBubble" aria-label="Team">
+                                                            @{ var isClientTeam = _clientTeams.TryGetValue(game.Id, out var _ct2) && _ct2.Contains(team); }
+                                                            <div class="bgm-teamBubble__header">
+                                                                @if (isClientTeam && _isAdmin && !game.IsConfirmed)
+                                                                {
+                                                                    <input class="form-control form-control-sm" value="@team" @onchange="e => RenameClientTeam(game.Id, team, e.Value?.ToString())" />
+                                                                }
+                                                                else
+                                                                {
+                                                                    <div class="fw-semibold">@team</div>
+                                                                }
+                                                            </div>
+
+                                                            <div class="bgm-teamBubble__players" aria-label="Players">
+                                                                @foreach (var player in teamPlayers)
+                                                                {
+                                                                    <div class="bgm-teamBubble__playerRow">
+                                                                        <span class="badge text-bg-light">@player.MemberName</span>
+
+                                                                        @if (_isAdmin && !game.IsConfirmed)
+                                                                        {
+                                                                            <button type="button"
+                                                                                    class="btn btn-sm btn-outline-danger"
+                                                                                    disabled="@_saving"
+                                                                                    title="Remove"
+                                                                                    aria-label="Remove @player.MemberName"
+                                                                                    @onclick="() => RemovePlayerAsync(game.Id, player.MemberId)">
+                                                                                ✕
+                                                                            </button>
+                                                                        }
+                                                                    </div>
+                                                                }
+                                                            </div>
+
+                                                            @if (_isAdmin && !game.IsConfirmed)
+                                                            {
+                                                                <div class="bgm-teamBubble__footer" aria-label="Add player">
+                                                                    <select class="form-select form-select-sm"
+                                                                            value="@GetSelectedTeamPlayer(game.Id, team)"
+                                                                            @onchange="e => SetSelectedTeamPlayer(game.Id, team, e.Value?.ToString())">
+                                                                        <option value="">Add attending player…</option>
+                                                                        @foreach (var attendee in _selectedNight.Attendees.Where(a => !game.Players.Any(p => p.MemberId == a.MemberId)))
+                                                                        {
+                                                                            <option value="@attendee.MemberId">@attendee.MemberName</option>
+                                                                        }
+                                                                    </select>
+                                                                    <button type="button"
+                                                                            class="btn btn-sm btn-outline-primary"
+                                                                            disabled="@_saving"
+                                                                            @onclick="() => AddSelectedPlayerToTeamAsync(game.Id, team)">
+                                                                        Add
+                                                                    </button>
+                                                                </div>
+                                                            }
+
+                                                            @if (game.IsConfirmed && _selected >= _nextMonday)
+                                                            {
+                                                                var rep = teamPlayers[0];
+                                                                var odds = game.Odds.FirstOrDefault(o => teamPlayers.Any(tp => tp.MemberId == o.MemberId))?.OddsTimes100;
+                                                                var key = (game.Id, rep.MemberId);
+
+                                                                <div class="bgm-teamBubble__odds" aria-label="Odds">
+                                                                    <div class="text-muted small fw-semibold">Odds</div>
+
+                                                                    @if (_isAdmin)
+                                                                    {
+                                                                        <div class="bgm-teamBubble__oddsRow">
+                                                                            <input type="number"
+                                                                                   class="form-control form-control-sm"
+                                                                                   min="1"
+                                                                                   step="1"
+                                                                                   value="@GetOddsNumerator(key, odds)"
+                                                                                   disabled="@_saving"
+                                                                                   @onchange="e => SetOddsNumerator(key, e.Value?.ToString())" />
+
+                                                                            <span class="text-muted">/</span>
+
+                                                                            <input type="number"
+                                                                                   class="form-control form-control-sm"
+                                                                                   min="1"
+                                                                                   step="1"
+                                                                                   value="@GetOddsDenominator(key, odds)"
+                                                                                   disabled="@_saving"
+                                                                                   @onchange="e => SetOddsDenominator(key, e.Value?.ToString())" />
+
+                                                                            <button type="button"
+                                                                                    class="btn btn-sm btn-outline-primary"
+                                                                                    disabled="@_saving"
+                                                                                    @onclick="() => SaveOddsAsync(game.Id, rep.MemberId)">
+                                                                                Save
+                                                                            </button>
+                                                                        </div>
+                                                                        <div class="text-muted small">@FormatFraction(odds)</div>
+                                                                    }
+                                                                    else
+                                                                    {
+                                                                        <div class="text-muted">@FormatFraction(odds)</div>
+                                                                    }
+                                                                </div>
+                                                            }
+                                                        </div>
+                                                    }
+
+                                                    @{ var soloPlayers = game.Players.Where(p => string.IsNullOrWhiteSpace(p.TeamName)).ToArray(); }
+                                                    @if (soloPlayers.Length > 0)
+                                                    {
+                                                        <div class="bgm-teamBubble" aria-label="No team">
+                                                            <div class="bgm-teamBubble__header fw-semibold">No team</div>
+                                                            <div class="bgm-teamBubble__players" aria-label="Players">
+                                                                @foreach (var player in soloPlayers)
+                                                                {
+                                                                    <div class="bgm-teamBubble__playerRow">
+                                                                        <span class="badge text-bg-light">@player.MemberName</span>
+
+                                                                        @if (_isAdmin && !game.IsConfirmed)
+                                                                        {
+                                                                            <button type="button"
+                                                                                    class="btn btn-sm btn-outline-danger"
+                                                                                    disabled="@_saving"
+                                                                                    title="Remove"
+                                                                                    aria-label="Remove @player.MemberName"
+                                                                                    @onclick="() => RemovePlayerAsync(game.Id, player.MemberId)">
+                                                                                ✕
+                                                                            </button>
+                                                                        }
+                                                                    </div>
+                                                                }
+                                                            </div>
+                                                        </div>
+                                                    }
+
+                                                    @if (_isAdmin && !game.IsConfirmed)
+                                                    {
+                                                        <div class="bgm-teamBubble bgm-teamBubble--add" aria-label="Add team">
+                                                            <button type="button"
+                                                                    class="bgm-teamBubble__addButton"
+                                                                    disabled="@_saving"
+                                                                    title="Add empty team"
+                                                                    @onclick="() => AddEmptyTeamAsync(game.Id)">
+                                                                +
+                                                            </button>
+
+                                                            <div class="mt-2">
+                                                                <select class="form-select form-select-sm"
+                                                                        value="@GetSelectedPlayer(game.Id)"
+                                                                        @onchange="e => SetSelectedPlayer(game.Id, e.Value?.ToString())">
+                                                                    <option value="">Create team with attendee…</option>
+                                                                    @foreach (var attendee in _selectedNight.Attendees.Where(a => !game.Players.Any(p => p.MemberId == a.MemberId)))
+                                                                    {
+                                                                        <option value="@attendee.MemberId">@attendee.MemberName</option>
+                                                                    }
+                                                                </select>
+                                                            </div>
+                                                        </div>
+                                                    }
+                                                </div>
                                             }
                                             else
                                             {
@@ -205,7 +389,7 @@
                                                 </div>
                                             }
 
-                                            @if (_isAdmin && !game.IsConfirmed)
+                                            @if (_isAdmin && !game.IsConfirmed && !IsTeamMode(game))
                                             {
                                                 <div class="mt-2 d-flex align-items-center gap-2 flex-wrap" aria-label="Add player">
                                                     <select class="form-select form-select-sm" style="max-width: 360px"
@@ -224,7 +408,7 @@
                                             }
                                         </div>
 
-                                        @if (game.IsConfirmed && _selected >= _nextMonday)
+                                        @if (game.IsConfirmed && _selected >= _nextMonday && !IsTeamMode(game))
                                         {
                                             <div class="mt-2" aria-label="Odds">
                                                 <div class="text-muted small mb-1">
@@ -238,68 +422,133 @@
                                                 else
                                                 {
                                                     <div class="d-grid gap-1 bgm-markets">
-                                                        @foreach (var p in game.Players)
-                                                        {
-                                                            var odds = game.Odds.FirstOrDefault(o => o.MemberId == p.MemberId)?.OddsTimes100;
-                                                            var key = (game.Id, p.MemberId);
-
-                                                            @if (_isAdmin)
+                                                        @{
+                                                            if (HasTeams(game))
                                                             {
-                                                                <div class="d-flex align-items-center gap-2 flex-wrap">
-                                                                    <div class="text-truncate bgm-oddsName">@p.MemberName</div>
+                                                                var teams = GetTeams(game);
+                                                                foreach (var team in teams)
+                                                                {
+                                                                    var teamPlayers = game.Players.Where(p => string.Equals(p.TeamName, team, StringComparison.OrdinalIgnoreCase)).ToArray();
+                                                                    if (teamPlayers.Length == 0)
+                                                                    {
+                                                                        continue;
+                                                                    }
 
-                                                                    <div class="d-inline-flex align-items-center gap-1" aria-label="Fractional odds">
-                                                                        <input type="number"
-                                                                               class="form-control form-control-sm"
-                                                                               style="max-width: 84px"
-                                                                               min="1"
-                                                                               step="1"
-                                                                               value="@GetOddsNumerator(key, odds)"
-                                                                               disabled="@_saving"
-                                                                               @onchange="e => SetOddsNumerator(key, e.Value?.ToString())" />
+                                                                    var rep = teamPlayers[0];
+                                                                    var odds = game.Odds.FirstOrDefault(o => teamPlayers.Any(tp => tp.MemberId == o.MemberId))?.OddsTimes100;
+                                                                    var key = (game.Id, rep.MemberId);
 
-                                                                        <span class="text-muted">/</span>
+                                                                    if (_isAdmin)
+                                                                    {
+                                                                        <div class="d-flex align-items-center gap-2 flex-wrap">
+                                                                            <div class="text-truncate bgm-oddsName">@team</div>
 
-                                                                        <input type="number"
-                                                                               class="form-control form-control-sm"
-                                                                               style="max-width: 84px"
-                                                                               min="1"
-                                                                               step="1"
-                                                                               value="@GetOddsDenominator(key, odds)"
-                                                                               disabled="@_saving"
-                                                                               @onchange="e => SetOddsDenominator(key, e.Value?.ToString())" />
-                                                                    </div>
+                                                                            <div class="d-inline-flex align-items-center gap-1" aria-label="Fractional odds">
+                                                                                <input type="number"
+                                                                                       class="form-control form-control-sm"
+                                                                                       style="max-width: 84px"
+                                                                                       min="1"
+                                                                                       step="1"
+                                                                                       value="@GetOddsNumerator(key, odds)"
+                                                                                       disabled="@_saving"
+                                                                                       @onchange="e => SetOddsNumerator(key, e.Value?.ToString())" />
 
-                                                                    <button type="button"
-                                                                            class="btn btn-sm btn-outline-primary"
-                                                                            disabled="@_saving"
-                                                                            @onclick="() => SaveOddsAsync(game.Id, p.MemberId)">
-                                                                        Save
-                                                                    </button>
+                                                                                <span class="text-muted">/</span>
 
-                                                                    <span class="text-muted">@FormatFraction(odds)</span>
-                                                                </div>
+                                                                                <input type="number"
+                                                                                       class="form-control form-control-sm"
+                                                                                       style="max-width: 84px"
+                                                                                       min="1"
+                                                                                       step="1"
+                                                                                       value="@GetOddsDenominator(key, odds)"
+                                                                                       disabled="@_saving"
+                                                                                       @onchange="e => SetOddsDenominator(key, e.Value?.ToString())" />
+                                                                            </div>
+
+                                                                            <button type="button"
+                                                                                    class="btn btn-sm btn-outline-primary"
+                                                                                    disabled="@_saving"
+                                                                                    @onclick="() => SaveOddsAsync(game.Id, rep.MemberId)">
+                                                                                Save
+                                                                            </button>
+
+                                                                            <span class="text-muted">@FormatFraction(odds)</span>
+                                                                        </div>
+                                                                    }
+                                                                    else
+                                                                    {
+                                                                        <div class="d-flex justify-content-between align-items-center bgm-oddsSlipRow">
+                                                                            <div class="text-truncate">@team</div>
+                                                                            <div class="text-muted">@FormatFraction(odds)</div>
+                                                                        </div>
+                                                                    }
+                                                                }
                                                             }
                                                             else
                                                             {
-                                                                <div class="d-flex justify-content-between align-items-center bgm-oddsSlipRow">
-                                                                    <div class="text-truncate">@p.MemberName</div>
-                                                                    <div class="text-muted">@FormatFraction(odds)</div>
-                                                                </div>
+                                                                foreach (var p in game.Players)
+                                                                {
+                                                                    var odds = game.Odds.FirstOrDefault(o => o.MemberId == p.MemberId)?.OddsTimes100;
+                                                                    var key = (game.Id, p.MemberId);
+
+                                                                    if (_isAdmin)
+                                                                    {
+                                                                        <div class="d-flex align-items-center gap-2 flex-wrap">
+                                                                            <div class="text-truncate bgm-oddsName">@p.MemberName</div>
+
+                                                                            <div class="d-inline-flex align-items-center gap-1" aria-label="Fractional odds">
+                                                                                <input type="number"
+                                                                                       class="form-control form-control-sm"
+                                                                                       style="max-width: 84px"
+                                                                                       min="1"
+                                                                                       step="1"
+                                                                                       value="@GetOddsNumerator(key, odds)"
+                                                                                       disabled="@_saving"
+                                                                                       @onchange="e => SetOddsNumerator(key, e.Value?.ToString())" />
+
+                                                                                <span class="text-muted">/</span>
+
+                                                                                <input type="number"
+                                                                                       class="form-control form-control-sm"
+                                                                                       style="max-width: 84px"
+                                                                                       min="1"
+                                                                                       step="1"
+                                                                                       value="@GetOddsDenominator(key, odds)"
+                                                                                       disabled="@_saving"
+                                                                                       @onchange="e => SetOddsDenominator(key, e.Value?.ToString())" />
+                                                                            </div>
+
+                                                                            <button type="button"
+                                                                                    class="btn btn-sm btn-outline-primary"
+                                                                                    disabled="@_saving"
+                                                                                    @onclick="() => SaveOddsAsync(game.Id, p.MemberId)">
+                                                                                Save
+                                                                            </button>
+
+                                                                            <span class="text-muted">@FormatFraction(odds)</span>
+                                                                        </div>
+                                                                    }
+                                                                    else
+                                                                    {
+                                                                        <div class="d-flex justify-content-between align-items-center bgm-oddsSlipRow">
+                                                                            <div class="text-truncate">@p.MemberName</div>
+                                                                            <div class="text-muted">@FormatFraction(odds)</div>
+                                                                        </div>
+                                                                    }
+                                                                }
                                                             }
                                                         }
                                                     </div>
                                                 }
                                             </div>
 
-                                            <AuthorizeView>
-                                                <Authorized>
-                                                    <div class="mt-3" aria-label="Betting">
-                                                        @if (_userId is null)
-                                                        {
-                                                            <div class="text-muted">Log in to place a bet.</div>
-                                                        }
-                                                        else if (_myBets.TryGetValue(game.Id, out var bet))
+                                            <div class="mt-3" aria-label="Betting">
+                                                <AuthorizeView>
+                                                    <NotAuthorized>
+                                                        <div class="text-muted">Log in to place a bet.</div>
+                                                    </NotAuthorized>
+                                                    <Authorized>
+                                                        @if (_myBets.TryGetValue(game.Id, out var bet))
                                                         {
                                                             <div class="text-muted">
                                                                 You bet @bet.Amount on @bet.WinnerMemberName (odds @FormatFraction(bet.OddsTimes100)).
@@ -321,12 +570,33 @@
                                                                         value="@GetSelectedBetWinner(game.Id)"
                                                                         @onchange="e => SetSelectedBetWinner(game.Id, e.Value?.ToString())">
                                                                     <option value="">Pick a winner…</option>
-                                                                    @foreach (var p in game.Players)
+                                                                    @if (HasTeams(game))
                                                                     {
-                                                                        var hasOdds = game.Odds.Any(o => o.MemberId == p.MemberId);
-                                                                        <option value="@p.MemberId" disabled="@(!hasOdds)">
-                                                                            @p.MemberName@(hasOdds ? string.Empty : " (no odds)")
-                                                                        </option>
+                                                                        var teams = GetTeams(game);
+                                                                        foreach (var team in teams)
+                                                                        {
+                                                                            var teamPlayers = game.Players.Where(p => string.Equals(p.TeamName, team, StringComparison.OrdinalIgnoreCase)).ToArray();
+                                                                            if (teamPlayers.Length == 0)
+                                                                            {
+                                                                                continue;
+                                                                            }
+
+                                                                            var rep = teamPlayers[0];
+                                                                            var hasOdds = game.Odds.Any(o => teamPlayers.Any(tp => tp.MemberId == o.MemberId));
+                                                                            <option value="@rep.MemberId" disabled="@(!hasOdds)">
+                                                                                @team@(hasOdds ? string.Empty : " (no odds)")
+                                                                            </option>
+                                                                        }
+                                                                    }
+                                                                    else
+                                                                    {
+                                                                        foreach (var p in game.Players)
+                                                                        {
+                                                                            var hasOdds = game.Odds.Any(o => o.MemberId == p.MemberId);
+                                                                            <option value="@p.MemberId" disabled="@(!hasOdds)">
+                                                                                @p.MemberName@(hasOdds ? string.Empty : " (no odds)")
+                                                                            </option>
+                                                                        }
                                                                     }
                                                                 </select>
 
@@ -362,9 +632,9 @@
                                                                 }
                                                             </div>
                                                         }
-                                                    </div>
-                                                </Authorized>
-                                            </AuthorizeView>
+                                                    </Authorized>
+                                                </AuthorizeView>
+                                            </div>
                                         }
 
                                         @if (_isAdmin && _selected < _nextMonday)
@@ -372,16 +642,32 @@
                                             <div class="mt-2" aria-label="Winner">
                                                 <div class="text-muted small mb-1">Winner</div>
                                                 <div class="d-flex align-items-center gap-2 flex-wrap">
-                                                    <select class="form-select form-select-sm" style="max-width: 360px"
-                                                            value="@(game.Winner?.MemberId.ToString() ?? string.Empty)"
-                                                            disabled="@(_saving || game.IsSettled)"
-                                                            @onchange="e => SetWinnerAsync(game.Id, e.Value?.ToString())">
-                                                        <option value="">No winner</option>
-                                                        @foreach (var p in game.Players)
-                                                        {
-                                                            <option value="@p.MemberId">@p.MemberName</option>
-                                                        }
-                                                    </select>
+                                                    @if (HasTeams(game))
+                                                    {
+                                                        <select class="form-select form-select-sm" style="max-width: 360px"
+                                                                value="@(game.Winner?.IsTeam == true ? (game.Winner?.Name ?? string.Empty) : string.Empty)"
+                                                                disabled="@(_saving || game.IsSettled)"
+                                                                @onchange="e => SetTeamWinnerAsync(game.Id, e.Value?.ToString())">
+                                                            <option value="">No winner</option>
+                                                            @foreach (var team in GetTeams(game))
+                                                            {
+                                                                <option value="@team">@team</option>
+                                                            }
+                                                        </select>
+                                                    }
+                                                    else
+                                                    {
+                                                        <select class="form-select form-select-sm" style="max-width: 360px"
+                                                                value="@(game.Winner?.MemberId?.ToString() ?? string.Empty)"
+                                                                disabled="@(_saving || game.IsSettled)"
+                                                                @onchange="e => SetWinnerAsync(game.Id, e.Value?.ToString())">
+                                                            <option value="">No winner</option>
+                                                            @foreach (var p in game.Players)
+                                                            {
+                                                                <option value="@p.MemberId">@p.MemberName</option>
+                                                            }
+                                                        </select>
+                                                    }
 
                                                     @if (game.Winner is not null)
                                                     {
@@ -515,7 +801,10 @@
     private readonly HashSet<int> _confirmWinnerPending = new();
     private readonly Dictionary<(int GameNightGameId, Guid MemberId), int> _oddsNumeratorByKey = new();
     private readonly Dictionary<(int GameNightGameId, Guid MemberId), int> _oddsDenominatorByKey = new();
+    private readonly HashSet<int> _teamModeGameIds = new();
+    private readonly Dictionary<(int GameNightGameId, string TeamName), string?> _selectedTeamPlayerByKey = new();
     private IReadOnlyDictionary<int, BettingService.UserBet> _myBets = new Dictionary<int, BettingService.UserBet>();
+    private readonly Dictionary<int, List<string>> _clientTeams = new();
 
     protected override async Task OnInitializedAsync()
     {
@@ -806,6 +1095,183 @@
         }
     }
 
+    private static bool HasTeams(GameNightService.GameNightGame game)
+        => game.Players.Any(p => !string.IsNullOrWhiteSpace(p.TeamName));
+
+    private bool IsTeamMode(GameNightService.GameNightGame game)
+        => HasTeams(game) || _teamModeGameIds.Contains(game.Id);
+
+    private static IReadOnlyList<string> GetTeams(GameNightService.GameNightGame game)
+    {
+        // Preserve the order teams first appear in the players list (stable insertion order),
+        // but avoid duplicates using a case-insensitive comparison.
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var list = new List<string>();
+
+        foreach (var name in game.Players
+                     .Select(p => p.TeamName)
+                     .Where(n => !string.IsNullOrWhiteSpace(n))
+                     .Select(n => n!.Trim()))
+        {
+            if (seen.Add(name))
+            {
+                list.Add(name);
+            }
+        }
+
+        return list;
+    }
+
+    private async Task SetPlayerTeamAsync(int gameNightGameId, Guid memberId, string? rawTeamName)
+    {
+        if (!_isAdmin || _selectedNight is null)
+        {
+            return;
+        }
+
+        _saving = true;
+        _status = null;
+        try
+        {
+            _selectedNight = await GameNightService.SetPlayerTeamAsync(_selectedNight.Id, gameNightGameId, memberId, rawTeamName);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task AddTeamWithSelectedPlayerAsync(int gameNightGameId)
+    {
+        if (!_isAdmin || _selectedNight is null)
+        {
+            return;
+        }
+
+        if (!_selectedPlayerByGameId.TryGetValue(gameNightGameId, out var raw) || !Guid.TryParse(raw, out var memberId))
+        {
+            return;
+        }
+
+        var attendee = _selectedNight.Attendees.FirstOrDefault(a => a.MemberId == memberId);
+        var baseName = attendee?.MemberName ?? string.Empty;
+        var teamName = BuildAutoTeamName(baseName);
+
+        _saving = true;
+        _status = null;
+        try
+        {
+            _selectedNight = await GameNightService.AddPlayerAsync(_selectedNight.Id, gameNightGameId, memberId);
+            _selectedNight = await GameNightService.SetPlayerTeamAsync(_selectedNight.Id, gameNightGameId, memberId, teamName);
+            _selectedPlayerByGameId[gameNightGameId] = null;
+            _teamModeGameIds.Add(gameNightGameId);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task EnableTeamModeAsync(int gameNightGameId)
+    {
+        if (!_isAdmin || _selectedNight is null)
+        {
+            return;
+        }
+
+        var game = _selectedNight.Games.FirstOrDefault(g => g.Id == gameNightGameId);
+        if (game is null)
+        {
+            return;
+        }
+
+        if (game.IsConfirmed)
+        {
+            return;
+        }
+
+        _saving = true;
+        _status = null;
+        try
+        {
+            // Clear existing players so the admin can rebuild the lineup into teams.
+            foreach (var player in game.Players.ToArray())
+            {
+                _selectedNight = await GameNightService.RemovePlayerAsync(_selectedNight.Id, gameNightGameId, player.MemberId);
+            }
+
+            _teamModeGameIds.Add(gameNightGameId);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private static string BuildAutoTeamName(string memberName)
+    {
+        if (string.IsNullOrWhiteSpace(memberName))
+        {
+            return "Team";
+        }
+
+        var trimmed = new string(memberName.Where(char.IsLetterOrDigit).ToArray());
+        if (trimmed.Length <= 3)
+        {
+            return $"Team {trimmed}";
+        }
+
+        return $"Team {trimmed.Substring(0, 3)}";
+    }
+
+    private string GetSelectedTeamPlayer(int gameNightGameId, string teamName)
+        => _selectedTeamPlayerByKey.TryGetValue((gameNightGameId, teamName), out var value) ? value ?? string.Empty : string.Empty;
+
+    private void SetSelectedTeamPlayer(int gameNightGameId, string teamName, string? value)
+    {
+        _selectedTeamPlayerByKey[(gameNightGameId, teamName)] = value;
+    }
+
+    private async Task AddSelectedPlayerToTeamAsync(int gameNightGameId, string teamName)
+    {
+        if (!_isAdmin || _selectedNight is null)
+        {
+            return;
+        }
+
+        if (!_selectedTeamPlayerByKey.TryGetValue((gameNightGameId, teamName), out var raw) || !Guid.TryParse(raw, out var memberId))
+        {
+            return;
+        }
+
+        _saving = true;
+        _status = null;
+        try
+        {
+            _selectedNight = await GameNightService.AddPlayerAsync(_selectedNight.Id, gameNightGameId, memberId);
+            _selectedNight = await GameNightService.SetPlayerTeamAsync(_selectedNight.Id, gameNightGameId, memberId, teamName);
+            // Remove any client-only placeholder team with the same name to avoid duplicate display entries.
+            if (_clientTeams.TryGetValue(gameNightGameId, out var ctList))
+            {
+                var removedCount = ctList.RemoveAll(n => string.Equals(n, teamName, StringComparison.OrdinalIgnoreCase));
+                if (ctList.Count == 0)
+                {
+                    _clientTeams.Remove(gameNightGameId);
+                }
+                else if (removedCount > 0)
+                {
+                    _clientTeams[gameNightGameId] = ctList;
+                }
+            }
+            _selectedTeamPlayerByKey[(gameNightGameId, teamName)] = null;
+            _teamModeGameIds.Add(gameNightGameId);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
     private async Task SetWinnerAsync(int gameNightGameId, string? value)
     {
         if (!_isAdmin || _selectedNight is null)
@@ -824,6 +1290,27 @@
         try
         {
             _selectedNight = await GameNightService.SetWinnerAsync(_selectedNight.Id, gameNightGameId, winnerId);
+            _settleStatusByGameId[gameNightGameId] = null;
+            _confirmWinnerPending.Remove(gameNightGameId);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task SetTeamWinnerAsync(int gameNightGameId, string? value)
+    {
+        if (!_isAdmin || _selectedNight is null)
+        {
+            return;
+        }
+
+        _saving = true;
+        _status = null;
+        try
+        {
+            _selectedNight = await GameNightService.SetTeamWinnerAsync(_selectedNight.Id, gameNightGameId, value);
             _settleStatusByGameId[gameNightGameId] = null;
             _confirmWinnerPending.Remove(gameNightGameId);
         }
@@ -1162,4 +1649,92 @@
     private sealed record MondayItem(DateOnly Date, string Kind);
 
     private sealed record GameOption(Guid Id, string Name);
+
+    private async Task AddEmptyTeamAsync(int gameNightGameId)
+    {
+        if (!_isAdmin || _selectedNight is null)
+        {
+            return;
+        }
+
+        var game = _selectedNight.Games.FirstOrDefault(g => g.Id == gameNightGameId);
+        if (game is null)
+        {
+            return;
+        }
+        // If an attendee is selected for this game, create the team with that attendee.
+        var selected = GetSelectedPlayer(gameNightGameId);
+        if (!string.IsNullOrWhiteSpace(selected) && Guid.TryParse(selected, out _))
+        {
+            await AddTeamWithSelectedPlayerAsync(gameNightGameId);
+            return;
+        }
+
+        // Ensure the generated team name does not duplicate any existing server or client-side team (case-insensitive).
+        _clientTeams.TryGetValue(gameNightGameId, out var list);
+        list ??= new List<string>();
+
+        var existingNames = new HashSet<string>(GetTeams(game), StringComparer.OrdinalIgnoreCase);
+        foreach (var n in list)
+        {
+            existingNames.Add(n);
+        }
+
+        // Choose the lowest Team N that isn't already used (Team 1, Team 2, ...)
+        var i = 1;
+        string teamName;
+        do
+        {
+            teamName = $"Team {i}";
+            i++;
+        } while (existingNames.Contains(teamName));
+
+        list.Add(teamName);
+        _clientTeams[gameNightGameId] = list;
+
+        // Rerender — actual persistence happens when an attendee is added to this team
+        StateHasChanged();
+    }
+
+    private void RenameClientTeam(int gameNightGameId, string oldName, string? newName)
+    {
+        if (string.IsNullOrWhiteSpace(newName) || string.Equals(newName, oldName, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        if (!_clientTeams.TryGetValue(gameNightGameId, out var list))
+        {
+            return;
+        }
+
+        // prevent duplicates (case-insensitive). Allow keeping same name casing for the same team.
+        var serverTeams = GetTeams(_selectedNight!.Games.First(g => g.Id == gameNightGameId));
+        var conflictWithClient = list.Any(n => !string.Equals(n, oldName, StringComparison.OrdinalIgnoreCase) && string.Equals(n, newName, StringComparison.OrdinalIgnoreCase));
+        var conflictWithServer = serverTeams.Any(n => string.Equals(n, newName, StringComparison.OrdinalIgnoreCase));
+        if (conflictWithClient || conflictWithServer)
+        {
+            return;
+        }
+
+        var idx = list.IndexOf(oldName);
+        if (idx < 0)
+        {
+            return;
+        }
+
+        list[idx] = newName;
+
+        // move any selected-team-player entries keyed by oldName to newName
+        var keyOld = (gameNightGameId, oldName);
+        var keyNew = (gameNightGameId, newName);
+        if (_selectedTeamPlayerByKey.TryGetValue(keyOld, out var val))
+        {
+            _selectedTeamPlayerByKey[keyNew] = val;
+            _selectedTeamPlayerByKey.Remove(keyOld);
+        }
+
+        _clientTeams[gameNightGameId] = list;
+        StateHasChanged();
+    }
 }

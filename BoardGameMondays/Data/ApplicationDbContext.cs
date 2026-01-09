@@ -60,11 +60,19 @@ public sealed class ApplicationDbContext : IdentityDbContext<ApplicationUser>
                 toDb => toDb.UtcDateTime.Ticks,
                 fromDb => new DateTimeOffset(new DateTime(fromDb, DateTimeKind.Utc)));
 
+        builder.Entity<GameNightGameEntity>()
+            .Property(x => x.WinnerTeamName)
+            .HasMaxLength(64);
+
         builder.Entity<GameNightGamePlayerEntity>()
             .Property(x => x.CreatedOn)
             .HasConversion(
                 toDb => toDb.UtcDateTime.Ticks,
                 fromDb => new DateTimeOffset(new DateTime(fromDb, DateTimeKind.Utc)));
+
+        builder.Entity<GameNightGamePlayerEntity>()
+            .Property(x => x.TeamName)
+            .HasMaxLength(64);
 
         builder.Entity<GameNightGameOddsEntity>()
             .Property(x => x.CreatedOn)

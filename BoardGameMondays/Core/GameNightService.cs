@@ -284,6 +284,7 @@ public sealed class GameNightService
         if (winnerMemberId is null)
         {
             game.WinnerMemberId = null;
+            game.WinnerTeamName = null;
             await db.SaveChangesAsync(ct);
             return await GetByIdAsync(gameNightId, ct);
         }
@@ -298,6 +299,82 @@ public sealed class GameNightService
         }
 
         game.WinnerMemberId = winnerMemberId;
+        game.WinnerTeamName = null;
+        await db.SaveChangesAsync(ct);
+        return await GetByIdAsync(gameNightId, ct);
+    }
+
+    public async Task<GameNight?> SetPlayerTeamAsync(Guid gameNightId, int gameNightGameId, Guid memberId, string? teamName, CancellationToken ct = default)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        var game = await db.GameNightGames
+            .FirstOrDefaultAsync(g => g.Id == gameNightGameId && g.GameNightId == gameNightId, ct);
+
+        if (game is null)
+        {
+            return null;
+        }
+
+        if (game.IsConfirmed)
+        {
+            return await GetByIdAsync(gameNightId, ct);
+        }
+
+        var player = await db.GameNightGamePlayers
+            .FirstOrDefaultAsync(p => p.GameNightGameId == gameNightGameId && p.MemberId == memberId, ct);
+
+        if (player is null)
+        {
+            return await GetByIdAsync(gameNightId, ct);
+        }
+
+        teamName = InputGuards.OptionalTrimToNull(teamName, maxLength: 64, nameof(teamName));
+        player.TeamName = teamName;
+
+        await db.SaveChangesAsync(ct);
+        return await GetByIdAsync(gameNightId, ct);
+    }
+
+    public async Task<GameNight?> SetTeamWinnerAsync(Guid gameNightId, int gameNightGameId, string? teamName, CancellationToken ct = default)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        var game = await db.GameNightGames
+            .FirstOrDefaultAsync(g => g.Id == gameNightGameId && g.GameNightId == gameNightId, ct);
+
+        if (game is null)
+        {
+            return null;
+        }
+
+        var isLocked = await db.GameNightGameBets
+            .AsNoTracking()
+            .AnyAsync(b => b.GameNightGameId == gameNightGameId && b.IsResolved, ct);
+        if (isLocked)
+        {
+            return await GetByIdAsync(gameNightId, ct);
+        }
+
+        teamName = InputGuards.OptionalTrimToNull(teamName, maxLength: 64, nameof(teamName));
+        if (teamName is null)
+        {
+            game.WinnerTeamName = null;
+            game.WinnerMemberId = null;
+            await db.SaveChangesAsync(ct);
+            return await GetByIdAsync(gameNightId, ct);
+        }
+
+        var exists = await db.GameNightGamePlayers
+            .AsNoTracking()
+            .AnyAsync(p => p.GameNightGameId == gameNightGameId && p.TeamName == teamName, ct);
+
+        if (!exists)
+        {
+            return await GetByIdAsync(gameNightId, ct);
+        }
+
+        game.WinnerTeamName = teamName;
+        game.WinnerMemberId = null;
+
         await db.SaveChangesAsync(ct);
         return await GetByIdAsync(gameNightId, ct);
     }
@@ -342,36 +419,70 @@ public sealed class GameNightService
 
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
 
-        var gameExists = await db.GameNightGames
-            .AnyAsync(g => g.Id == gameNightGameId && g.GameNightId == gameNightId, ct);
-        if (!gameExists)
+        var game = await db.GameNightGames
+            .FirstOrDefaultAsync(g => g.Id == gameNightGameId && g.GameNightId == gameNightId, ct);
+        if (game is null)
         {
             return null;
         }
 
-        var isPlayer = await db.GameNightGamePlayers
-            .AnyAsync(p => p.GameNightGameId == gameNightGameId && p.MemberId == memberId, ct);
-        if (!isPlayer)
+        var player = await db.GameNightGamePlayers
+            .FirstOrDefaultAsync(p => p.GameNightGameId == gameNightGameId && p.MemberId == memberId, ct);
+        if (player is null)
         {
             return await GetByIdAsync(gameNightId, ct);
         }
+        var teamName = player.TeamName;
 
-        var existing = await db.GameNightGameOdds
-            .FirstOrDefaultAsync(o => o.GameNightGameId == gameNightGameId && o.MemberId == memberId, ct);
-
-        if (existing is null)
+        if (!string.IsNullOrWhiteSpace(teamName))
         {
-            db.GameNightGameOdds.Add(new GameNightGameOddsEntity
+            var memberIds = await db.GameNightGamePlayers
+                .AsNoTracking()
+                .Where(p => p.GameNightGameId == gameNightGameId && p.TeamName == teamName)
+                .Select(p => p.MemberId)
+                .ToListAsync(ct);
+
+            var existingAll = await db.GameNightGameOdds
+                .Where(o => o.GameNightGameId == gameNightGameId && memberIds.Contains(o.MemberId))
+                .ToListAsync(ct);
+
+            var existingByMember = existingAll.ToDictionary(o => o.MemberId, o => o);
+
+            foreach (var id in memberIds)
             {
-                GameNightGameId = gameNightGameId,
-                MemberId = memberId,
-                OddsTimes100 = oddsTimes100,
-                CreatedOn = DateTimeOffset.UtcNow
-            });
+                if (!existingByMember.TryGetValue(id, out var odds))
+                {
+                    odds = new GameNightGameOddsEntity
+                    {
+                        GameNightGameId = gameNightGameId,
+                        MemberId = id,
+                        CreatedOn = DateTimeOffset.UtcNow
+                    };
+                    db.GameNightGameOdds.Add(odds);
+                }
+
+                odds.OddsTimes100 = oddsTimes100;
+            }
         }
         else
         {
-            existing.OddsTimes100 = oddsTimes100;
+            var existing = await db.GameNightGameOdds
+                .FirstOrDefaultAsync(o => o.GameNightGameId == gameNightGameId && o.MemberId == memberId, ct);
+
+            if (existing is null)
+            {
+                db.GameNightGameOdds.Add(new GameNightGameOddsEntity
+                {
+                    GameNightGameId = gameNightGameId,
+                    MemberId = memberId,
+                    OddsTimes100 = oddsTimes100,
+                    CreatedOn = DateTimeOffset.UtcNow
+                });
+            }
+            else
+            {
+                existing.OddsTimes100 = oddsTimes100;
+            }
         }
 
         await db.SaveChangesAsync(ct);
@@ -415,7 +526,7 @@ public sealed class GameNightService
             {
                 var players = g.Players
                     .OrderBy(p => p.Member.Name)
-                    .Select(p => new GameNightGamePlayer(p.MemberId, p.Member.Name))
+                    .Select(p => new GameNightGamePlayer(p.MemberId, p.Member.Name, p.TeamName))
                     .ToArray();
 
                 var odds = g.Odds
@@ -423,9 +534,15 @@ public sealed class GameNightService
                     .Select(o => new GameNightGameOdds(o.MemberId, o.Member.Name, o.OddsTimes100))
                     .ToArray();
 
-                var winner = g.WinnerMemberId is { } w && g.WinnerMember is not null
-                    ? new GameNightWinner(w, g.WinnerMember.Name)
-                    : null;
+                GameNightWinner? winner = null;
+                if (!string.IsNullOrWhiteSpace(g.WinnerTeamName))
+                {
+                    winner = new GameNightWinner(null, g.WinnerTeamName!, true);
+                }
+                else if (g.WinnerMemberId is { } w && g.WinnerMember is not null)
+                {
+                    winner = new GameNightWinner(w, g.WinnerMember.Name, false);
+                }
 
                 var isSettled = g.Bets.Count == 0 || g.Bets.All(b => b.IsResolved);
 
@@ -453,11 +570,11 @@ public sealed class GameNightService
 
     public sealed record GameNightGame(int Id, Guid GameId, string GameName, bool IsPlayed, bool IsConfirmed, bool IsSettled, IReadOnlyList<GameNightGamePlayer> Players, IReadOnlyList<GameNightGameOdds> Odds, GameNightWinner? Winner);
 
-    public sealed record GameNightGamePlayer(Guid MemberId, string MemberName);
+    public sealed record GameNightGamePlayer(Guid MemberId, string MemberName, string? TeamName);
 
     public sealed record GameNightGameOdds(Guid MemberId, string MemberName, int OddsTimes100);
 
-    public sealed record GameNightWinner(Guid MemberId, string MemberName);
+    public sealed record GameNightWinner(Guid? MemberId, string Name, bool IsTeam);
 
     public sealed record MemberOption(Guid Id, string Name);
 }

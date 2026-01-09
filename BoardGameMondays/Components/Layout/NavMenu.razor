@@ -18,14 +18,13 @@
         </a>
 
         <div class="bgm-header__right">
-            <AuthorizeView>
-                <Authorized>
-                    <div class="bgm-coins" aria-label="BGM Coins">
-                        <span class="bgm-coins__label">BGM Coins:</span>
-                        <span class="bgm-coins__value">@(_coins?.ToString() ?? "…")</span>
-                    </div>
-                </Authorized>
-            </AuthorizeView>
+            @if (_userId is not null)
+            {
+                <div class="bgm-coins" aria-label="BGM Coins">
+                    <span class="bgm-coins__label">BGM Coins:</span>
+                    <span class="bgm-coins__value">@(_coins?.ToString() ?? "…")</span>
+                </div>
+            }
 
             <button class="bgm-menuButton"
                     type="button"
@@ -52,23 +51,24 @@
         <a class="bgm-popup__link" href="/#blog" @onclick="CloseMenu">Blog</a>
         <a class="bgm-popup__link" href="/#people" @onclick="CloseMenu">People</a>
 
-        <AuthorizeView>
-            <Authorized Context="auth">
-                <AuthorizeView Roles="Admin">
-                    <Authorized Context="adminAuth">
-                        <a class="bgm-popup__link" href="/admin" @onclick="CloseMenu">Admin</a>
-                    </Authorized>
-                </AuthorizeView>
-                <form method="post" action="/account/logout" data-enhance="false">
-                    <AntiforgeryToken />
-                    <button type="submit" class="bgm-popup__link bgm-popup__linkButton" @onclick="CloseMenu">Logout</button>
-                </form>
-            </Authorized>
-            <NotAuthorized>
-                <button type="button" class="bgm-popup__link bgm-popup__linkButton" @onclick="GoToLogin">Login</button>
-                <button type="button" class="bgm-popup__link bgm-popup__linkButton" @onclick="GoToRegister">Sign up</button>
-            </NotAuthorized>
-        </AuthorizeView>
+        @if (_userId is not null)
+        {
+            <AuthorizeView Roles="Admin">
+                <Authorized>
+                    <a class="bgm-popup__link" href="/admin" @onclick="CloseMenu">Admin</a>
+                </Authorized>
+            </AuthorizeView>
+
+            <form method="post" action="/account/logout" data-enhance="false">
+                @* Antiforgery is handled by ASP.NET Core; no explicit token component needed here. *@
+                <button type="submit" class="bgm-popup__link bgm-popup__linkButton" @onclick="CloseMenu">Logout</button>
+            </form>
+        }
+        else
+        {
+            <button type="button" class="bgm-popup__link bgm-popup__linkButton" @onclick="GoToLogin">Login</button>
+            <button type="button" class="bgm-popup__link bgm-popup__linkButton" @onclick="GoToRegister">Sign up</button>
+        }
     </nav>
 </aside>
 
@@ -76,6 +76,7 @@
     private bool _menuOpen;
     private string? _userId;
     private int? _coins;
+    private bool _userIsAdmin;
 
     protected override async Task OnInitializedAsync()
     {
@@ -113,11 +114,14 @@
         {
             _userId = null;
             _coins = null;
+            _userIsAdmin = false;
             StateHasChanged();
             return;
         }
 
         _userId = user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        _userIsAdmin = user.IsInRole("Admin");
+
         if (string.IsNullOrWhiteSpace(_userId))
         {
             _coins = null;

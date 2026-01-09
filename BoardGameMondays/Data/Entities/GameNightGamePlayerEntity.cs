@@ -17,6 +17,10 @@ public sealed class GameNightGamePlayerEntity
 
     public MemberEntity Member { get; set; } = null!;
 
+    // Optional: team label for this player within a game (e.g. "Team A").
+    [MaxLength(64)]
+    public string? TeamName { get; set; }
+
     [Required]
     public DateTimeOffset CreatedOn { get; set; }
 }

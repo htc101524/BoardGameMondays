@@ -310,6 +310,10 @@ namespace BoardGameMondays.Migrations
                     b.Property<Guid?>("WinnerMemberId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("WinnerTeamName")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
                     b.HasKey("Id");
 
                     b.HasIndex("GameId");
@@ -368,6 +372,10 @@ namespace BoardGameMondays.Migrations
 
                     b.Property<Guid>("MemberId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("TeamName")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
 
                     b.HasKey("Id");
 
