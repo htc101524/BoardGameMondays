@@ -211,10 +211,10 @@
                                                     <select class="form-select form-select-sm" style="max-width: 360px"
                                                             value="@GetSelectedPlayer(game.Id)"
                                                             @onchange="e => SetSelectedPlayer(game.Id, e.Value?.ToString())">
-                                                        <option value="">Add a member…</option>
-                                                        @foreach (var m in _allMembers)
+                                                        <option value="">Add an attendee…</option>
+                                                        @foreach (var attendee in _selectedNight.Attendees)
                                                         {
-                                                            <option value="@m.Id">@m.Name</option>
+                                                            <option value="@attendee.MemberId">@attendee.MemberName</option>
                                                         }
                                                     </select>
                                                     <button type="button" class="btn btn-sm btn-outline-primary" disabled="@_saving" @onclick="() => AddSelectedPlayerAsync(game.Id)">

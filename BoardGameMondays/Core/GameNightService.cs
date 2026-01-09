@@ -188,6 +188,7 @@ public sealed class GameNightService
     {
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
         var game = await db.GameNightGames
+            .Include(g => g.GameNight)
             .FirstOrDefaultAsync(g => g.Id == gameNightGameId && g.GameNightId == gameNightId, ct);
         if (game is null)
         {
@@ -195,6 +196,16 @@ public sealed class GameNightService
         }
 
         if (game.IsConfirmed)
+        {
+            return await GetByIdAsync(gameNightId, ct);
+        }
+
+        // Only allow players who are marked as attending for this night.
+        var isAttending = await db.GameNightAttendees
+            .AsNoTracking()
+            .AnyAsync(a => a.GameNightId == game.GameNightId && a.MemberId == memberId, ct);
+
+        if (!isAttending)
         {
             return await GetByIdAsync(gameNightId, ct);
         }
