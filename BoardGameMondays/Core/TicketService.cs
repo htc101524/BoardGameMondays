@@ -19,7 +19,8 @@ public sealed class TicketService
         string Title,
         string? Description,
         DateTimeOffset CreatedOn,
-        int PriorityScore);
+        int PriorityScore,
+        DateTimeOffset? DoneOn);
 
     public async Task<TicketListItem> CreateAsync(
         TicketType type,
@@ -45,7 +46,52 @@ public sealed class TicketService
         db.Tickets.Add(entity);
         await db.SaveChangesAsync(ct);
 
-        return new TicketListItem(entity.Id, type, entity.Title, entity.Description, entity.CreatedOn, PriorityScore: 0);
+        return new TicketListItem(entity.Id, type, entity.Title, entity.Description, entity.CreatedOn, PriorityScore: 0, DoneOn: entity.DoneOn);
+    }
+
+    public async Task<bool> MarkDoneAsync(Guid ticketId, CancellationToken ct = default)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+
+        var entity = await db.Tickets.FirstOrDefaultAsync(t => t.Id == ticketId, ct);
+        if (entity is null)
+        {
+            return false;
+        }
+
+        if (entity.DoneOn is not null)
+        {
+            return true;
+        }
+
+        entity.DoneOn = DateTimeOffset.UtcNow;
+
+        await db.TicketPriorities
+            .Where(p => p.TicketId == ticketId)
+            .ExecuteDeleteAsync(ct);
+
+        await db.SaveChangesAsync(ct);
+        return true;
+    }
+
+    public async Task<bool> ReopenAsync(Guid ticketId, CancellationToken ct = default)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+
+        var entity = await db.Tickets.FirstOrDefaultAsync(t => t.Id == ticketId, ct);
+        if (entity is null)
+        {
+            return false;
+        }
+
+        if (entity.DoneOn is null)
+        {
+            return true;
+        }
+
+        entity.DoneOn = null;
+        await db.SaveChangesAsync(ct);
+        return true;
     }
 
     public async Task<bool> DeleteAsync(Guid ticketId, CancellationToken ct = default)
@@ -71,7 +117,7 @@ public sealed class TicketService
 
         var tickets = await db.Tickets
             .AsNoTracking()
-            .Where(t => t.Type == typeInt)
+            .Where(t => t.Type == typeInt && t.DoneOn == null)
             .ToListAsync(ct);
 
         if (tickets.Count == 0)
@@ -95,10 +141,35 @@ public sealed class TicketService
                 Title: t.Title,
                 Description: t.Description,
                 CreatedOn: t.CreatedOn,
-                PriorityScore: scores.TryGetValue(t.Id, out var s) ? s : 0))
+                PriorityScore: scores.TryGetValue(t.Id, out var s) ? s : 0,
+                DoneOn: t.DoneOn))
             .OrderByDescending(x => x.PriorityScore)
             .ThenBy(x => x.CreatedOn)
             .ToArray();
+    }
+
+    public async Task<IReadOnlyList<TicketListItem>> GetDoneOrderedAsync(TicketType type, CancellationToken ct = default)
+    {
+        var typeInt = (int)type;
+
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+
+        var tickets = await db.Tickets
+            .AsNoTracking()
+            .Where(t => t.Type == typeInt && t.DoneOn != null)
+            .OrderByDescending(t => t.DoneOn)
+            .ThenBy(t => t.CreatedOn)
+            .Select(t => new TicketListItem(
+                Id: t.Id,
+                Type: (TicketType)t.Type,
+                Title: t.Title,
+                Description: t.Description,
+                CreatedOn: t.CreatedOn,
+                PriorityScore: 0,
+                DoneOn: t.DoneOn))
+            .ToListAsync(ct);
+
+        return tickets;
     }
 
     public async Task<(Guid? First, Guid? Second, Guid? Third)> GetAdminTop3Async(
@@ -191,7 +262,7 @@ public sealed class TicketService
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
         return await db.Tickets
             .AsNoTracking()
-            .Where(t => t.Type == typeInt)
+            .Where(t => t.Type == typeInt && t.DoneOn == null)
             .OrderBy(t => t.Title)
             .Select(t => new ValueTuple<Guid, string>(t.Id, t.Title))
             .ToListAsync(ct);

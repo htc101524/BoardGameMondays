@@ -279,6 +279,7 @@ try
         // Defensive guard: if a previous deploy ended up with migrations history out of sync
         // (migration marked applied but columns missing), patch the schema so runtime queries don't crash.
         await EnsureSqlServerTeamColumnsAsync(db, app.Logger);
+        await EnsureSqlServerTicketColumnsAsync(db, app.Logger);
     }
 
     // Ensure identity tables exist before assigning roles.
@@ -321,6 +322,35 @@ END;
     {
         // If this fails, keep the exception visible; missing columns will crash later anyway.
         logger.LogCritical(ex, "Failed to ensure team columns exist in SQL Server schema.");
+        throw;
+    }
+}
+
+static async Task EnsureSqlServerTicketColumnsAsync(ApplicationDbContext db, ILogger logger)
+{
+    if (!db.Database.IsSqlServer())
+    {
+        return;
+    }
+
+    const string sql = @"
+IF COL_LENGTH(N'dbo.Tickets', N'DoneOn') IS NULL
+BEGIN
+    ALTER TABLE [dbo].[Tickets] ADD [DoneOn] bigint NULL;
+END;
+";
+
+    try
+    {
+        var affected = await db.Database.ExecuteSqlRawAsync(sql);
+        if (affected != 0)
+        {
+            logger.LogWarning("Patched missing ticket columns in SQL Server schema.");
+        }
+    }
+    catch (Exception ex)
+    {
+        logger.LogCritical(ex, "Failed to ensure ticket columns exist in SQL Server schema.");
         throw;
     }
 }
@@ -575,10 +605,35 @@ CREATE TABLE IF NOT EXISTS Tickets (
     Title TEXT NOT NULL,
     Description TEXT NULL,
     CreatedOn INTEGER NOT NULL,
+    DoneOn INTEGER NULL,
     CreatedByUserId TEXT NULL
 );
 ";
             await createTickets.ExecuteNonQueryAsync();
+        }
+
+        // Tickets.DoneOn
+        var hasTicketDoneOn = false;
+        await using (var cmd = connection.CreateCommand())
+        {
+            cmd.CommandText = "PRAGMA table_info('Tickets');";
+            await using var reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                var name = reader.GetString(1);
+                if (string.Equals(name, "DoneOn", StringComparison.OrdinalIgnoreCase))
+                {
+                    hasTicketDoneOn = true;
+                    break;
+                }
+            }
+        }
+
+        if (!hasTicketDoneOn)
+        {
+            await using var alter = connection.CreateCommand();
+            alter.CommandText = "ALTER TABLE Tickets ADD COLUMN DoneOn INTEGER NULL;";
+            await alter.ExecuteNonQueryAsync();
         }
 
         await using (var createTicketPriorities = connection.CreateCommand())

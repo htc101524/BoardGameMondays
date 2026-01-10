@@ -163,6 +163,45 @@
                 }
             </div>
         }
+
+        @if (_doneBugs.Count > 0)
+        {
+            <hr class="my-4" />
+            <div class="fw-semibold mb-2">Done</div>
+
+            <div class="list-group">
+                @foreach (var t in _doneBugs)
+                {
+                    <div class="list-group-item">
+                        <div class="d-flex justify-content-between align-items-start gap-2">
+                            <div class="fw-semibold d-flex align-items-start gap-2">
+                                <span aria-hidden="true" style="margin-top: -0.05rem; margin-left: -0.25rem; color: var(--bs-purple);">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <circle cx="9" cy="9" r="1" />
+                                        <circle cx="15" cy="9" r="1" />
+                                        <path d="M8 14h8" />
+                                        <path d="M7 12c0-3 2-5 5-5s5 2 5 5v3c0 2-1 4-5 4s-5-2-5-4v-3z" />
+                                        <path d="M4 13h3" />
+                                        <path d="M17 13h3" />
+                                        <path d="M6 19l2-2" />
+                                        <path d="M18 19l-2-2" />
+                                    </svg>
+                                </span>
+                                <span>@t.Title</span>
+                            </div>
+                            <div class="d-flex align-items-center gap-2">
+                                <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => ReopenAsync(t.Id)">Re-Open</button>
+                                <button type="button" class="btn btn-sm btn-outline-danger" @onclick="() => DeleteAsync(t.Id)">Delete</button>
+                            </div>
+                        </div>
+                        @if (!string.IsNullOrWhiteSpace(t.Description))
+                        {
+                            <div class="text-muted mt-1">@t.Description</div>
+                        }
+                    </div>
+                }
+            </div>
+        }
     </div>
 
     <div class="col-12 col-lg-6">
@@ -267,6 +306,38 @@
                 }
             </div>
         }
+
+        @if (_doneFeatures.Count > 0)
+        {
+            <hr class="my-4" />
+            <div class="fw-semibold mb-2">Done</div>
+
+            <div class="list-group">
+                @foreach (var t in _doneFeatures)
+                {
+                    <div class="list-group-item">
+                        <div class="d-flex justify-content-between align-items-start gap-2">
+                            <div class="fw-semibold d-flex align-items-start gap-2">
+                                <span class="text-warning" aria-hidden="true" style="margin-top: -0.05rem; margin-left: -0.25rem;">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M12 2l3.09 6.26L22 9.27l-5 4.87L18.18 22 12 18.77 5.82 22 7 14.14 2 9.27l6.91-1.01L12 2z" />
+                                    </svg>
+                                </span>
+                                <span>@t.Title</span>
+                            </div>
+                            <div class="d-flex align-items-center gap-2">
+                                <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => ReopenAsync(t.Id)">Re-Open</button>
+                                <button type="button" class="btn btn-sm btn-outline-danger" @onclick="() => DeleteAsync(t.Id)">Delete</button>
+                            </div>
+                        </div>
+                        @if (!string.IsNullOrWhiteSpace(t.Description))
+                        {
+                            <div class="text-muted mt-1">@t.Description</div>
+                        }
+                    </div>
+                }
+            </div>
+        }
     </div>
 </div>
 
@@ -304,6 +375,9 @@
     private List<TicketService.TicketListItem> _bugs = new();
     private List<TicketService.TicketListItem> _features = new();
 
+    private List<TicketService.TicketListItem> _doneBugs = new();
+    private List<TicketService.TicketListItem> _doneFeatures = new();
+
     private List<(Guid Id, string Title)> _bugChoices = new();
     private List<(Guid Id, string Title)> _featureChoices = new();
 
@@ -340,6 +414,18 @@
     }
 
     private async Task DoneAsync(Guid ticketId)
+    {
+        await Tickets.MarkDoneAsync(ticketId);
+        await ReloadAsync();
+    }
+
+    private async Task ReopenAsync(Guid ticketId)
+    {
+        await Tickets.ReopenAsync(ticketId);
+        await ReloadAsync();
+    }
+
+    private async Task DeleteAsync(Guid ticketId)
     {
         await Tickets.DeleteAsync(ticketId);
         await ReloadAsync();
@@ -385,6 +471,9 @@
     {
         _bugs = (await Tickets.GetOrderedAsync(TicketType.Bug)).ToList();
         _features = (await Tickets.GetOrderedAsync(TicketType.Feature)).ToList();
+
+        _doneBugs = (await Tickets.GetDoneOrderedAsync(TicketType.Bug)).ToList();
+        _doneFeatures = (await Tickets.GetDoneOrderedAsync(TicketType.Feature)).ToList();
 
         _bugChoices = (await Tickets.GetOpenChoicesAsync(TicketType.Bug)).ToList();
         _featureChoices = (await Tickets.GetOpenChoicesAsync(TicketType.Feature)).ToList();

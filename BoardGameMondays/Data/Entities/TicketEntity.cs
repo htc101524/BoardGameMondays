@@ -13,6 +13,8 @@ public sealed class TicketEntity
 
     public DateTimeOffset CreatedOn { get; set; }
 
+    public DateTimeOffset? DoneOn { get; set; }
+
     public string? CreatedByUserId { get; set; }
 
     public ICollection<TicketPriorityEntity> Priorities { get; set; } = new List<TicketPriorityEntity>();
