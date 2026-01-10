@@ -124,7 +124,7 @@ public sealed class BettingService
 
     public async Task<ResolveResult> ResolveGameAsync(Guid gameNightId, int gameNightGameId, CancellationToken ct = default)
     {
-        // Only resolve for past nights where a winner has been selected.
+        // Only resolve for past nights. A winner may be unset (no winner); in that case all bets are lost.
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
         var game = await db.GameNightGames
             .AsNoTracking()
@@ -143,10 +143,7 @@ public sealed class BettingService
         }
 
         var winnerHasTeam = !string.IsNullOrWhiteSpace(game.WinnerTeamName);
-        if (!winnerHasTeam && game.WinnerMemberId is null)
-        {
-            return ResolveResult.MissingWinner;
-        }
+        // If no winner is selected (neither team nor member), we still resolve: nobody wins.
 
         // Fast path: nothing unresolved.
         var hasUnresolved = await db.GameNightGameBets

@@ -1,5 +1,6 @@
 @using BoardGameMondays.Core
 @using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Components
 @using System.Security.Claims
 @inject BlogService BlogService
 @inject AuthenticationStateProvider AuthStateProvider
@@ -94,7 +95,6 @@ else
                     </div>
                 </Authorized>
             </AuthorizeView>
-            }
         </div>
     </section>
 }
