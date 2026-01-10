@@ -7,6 +7,7 @@
 @inject AuthenticationStateProvider AuthStateProvider
 @inject BettingService BettingService
 @inject BgmCoinService CoinService
+@inject IJSRuntime JS
 
 @implements IDisposable
 
@@ -149,7 +150,7 @@
                             <div class="d-grid gap-2">
                                 @foreach (var game in _selectedNight.Games)
                                 {
-                                    <div class="border rounded p-2" aria-label="Game">
+                                    <div id="mondays-game-@game.Id" class="border rounded p-2 bgm-mondayGameCard" aria-label="Game">
                                         <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
                                             <div class="fw-semibold">@game.GameName</div>
 
@@ -805,6 +806,7 @@
     private readonly Dictionary<(int GameNightGameId, string TeamName), string?> _selectedTeamPlayerByKey = new();
     private IReadOnlyDictionary<int, BettingService.UserBet> _myBets = new Dictionary<int, BettingService.UserBet>();
     private readonly Dictionary<int, List<string>> _clientTeams = new();
+    private readonly Dictionary<int, string?> _paletteImageUrlByGame = new();
 
     protected override async Task OnInitializedAsync()
     {
@@ -867,6 +869,58 @@
 
         _selected = _nextMonday;
         await LoadSelectedAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_selectedNight is null)
+        {
+            return;
+        }
+
+        foreach (var game in _selectedNight.Games)
+        {
+            var id = $"mondays-game-{game.Id}";
+
+            // Resolve board game image via BoardGameService (GameNightGame contains only GameId)
+            string? url = null;
+            try
+            {
+                var bg = await BoardGameService.GetByIdAsync(game.GameId);
+                url = bg?.ImageUrl;
+            }
+            catch
+            {
+                url = null;
+            }
+
+            _paletteImageUrlByGame.TryGetValue(game.Id, out var prev);
+            if (string.Equals(prev, url, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            try
+            {
+                if (string.IsNullOrWhiteSpace(url))
+                {
+                    if (!string.IsNullOrWhiteSpace(prev))
+                    {
+                        await JS.InvokeVoidAsync("bgm.clearPalette", id);
+                        _paletteImageUrlByGame.Remove(game.Id);
+                    }
+                }
+                else
+                {
+                    await JS.InvokeVoidAsync("bgm.applyPaletteFromImage", id, url);
+                    _paletteImageUrlByGame[game.Id] = url;
+                }
+            }
+            catch
+            {
+                // best-effort; ignore palette failures
+            }
+        }
     }
 
     public void Dispose()

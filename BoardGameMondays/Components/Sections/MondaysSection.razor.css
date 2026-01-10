@@ -234,3 +234,28 @@
 .bgm-teamBubble__oddsRow input[type="number"] {
     -moz-appearance: textfield;
 }
+
+/* Per-game card palette background (uses --bgm-c1-rgb / c2 / c3 set by JS) */
+.bgm-mondayGameCard {
+    position: relative;
+    overflow: hidden;
+    border: 1px solid var(--bs-border-color);
+    background:
+        linear-gradient(135deg,
+            rgba(var(--bgm-c1-rgb), 0.06),
+            rgba(var(--bgm-c2-rgb), 0.04) 45%,
+            rgba(var(--bgm-c3-rgb), 0.03)
+        );
+}
+
+.bgm-mondayGameCard.has-art::before {
+    content: "";
+    position: absolute;
+    inset: -12px;
+    background-image: var(--bgm-game-art);
+    background-size: cover;
+    background-position: center;
+    filter: blur(8px) saturate(1.05);
+    opacity: 0.20;
+    transform: scale(1.03);
+}
