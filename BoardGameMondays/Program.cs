@@ -275,6 +275,10 @@ try
     {
         // Production workflow (Azure SQL): use EF migrations.
         await db.Database.MigrateAsync();
+
+        // Defensive guard: if a previous deploy ended up with migrations history out of sync
+        // (migration marked applied but columns missing), patch the schema so runtime queries don't crash.
+        await EnsureSqlServerTeamColumnsAsync(db, app.Logger);
     }
 
     // Ensure identity tables exist before assigning roles.
@@ -284,6 +288,41 @@ catch (Exception ex)
 {
     app.Logger.LogCritical(ex, "Fatal error during application startup.");
     throw;
+}
+
+static async Task EnsureSqlServerTeamColumnsAsync(ApplicationDbContext db, ILogger logger)
+{
+    if (!db.Database.IsSqlServer())
+    {
+        return;
+    }
+
+    const string sql = @"
+IF COL_LENGTH(N'dbo.GameNightGames', N'WinnerTeamName') IS NULL
+BEGIN
+    ALTER TABLE [dbo].[GameNightGames] ADD [WinnerTeamName] nvarchar(64) NULL;
+END;
+
+IF COL_LENGTH(N'dbo.GameNightGamePlayers', N'TeamName') IS NULL
+BEGIN
+    ALTER TABLE [dbo].[GameNightGamePlayers] ADD [TeamName] nvarchar(64) NULL;
+END;
+";
+
+    try
+    {
+        var affected = await db.Database.ExecuteSqlRawAsync(sql);
+        if (affected != 0)
+        {
+            logger.LogWarning("Patched missing team columns in SQL Server schema.");
+        }
+    }
+    catch (Exception ex)
+    {
+        // If this fails, keep the exception visible; missing columns will crash later anyway.
+        logger.LogCritical(ex, "Failed to ensure team columns exist in SQL Server schema.");
+        throw;
+    }
 }
 
 static async Task EnsureAdminRoleAssignmentsAsync(IServiceProvider services)
