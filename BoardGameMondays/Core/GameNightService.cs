@@ -23,6 +23,8 @@ public sealed class GameNightService
             .ThenInclude(g => g.Players)
             .ThenInclude(p => p.Member)
             .Include(n => n.Games)
+            .ThenInclude(g => g.Teams)
+            .Include(n => n.Games)
             .ThenInclude(g => g.WinnerMember)
             .Include(n => n.Games)
             .ThenInclude(g => g.Odds)
@@ -379,6 +381,66 @@ public sealed class GameNightService
         return await GetByIdAsync(gameNightId, ct);
     }
 
+    public async Task<GameNight?> SetTeamColorAsync(Guid gameNightId, int gameNightGameId, string teamName, string? colorHex, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(teamName)) return await GetByIdAsync(gameNightId, ct);
+
+        teamName = teamName.Trim();
+        colorHex = string.IsNullOrWhiteSpace(colorHex) ? null : colorHex.Trim();
+
+        if (colorHex is not null && colorHex.Length > 16)
+        {
+            colorHex = colorHex.Substring(0, 16);
+        }
+
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+
+        var game = await db.GameNightGames
+            .FirstOrDefaultAsync(g => g.Id == gameNightGameId && g.GameNightId == gameNightId, ct);
+
+        if (game is null)
+        {
+            return null;
+        }
+
+        // Ensure a record exists for this team on this game-night-game.
+        var existing = await db.GameNightGameTeams
+            .FirstOrDefaultAsync(t => t.GameNightGameId == gameNightGameId && t.TeamName == teamName, ct);
+
+        if (existing is null)
+        {
+            if (colorHex is null)
+            {
+                // nothing to do
+                return await GetByIdAsync(gameNightId, ct);
+            }
+
+            existing = new GameNightGameTeamEntity
+            {
+                GameNightGameId = gameNightGameId,
+                TeamName = teamName,
+                ColorHex = colorHex
+            };
+
+            db.GameNightGameTeams.Add(existing);
+        }
+        else
+        {
+            if (colorHex is null)
+            {
+                // Treat null as "use default/background"; remove the row to keep the table clean.
+                db.GameNightGameTeams.Remove(existing);
+            }
+            else
+            {
+                existing.ColorHex = colorHex;
+            }
+        }
+
+        await db.SaveChangesAsync(ct);
+        return await GetByIdAsync(gameNightId, ct);
+    }
+
     public async Task<IReadOnlyList<MemberOption>> GetAllMembersAsync(CancellationToken ct = default)
     {
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
@@ -534,6 +596,11 @@ public sealed class GameNightService
                     .Select(o => new GameNightGameOdds(o.MemberId, o.Member.Name, o.OddsTimes100))
                     .ToArray();
 
+                var teams = g.Teams
+                    .OrderBy(t => t.Id)
+                    .Select(t => new GameNightGameTeam(t.TeamName, t.ColorHex))
+                    .ToArray();
+
                 GameNightWinner? winner = null;
                 if (!string.IsNullOrWhiteSpace(g.WinnerTeamName))
                 {
@@ -546,7 +613,7 @@ public sealed class GameNightService
 
                 var isSettled = g.Bets.Count == 0 || g.Bets.All(b => b.IsResolved);
 
-                return new GameNightGame(g.Id, g.GameId, g.Game.Name, g.IsPlayed, g.IsConfirmed, isSettled, players, odds, winner);
+                return new GameNightGame(g.Id, g.GameId, g.Game.Name, g.IsPlayed, g.IsConfirmed, isSettled, players, odds, teams, winner);
             })
             .ToArray();
 
@@ -568,11 +635,13 @@ public sealed class GameNightService
 
     public sealed record GameNightAttendee(Guid MemberId, string MemberName);
 
-    public sealed record GameNightGame(int Id, Guid GameId, string GameName, bool IsPlayed, bool IsConfirmed, bool IsSettled, IReadOnlyList<GameNightGamePlayer> Players, IReadOnlyList<GameNightGameOdds> Odds, GameNightWinner? Winner);
+    public sealed record GameNightGame(int Id, Guid GameId, string GameName, bool IsPlayed, bool IsConfirmed, bool IsSettled, IReadOnlyList<GameNightGamePlayer> Players, IReadOnlyList<GameNightGameOdds> Odds, IReadOnlyList<GameNightGameTeam> Teams, GameNightWinner? Winner);
 
     public sealed record GameNightGamePlayer(Guid MemberId, string MemberName, string? TeamName);
 
     public sealed record GameNightGameOdds(Guid MemberId, string MemberName, int OddsTimes100);
+
+    public sealed record GameNightGameTeam(string TeamName, string? ColorHex);
 
     public sealed record GameNightWinner(Guid? MemberId, string Name, bool IsTeam);
 

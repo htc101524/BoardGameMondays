@@ -11,7 +11,7 @@
 
 @implements IDisposable
 
-<section id="mondays" class="home-section bgm-mondaysSection" aria-label="Mondays">
+<section id="mondays" class="home-section bgm-mondaysSection" aria-label="Mondays" @ref="_mondaysSectionRef">
     <div class="home-section__inner">
         <h1>Mondays</h1>
 
@@ -211,8 +211,12 @@
                                                             }
                                                         }
 
-                                                        <div class="bgm-teamBubble" aria-label="Team">
-                                                            @{ var isClientTeam = _clientTeams.TryGetValue(game.Id, out var _ct2) && _ct2.Contains(team); }
+                                                        var colorHex = GetTeamColor(game, team);
+                                                        var textColor = GetContrastingText(colorHex);
+                                                        var isClientTeam = _clientTeams.TryGetValue(game.Id, out var _ct2) && _ct2.Contains(team);
+                                                        var removeBorder = ShouldRemoveTeamBorder(colorHex);
+
+                                                        <div class="bgm-teamBubble @(removeBorder ? "bgm-teamBubble--noBorder" : "")" aria-label="Team" style="@(colorHex is null ? string.Empty : $"background-color: {colorHex}; color: {textColor};")">
                                                             <div class="bgm-teamBubble__header">
                                                                 @if (isClientTeam && _isAdmin && !game.IsConfirmed)
                                                                 {
@@ -222,13 +226,14 @@
                                                                 {
                                                                     <div class="fw-semibold">@team</div>
                                                                 }
+
                                                             </div>
 
                                                             <div class="bgm-teamBubble__players" aria-label="Players">
                                                                 @foreach (var player in teamPlayers)
                                                                 {
                                                                     <div class="bgm-teamBubble__playerRow">
-                                                                        <span class="badge text-bg-light">@player.MemberName</span>
+                                                                        <span class="bgm-teamBubble__playerName">@player.MemberName</span>
 
                                                                         @if (_isAdmin && !game.IsConfirmed)
                                                                         {
@@ -263,6 +268,15 @@
                                                                             @onclick="() => AddSelectedPlayerToTeamAsync(game.Id, team)">
                                                                         Add
                                                                     </button>
+                                                                </div>
+
+                                                                <div class="bgm-teamBubble__colorRow" aria-label="Choose colour">
+                                                                    <div class="text-muted small">Choose colour:</div>
+                                                                    <input type="color"
+                                                                           class="form-control form-control-color form-control-sm"
+                                                                           value="@(NormalizeColor(colorHex ?? _mondaysSectionBackgroundHex))"
+                                                                           disabled="@_saving"
+                                                                           @onchange="e => ChangeTeamColorAsync(game.Id, team, e.Value?.ToString())" />
                                                                 </div>
                                                             }
 
@@ -323,7 +337,7 @@
                                                                 @foreach (var player in soloPlayers)
                                                                 {
                                                                     <div class="bgm-teamBubble__playerRow">
-                                                                        <span class="badge text-bg-light">@player.MemberName</span>
+                                                                        <span class="bgm-teamBubble__playerName">@player.MemberName</span>
 
                                                                         @if (_isAdmin && !game.IsConfirmed)
                                                                         {
@@ -808,6 +822,9 @@
     private readonly Dictionary<int, List<string>> _clientTeams = new();
     private readonly Dictionary<int, string?> _paletteImageUrlByGame = new();
 
+    private ElementReference _mondaysSectionRef;
+    private string? _mondaysSectionBackgroundHex;
+
     protected override async Task OnInitializedAsync()
     {
         var today = DateOnly.FromDateTime(DateTime.Today);
@@ -876,6 +893,18 @@
         if (_selectedNight is null)
         {
             return;
+        }
+
+        if (firstRender)
+        {
+            try
+            {
+                _mondaysSectionBackgroundHex = await JS.InvokeAsync<string?>("bgm.getBackgroundHex", _mondaysSectionRef);
+            }
+            catch
+            {
+                _mondaysSectionBackgroundHex = null;
+            }
         }
 
         foreach (var game in _selectedNight.Games)
@@ -1351,6 +1380,83 @@
         {
             _saving = false;
         }
+    }
+
+    private string? GetTeamColor(GameNightService.GameNightGame game, string teamName)
+        => game.Teams?.FirstOrDefault(t => string.Equals(t.TeamName, teamName, StringComparison.OrdinalIgnoreCase))?.ColorHex;
+
+    private async Task ChangeTeamColorAsync(int gameNightGameId, string teamName, string? color)
+    {
+        if (!_isAdmin || _selectedNight is null)
+        {
+            return;
+        }
+
+        _saving = true;
+        _status = null;
+        try
+        {
+            _selectedNight = await GameNightService.SetTeamColorAsync(_selectedNight.Id, gameNightGameId, teamName, color);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private static string NormalizeColor(string? hex)
+    {
+        if (string.IsNullOrWhiteSpace(hex)) return "#ffffff";
+        var h = hex.Trim();
+        if (!h.StartsWith("#")) h = "#" + h;
+        if (h.Length == 4)
+        {
+            // #rgb -> #rrggbb
+            return "#" + string.Concat(h[1], h[1], h[2], h[2], h[3], h[3]);
+        }
+        if (h.Length >= 7) return h.Substring(0, 7);
+        if (h.Length == 6) return "#" + h;
+        return "#ffffff";
+    }
+
+    private static string GetContrastingText(string? hex)
+    {
+        if (string.IsNullOrWhiteSpace(hex)) return "#000";
+        var h = hex.TrimStart('#');
+        if (h.Length == 3) h = string.Concat(h[0], h[0], h[1], h[1], h[2], h[2]);
+        if (h.Length < 6) return "#000";
+        try
+        {
+            var r = int.Parse(h.Substring(0, 2), NumberStyles.HexNumber);
+            var g = int.Parse(h.Substring(2, 2), NumberStyles.HexNumber);
+            var b = int.Parse(h.Substring(4, 2), NumberStyles.HexNumber);
+            var brightness = (299 * r + 587 * g + 114 * b) / 1000;
+            return brightness > 128 ? "#000" : "#fff";
+        }
+        catch
+        {
+            return "#000";
+        }
+    }
+
+    private bool ShouldRemoveTeamBorder(string? colorHex)
+    {
+        if (string.IsNullOrWhiteSpace(colorHex))
+        {
+            return false;
+        }
+
+        // If we can't determine the section background (e.g. JS interop failed), still remove the border
+        // for custom colours; it generally looks better.
+        if (string.IsNullOrWhiteSpace(_mondaysSectionBackgroundHex))
+        {
+            return true;
+        }
+
+        return !string.Equals(
+            NormalizeColor(colorHex),
+            NormalizeColor(_mondaysSectionBackgroundHex),
+            StringComparison.OrdinalIgnoreCase);
     }
 
     private async Task SetTeamWinnerAsync(int gameNightGameId, string? value)

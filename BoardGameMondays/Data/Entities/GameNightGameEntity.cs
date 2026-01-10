@@ -35,6 +35,8 @@ public sealed class GameNightGameEntity
 
     public List<GameNightGamePlayerEntity> Players { get; set; } = new();
 
+    public List<GameNightGameTeamEntity> Teams { get; set; } = new();
+
     public List<GameNightGameOddsEntity> Odds { get; set; } = new();
 
     public List<GameNightGameBetEntity> Bets { get; set; } = new();

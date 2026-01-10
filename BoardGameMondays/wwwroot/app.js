@@ -32,6 +32,35 @@ window.bgm.scrollToIdNextFrame = (id, behavior) => {
     });
 };
 
+window.bgm.getBackgroundHex = (element) => {
+    const toHex2 = (n) => {
+        const h = Number(n).toString(16);
+        return h.length === 1 ? "0" + h : h;
+    };
+
+    const rgbStringToHex = (rgb) => {
+        if (!rgb) return null;
+        const m = rgb.match(/rgba?\((\d+)\s*,\s*(\d+)\s*,\s*(\d+)(?:\s*,\s*([0-9.]+))?\)/i);
+        if (!m) return null;
+        const r = Math.max(0, Math.min(255, Number(m[1]) || 0));
+        const g = Math.max(0, Math.min(255, Number(m[2]) || 0));
+        const b = Math.max(0, Math.min(255, Number(m[3]) || 0));
+        return "#" + toHex2(r) + toHex2(g) + toHex2(b);
+    };
+
+    // If background is transparent, walk up until we find something non-transparent.
+    let el = element;
+    while (el) {
+        const bg = window.getComputedStyle(el).backgroundColor;
+        if (bg && bg !== "transparent" && !bg.startsWith("rgba(0, 0, 0, 0")) {
+            return rgbStringToHex(bg);
+        }
+        el = el.parentElement;
+    }
+
+    return null;
+};
+
 // Extract a lightweight 3-color palette from an image and apply it to an element as CSS vars.
 // Vars set: --bgm-c1-rgb, --bgm-c2-rgb, --bgm-c3-rgb (comma-separated RGB, e.g. "123, 45, 67")
 (() => {

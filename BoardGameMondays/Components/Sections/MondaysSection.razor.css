@@ -158,6 +158,10 @@
     min-height: 220px;
 }
 
+.bgm-teamBubble--noBorder {
+    border-color: transparent;
+}
+
 .bgm-teamBubble__header {
     line-height: 1.1;
 }
@@ -175,10 +179,34 @@
     gap: 8px;
 }
 
+.bgm-teamBubble__playerName {
+    font-weight: 500;
+    font-size: 0.95rem;
+    color: rgba(0,0,0,0.6); /* subtle default */
+}
+
+/* When the bubble is coloured, allow player names to inherit the computed text color */
+.bgm-teamBubble--noBorder .bgm-teamBubble__playerName {
+    color: inherit;
+}
+
+.bgm-teamBubble__header .fw-semibold {
+    font-size: 1.125rem;
+    font-weight: 700;
+    letter-spacing: 0.2px;
+}
+
 .bgm-teamBubble__footer {
     display: flex;
     gap: 8px;
     align-items: center;
+}
+
+.bgm-teamBubble__colorRow {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
 }
 
 .bgm-teamBubble__footer select {

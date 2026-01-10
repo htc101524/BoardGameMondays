@@ -22,6 +22,7 @@ public sealed class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<GameNightAttendeeEntity> GameNightAttendees => Set<GameNightAttendeeEntity>();
     public DbSet<GameNightGameEntity> GameNightGames => Set<GameNightGameEntity>();
     public DbSet<GameNightGamePlayerEntity> GameNightGamePlayers => Set<GameNightGamePlayerEntity>();
+    public DbSet<GameNightGameTeamEntity> GameNightGameTeams => Set<GameNightGameTeamEntity>();
     public DbSet<GameNightGameOddsEntity> GameNightGameOdds => Set<GameNightGameOddsEntity>();
     public DbSet<GameNightGameBetEntity> GameNightGameBets => Set<GameNightGameBetEntity>();
     public DbSet<BlogPostEntity> BlogPosts => Set<BlogPostEntity>();
@@ -63,6 +64,14 @@ public sealed class ApplicationDbContext : IdentityDbContext<ApplicationUser>
         builder.Entity<GameNightGameEntity>()
             .Property(x => x.WinnerTeamName)
             .HasMaxLength(64);
+
+        builder.Entity<GameNightGameTeamEntity>()
+            .Property(x => x.TeamName)
+            .HasMaxLength(64);
+
+        builder.Entity<GameNightGameTeamEntity>()
+            .Property(x => x.ColorHex)
+            .HasMaxLength(16);
 
         builder.Entity<GameNightGamePlayerEntity>()
             .Property(x => x.CreatedOn)
@@ -194,6 +203,16 @@ public sealed class ApplicationDbContext : IdentityDbContext<ApplicationUser>
 
         builder.Entity<GameNightGamePlayerEntity>()
             .HasIndex(x => new { x.GameNightGameId, x.MemberId })
+            .IsUnique();
+
+        builder.Entity<GameNightGameTeamEntity>()
+            .HasOne(x => x.GameNightGame)
+            .WithMany(x => x.Teams)
+            .HasForeignKey(x => x.GameNightGameId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Entity<GameNightGameTeamEntity>()
+            .HasIndex(x => new { x.GameNightGameId, x.TeamName })
             .IsUnique();
 
         builder.Entity<GameNightGameOddsEntity>()

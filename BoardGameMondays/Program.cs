@@ -787,6 +787,29 @@ CREATE TABLE IF NOT EXISTS GameNightGamePlayers (
             await alter.ExecuteNonQueryAsync();
         }
 
+        // Per-game team colours table
+        await using (var createGameNightGameTeams = connection.CreateCommand())
+        {
+            createGameNightGameTeams.CommandText = @"
+CREATE TABLE IF NOT EXISTS GameNightGameTeams (
+    Id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    GameNightGameId INTEGER NOT NULL,
+    TeamName TEXT NOT NULL,
+    ColorHex TEXT NULL,
+    FOREIGN KEY (GameNightGameId) REFERENCES GameNightGames(Id) ON DELETE CASCADE
+);
+";
+            await createGameNightGameTeams.ExecuteNonQueryAsync();
+        }
+
+        await using (var createGameNightGameTeamsIndexes = connection.CreateCommand())
+        {
+            createGameNightGameTeamsIndexes.CommandText = @"
+CREATE UNIQUE INDEX IF NOT EXISTS IX_GameNightGameTeams_NightGame_Team ON GameNightGameTeams(GameNightGameId, TeamName);
+";
+            await createGameNightGameTeamsIndexes.ExecuteNonQueryAsync();
+        }
+
         // Betting odds + bets
         await using (var createOdds = connection.CreateCommand())
         {
