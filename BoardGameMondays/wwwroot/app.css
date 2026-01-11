@@ -50,6 +50,7 @@ textarea,
     --bgm-c1-rgb: var(--bs-warning-rgb);
     --bgm-c2-rgb: var(--bs-primary-rgb);
     --bgm-c3-rgb: var(--bs-secondary-rgb);
+    --bgm-thoughts-progress: 0;
     /* Place the header band at the very top of this section */
     padding-top: 0;
     /* Prevent tiny horizontal overflow from full-bleed backgrounds */
@@ -175,6 +176,35 @@ textarea,
 .bgm-thoughtsHero__title {
     margin: 0;
     line-height: 1.05;
+
+    /* Scroll-driven "faded -> neon" fill from left-to-right. */
+    --bgm-thoughts-fill: calc(var(--bgm-thoughts-progress, 0) * 100%);
+    /* Switch color from the bleed color (c1) at rest to the game's secondary color (c2) as fill progresses. */
+    /* If c2 is very light, use the computed darker variant `--bgm-c2-contrast-rgb` instead. */
+    color: color-mix(
+        in srgb,
+        rgb(var(--bgm-c2-contrast-rgb, var(--bgm-c2-rgb))) var(--bgm-thoughts-fill),
+        rgb(var(--bgm-c1-rgb)) calc(100% - var(--bgm-thoughts-fill))
+    );
+    will-change: color;
+}
+
+@supports not ((-webkit-background-clip: text) or (background-clip: text)) {
+    .bgm-thoughtsHero__title {
+        background: none;
+        color: rgba(var(--bs-emphasis-color-rgb), 0.85);
+        -webkit-text-fill-color: currentColor;
+        text-shadow: none;
+    }
+}
+
+/* Keep the score badge clean and legible (no blurs). */
+#thoughts .bgm-thoughtsHero__rating .bgm-scoreBadge {
+    --bgm-p: var(--bgm-thoughts-progress, 0);
+    transform: translateY(calc(-2px * var(--bgm-p))) scale(calc(1 + var(--bgm-p) * 0.04));
+    box-shadow: none;
+    border: 1px solid color-mix(in srgb, rgb(var(--bgm-c1-rgb)) 84%, rgb(0 0 0) 16%);
+    will-change: transform;
 }
 
 .bgm-thoughtsHero__tagline {

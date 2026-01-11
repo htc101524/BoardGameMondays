@@ -278,6 +278,63 @@ window.bgm.getBackgroundHex = (element) => {
             el.style.setProperty("--bgm-c1-rgb", palette.c1);
             el.style.setProperty("--bgm-c2-rgb", palette.c2);
             el.style.setProperty("--bgm-c3-rgb", palette.c3);
+
+            // Compute contrast-aware fallback variants for c1 and c2.
+            const parseRgb = (s) => s.split(',').map(x => Number(x.trim()) || 0);
+            const toRgbString = (r, g, b) => `${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)}`;
+
+            const srgbToLinear = (v) => {
+                v = v / 255;
+                return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+            };
+            const luminanceFromRgb = (rgb) => {
+                return 0.2126 * srgbToLinear(rgb[0]) + 0.7152 * srgbToLinear(rgb[1]) + 0.0722 * srgbToLinear(rgb[2]);
+            };
+            const contrastRatio = (L1, L2) => {
+                const lighter = Math.max(L1, L2);
+                const darker = Math.min(L1, L2);
+                return (lighter + 0.05) / (darker + 0.05);
+            };
+
+            // Get computed background colour for the element (fall back to white if transparent)
+            const bgCss = window.getComputedStyle(el).backgroundColor;
+            const m = (bgCss || '').match(/rgba?\((\d+)\s*,\s*(\d+)\s*,\s*(\d+)(?:\s*,\s*([0-9.]+))?\)/i);
+            const bgRgb = m ? [Number(m[1]), Number(m[2]), Number(m[3])] : [255, 255, 255];
+            const bgL = luminanceFromRgb(bgRgb);
+
+            try {
+                for (let i = 0; i < 2; i++) {
+                    const key = i === 0 ? 'c1' : 'c2';
+                    const raw = parseRgb(palette[key]);
+
+                    // Candidate palette color
+                    const cand = raw;
+                    const candL = luminanceFromRgb(cand);
+                    let best = { rgb: cand, ratio: contrastRatio(candL, bgL) };
+
+                    // Candidate fallback mixes to try
+                    const ensureCandidates = [
+                        [cand[0] * 0.66, cand[1] * 0.66, cand[2] * 0.66], // moderate darken
+                        [cand[0] * 0.45, cand[1] * 0.45, cand[2] * 0.45], // stronger darken
+                        [0, 0, 0], // black
+                        [255, 255, 255] // white
+                    ];
+
+                    for (const c of ensureCandidates) {
+                        const Lc = luminanceFromRgb(c);
+                        const r = contrastRatio(Lc, bgL);
+                        if (r > best.ratio) {
+                            best = { rgb: c, ratio: r };
+                        }
+                    }
+
+                    // Set the contrast var to the best candidate (prefer >= 4.5 but fall back to best available)
+                    el.style.setProperty("--bgm-" + key + "-contrast-rgb", toRgbString(best.rgb[0], best.rgb[1], best.rgb[2]));
+                }
+            }
+            catch (e) {
+                // ignore parsing failures
+            }
             el.dataset.bgmPalette = "1";
             return true;
         } catch {
@@ -296,3 +353,75 @@ window.bgm.getBackgroundHex = (element) => {
         el.dataset.bgmPalette = "0";
     };
 })();
+
+// Bind a lightweight scroll progress value (0..1) to the Thoughts section as CSS variable.
+// Used for scroll-driven styling (title fill + score highlight).
+window.bgm.bindThoughtsScrollProgress = (sectionId) => {
+    const clamp = (n, min, max) => Math.max(min, Math.min(max, n));
+
+    let disposed = false;
+    let raf = 0;
+
+    const update = () => {
+        if (disposed) {
+            return;
+        }
+
+        const root = sectionId ? document.getElementById(sectionId) : null;
+        if (!root) {
+            return;
+        }
+
+        const title = root.querySelector(".bgm-thoughtsHero__title") || root;
+        const rect = title.getBoundingClientRect();
+
+        // Progress 0 when the title is near the bottom of the viewport; 1 when it's near the top.
+        const start = window.innerHeight * 0.85;
+        const end = window.innerHeight * 0.25;
+        const denom = (start - end) || 1;
+        const progress = clamp((start - rect.top) / denom, 0, 1);
+
+        root.style.setProperty("--bgm-thoughts-progress", progress.toFixed(4));
+        // Transient value: 1 when not filled, 0 when fully filled. Use to fade transient glows.
+        const transient = Math.max(0, 1 - progress);
+        root.style.setProperty("--bgm-thoughts-transient", transient.toFixed(4));
+    };
+
+    const schedule = () => {
+        if (disposed) {
+            return;
+        }
+
+        if (raf) {
+            return;
+        }
+
+        raf = window.requestAnimationFrame(() => {
+            raf = 0;
+            update();
+        });
+    };
+
+    window.addEventListener("scroll", schedule, { passive: true });
+    window.addEventListener("resize", schedule, { passive: true });
+
+    // Initial value
+    update();
+
+    // Always return a disposable object so Blazor can safely dispose it.
+    return {
+        dispose: () => {
+            if (disposed) {
+                return;
+            }
+
+            disposed = true;
+            window.removeEventListener("scroll", schedule);
+            window.removeEventListener("resize", schedule);
+            if (raf) {
+                window.cancelAnimationFrame(raf);
+                raf = 0;
+            }
+        }
+    };
+};

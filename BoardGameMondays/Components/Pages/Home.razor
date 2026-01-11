@@ -1,6 +1,7 @@
 ﻿@page "/"
 
 @implements IDisposable
+@implements IAsyncDisposable
 
 @using BoardGameMondays.Core
 @using BoardGameMondays.Components.Sections
@@ -371,6 +372,8 @@
 
     private string? _paletteImageUrl;
 
+    private IJSObjectReference? _thoughtsScrollBinder;
+
     private int? _myAgreement;
     private bool _savingAgreement;
     private string? _agreementStatus;
@@ -390,6 +393,17 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        if (firstRender && _thoughtsScrollBinder is null)
+        {
+            try
+            {
+                _thoughtsScrollBinder = await JS.InvokeAsync<IJSObjectReference>("bgm.bindThoughtsScrollProgress", "thoughts");
+            }
+            catch
+            {
+            }
+        }
+
         var url = _thoughtsGame?.ImageUrl;
         if (string.IsNullOrWhiteSpace(url))
         {
@@ -466,6 +480,32 @@
     {
         Navigation.LocationChanged -= OnLocationChanged;
         BoardGameService.Changed -= OnBoardGameServiceChanged;
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_thoughtsScrollBinder is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await _thoughtsScrollBinder.InvokeVoidAsync("dispose");
+        }
+        catch
+        {
+        }
+
+        try
+        {
+            await _thoughtsScrollBinder.DisposeAsync();
+        }
+        catch
+        {
+        }
+
+        _thoughtsScrollBinder = null;
     }
 
     private void SelectReview(Review review)
