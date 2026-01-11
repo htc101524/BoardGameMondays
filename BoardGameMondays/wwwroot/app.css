@@ -50,13 +50,16 @@ textarea,
     --bgm-c1-rgb: var(--bs-warning-rgb);
     --bgm-c2-rgb: var(--bs-primary-rgb);
     --bgm-c3-rgb: var(--bs-secondary-rgb);
+    /* Place the header band at the very top of this section */
+    padding-top: 0;
+    /* Prevent tiny horizontal overflow from full-bleed backgrounds */
+    overflow-x: clip;
 }
 
 #thoughts .home-section__inner {
-    background: rgba(var(--bgm-c3-rgb), 0.08);
-    border: 2px solid rgba(var(--bgm-c3-rgb), 0.22);
+    background: transparent;
     border-radius: var(--bs-border-radius-xl);
-    padding: 18px;
+    padding: 0 18px 18px;
 }
 
 #games.home-section {
@@ -79,18 +82,34 @@ textarea,
 }
 
 .bgm-thoughtsHeader {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 18px;
+    /* Centered content, with a full-bleed c1 band behind it. */
+    position: relative;
+    padding: 18px 0;
     margin-bottom: 18px;
-    flex-wrap: wrap;
+}
+
+.bgm-thoughtsHeader::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 100vw;
+    background: rgb(var(--bgm-c1-rgb));
+    pointer-events: none;
+}
+
+.bgm-thoughtsHeader > * {
+    position: relative;
+    z-index: 1;
 }
 
 .bgm-thoughtsHero {
     position: relative;
-    width: 100%;
-    border: 8px solid rgb(var(--bgm-c1-rgb));
+    width: min(980px, 92vw);
+    margin: 0 auto;
+    border: none;
     border-radius: var(--bs-border-radius-lg);
     background:
         linear-gradient(135deg,
