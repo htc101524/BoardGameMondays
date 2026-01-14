@@ -20,6 +20,7 @@ public sealed class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<TicketPriorityEntity> TicketPriorities => Set<TicketPriorityEntity>();
     public DbSet<GameNightEntity> GameNights => Set<GameNightEntity>();
     public DbSet<GameNightAttendeeEntity> GameNightAttendees => Set<GameNightAttendeeEntity>();
+    public DbSet<GameNightRsvpEntity> GameNightRsvps => Set<GameNightRsvpEntity>();
     public DbSet<GameNightGameEntity> GameNightGames => Set<GameNightGameEntity>();
     public DbSet<GameNightGamePlayerEntity> GameNightGamePlayers => Set<GameNightGamePlayerEntity>();
     public DbSet<GameNightGameTeamEntity> GameNightGameTeams => Set<GameNightGameTeamEntity>();
@@ -56,6 +57,12 @@ public sealed class ApplicationDbContext : IdentityDbContext<ApplicationUser>
                 fromDb => new DateTimeOffset(new DateTime(fromDb, DateTimeKind.Utc)));
 
         builder.Entity<GameNightAttendeeEntity>()
+            .Property(x => x.CreatedOn)
+            .HasConversion(
+                toDb => toDb.UtcDateTime.Ticks,
+                fromDb => new DateTimeOffset(new DateTime(fromDb, DateTimeKind.Utc)));
+
+        builder.Entity<GameNightRsvpEntity>()
             .Property(x => x.CreatedOn)
             .HasConversion(
                 toDb => toDb.UtcDateTime.Ticks,
@@ -170,6 +177,22 @@ public sealed class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             .OnDelete(DeleteBehavior.Cascade);
 
         builder.Entity<GameNightAttendeeEntity>()
+            .HasIndex(x => new { x.GameNightId, x.MemberId })
+            .IsUnique();
+
+        builder.Entity<GameNightRsvpEntity>()
+            .HasOne(x => x.GameNight)
+            .WithMany(x => x.Rsvps)
+            .HasForeignKey(x => x.GameNightId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Entity<GameNightRsvpEntity>()
+            .HasOne(x => x.Member)
+            .WithMany()
+            .HasForeignKey(x => x.MemberId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Entity<GameNightRsvpEntity>()
             .HasIndex(x => new { x.GameNightId, x.MemberId })
             .IsUnique();
 

@@ -127,7 +127,7 @@
                             <div class="mt-2 d-flex align-items-center gap-2 flex-wrap" aria-label="Add attendee">
                                 <select class="form-select form-select-sm" style="max-width: 360px" @bind="_selectedMemberId">
                                     <option value="">Add a member…</option>
-                                    @foreach (var m in _allMembers)
+                                    @foreach (var m in _allMembers.Where(m => !_selectedNight.Attendees.Any(a => a.MemberId == m.Id) && !_declinedMemberIds.Contains(m.Id)))
                                     {
                                         <option value="@m.Id">@m.Name</option>
                                     }
@@ -169,6 +169,17 @@
                                                         Confirm
                                                     </button>
                                                 }
+                                            }
+
+                                            @if (_isAdmin && !game.IsConfirmed)
+                                            {
+                                                <button type="button"
+                                                        class="btn btn-sm btn-outline-danger"
+                                                        disabled="@_saving"
+                                                        title="Remove this game from the night"
+                                                        @onclick="() => RemoveGameAsync(game.Id)">
+                                                    Remove
+                                                </button>
                                             }
 
                                             @if (game.Winner is not null)
@@ -806,6 +817,7 @@
     private bool _saving;
     private string? _status;
     private bool _amAttending;
+    private HashSet<Guid> _declinedMemberIds = new();
     private string? _selectedGameId;
     private string? _selectedMemberId;
     private readonly Dictionary<int, string?> _selectedPlayerByGameId = new();
@@ -977,6 +989,7 @@
         {
             _selectedNight = await GameNightService.GetByDateAsync(_selected);
             _amAttending = _memberId is { } me && _selectedNight?.Attendees.Any(a => a.MemberId == me) == true;
+            _declinedMemberIds = _selectedNight?.Rsvps.Where(r => !r.IsAttending).Select(r => r.MemberId).ToHashSet() ?? new();
             _recapEdit = _selectedNight?.Recap ?? string.Empty;
             _recapStatus = null;
 
@@ -1072,6 +1085,7 @@
         {
             _selectedNight = await GameNightService.CreateAsync(_selected);
             _amAttending = _memberId is { } me && _selectedNight.Attendees.Any(a => a.MemberId == me);
+            _declinedMemberIds = _selectedNight.Rsvps.Where(r => !r.IsAttending).Select(r => r.MemberId).ToHashSet();
         }
         finally
         {
@@ -1090,9 +1104,10 @@
         _status = null;
         try
         {
-            var updated = await GameNightService.SetAttendingAsync(_selectedNight.Id, _memberId.Value, attending);
+            var updated = await GameNightService.SetRsvpAsync(_selectedNight.Id, _memberId.Value, attending);
             _selectedNight = updated;
             _amAttending = attending;
+            _declinedMemberIds = _selectedNight?.Rsvps.Where(r => !r.IsAttending).Select(r => r.MemberId).ToHashSet() ?? new();
         }
         finally
         {
@@ -1231,6 +1246,8 @@
             return;
         }
 
+        var nightId = _selectedNight.Id;
+
         if (!_selectedPlayerByGameId.TryGetValue(gameNightGameId, out var raw) || !Guid.TryParse(raw, out var memberId))
         {
             return;
@@ -1244,8 +1261,8 @@
         _status = null;
         try
         {
-            _selectedNight = await GameNightService.AddPlayerAsync(_selectedNight.Id, gameNightGameId, memberId);
-            _selectedNight = await GameNightService.SetPlayerTeamAsync(_selectedNight.Id, gameNightGameId, memberId, teamName);
+            _selectedNight = await GameNightService.AddPlayerAsync(nightId, gameNightGameId, memberId) ?? _selectedNight;
+            _selectedNight = await GameNightService.SetPlayerTeamAsync(nightId, gameNightGameId, memberId, teamName) ?? _selectedNight;
             _selectedPlayerByGameId[gameNightGameId] = null;
             _teamModeGameIds.Add(gameNightGameId);
         }
@@ -1261,6 +1278,8 @@
         {
             return;
         }
+
+        var nightId = _selectedNight.Id;
 
         var game = _selectedNight.Games.FirstOrDefault(g => g.Id == gameNightGameId);
         if (game is null)
@@ -1280,7 +1299,7 @@
             // Clear existing players so the admin can rebuild the lineup into teams.
             foreach (var player in game.Players.ToArray())
             {
-                _selectedNight = await GameNightService.RemovePlayerAsync(_selectedNight.Id, gameNightGameId, player.MemberId);
+                _selectedNight = await GameNightService.RemovePlayerAsync(nightId, gameNightGameId, player.MemberId) ?? _selectedNight;
             }
 
             _teamModeGameIds.Add(gameNightGameId);
@@ -1322,6 +1341,8 @@
             return;
         }
 
+        var nightId = _selectedNight.Id;
+
         if (!_selectedTeamPlayerByKey.TryGetValue((gameNightGameId, teamName), out var raw) || !Guid.TryParse(raw, out var memberId))
         {
             return;
@@ -1331,8 +1352,8 @@
         _status = null;
         try
         {
-            _selectedNight = await GameNightService.AddPlayerAsync(_selectedNight.Id, gameNightGameId, memberId);
-            _selectedNight = await GameNightService.SetPlayerTeamAsync(_selectedNight.Id, gameNightGameId, memberId, teamName);
+            _selectedNight = await GameNightService.AddPlayerAsync(nightId, gameNightGameId, memberId) ?? _selectedNight;
+            _selectedNight = await GameNightService.SetPlayerTeamAsync(nightId, gameNightGameId, memberId, teamName) ?? _selectedNight;
             // Remove any client-only placeholder team with the same name to avoid duplicate display entries.
             if (_clientTeams.TryGetValue(gameNightGameId, out var ctList))
             {
@@ -1551,12 +1572,80 @@
         _status = null;
         try
         {
-            _selectedNight = await GameNightService.SetAttendingAsync(_selectedNight.Id, memberId, attending);
+            _selectedNight = await GameNightService.SetAttendanceAsync(_selectedNight.Id, memberId, attending, respectExplicitDeclines: attending);
             _amAttending = _memberId is { } me && _selectedNight?.Attendees.Any(a => a.MemberId == me) == true;
+            _declinedMemberIds = _selectedNight?.Rsvps.Where(r => !r.IsAttending).Select(r => r.MemberId).ToHashSet() ?? new();
         }
         finally
         {
             _saving = false;
+        }
+    }
+
+    private async Task RemoveGameAsync(int gameNightGameId)
+    {
+        if (!_isAdmin || _selectedNight is null)
+        {
+            return;
+        }
+
+        var name = _selectedNight.Games.FirstOrDefault(g => g.Id == gameNightGameId)?.GameName ?? "this game";
+
+        bool ok;
+        try
+        {
+            ok = await JS.InvokeAsync<bool>("confirm",
+                $"Remove '{name}' from this Monday? This will delete its teams/players/odds/bets.");
+        }
+        catch
+        {
+            // If confirm isn't available for some reason, fail safe (don't remove).
+            return;
+        }
+
+        if (!ok)
+        {
+            return;
+        }
+
+        _saving = true;
+        _status = null;
+        try
+        {
+            CleanupRemovedGameClientState(gameNightGameId);
+            _selectedNight = await GameNightService.RemoveGameAsync(_selectedNight.Id, gameNightGameId);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private void CleanupRemovedGameClientState(int gameNightGameId)
+    {
+        _selectedPlayerByGameId.Remove(gameNightGameId);
+        _selectedBetWinnerByGameId.Remove(gameNightGameId);
+        _selectedBetAmountByGameId.Remove(gameNightGameId);
+        _betStatusByGameId.Remove(gameNightGameId);
+        _settleStatusByGameId.Remove(gameNightGameId);
+        _confirmWinnerPending.Remove(gameNightGameId);
+        _teamModeGameIds.Remove(gameNightGameId);
+        _clientTeams.Remove(gameNightGameId);
+        _paletteImageUrlByGame.Remove(gameNightGameId);
+
+        foreach (var key in _oddsNumeratorByKey.Keys.Where(k => k.GameNightGameId == gameNightGameId).ToArray())
+        {
+            _oddsNumeratorByKey.Remove(key);
+        }
+
+        foreach (var key in _oddsDenominatorByKey.Keys.Where(k => k.GameNightGameId == gameNightGameId).ToArray())
+        {
+            _oddsDenominatorByKey.Remove(key);
+        }
+
+        foreach (var key in _selectedTeamPlayerByKey.Keys.Where(k => k.GameNightGameId == gameNightGameId).ToArray())
+        {
+            _selectedTeamPlayerByKey.Remove(key);
         }
     }
 

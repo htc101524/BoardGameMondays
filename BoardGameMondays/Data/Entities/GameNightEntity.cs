@@ -15,5 +15,7 @@ public sealed class GameNightEntity
 
     public List<GameNightAttendeeEntity> Attendees { get; set; } = new();
 
+    public List<GameNightRsvpEntity> Rsvps { get; set; } = new();
+
     public List<GameNightGameEntity> Games { get; set; } = new();
 }

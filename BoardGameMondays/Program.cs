@@ -280,6 +280,7 @@ try
         // (migration marked applied but columns missing), patch the schema so runtime queries don't crash.
         await EnsureSqlServerTeamColumnsAsync(db, app.Logger);
         await EnsureSqlServerTicketColumnsAsync(db, app.Logger);
+        await EnsureSqlServerGameNightRsvpTableAsync(db, app.Logger);
     }
 
     // Ensure identity tables exist before assigning roles.
@@ -351,6 +352,64 @@ END;
     catch (Exception ex)
     {
         logger.LogCritical(ex, "Failed to ensure ticket columns exist in SQL Server schema.");
+        throw;
+    }
+}
+
+static async Task EnsureSqlServerGameNightRsvpTableAsync(ApplicationDbContext db, ILogger logger)
+{
+    if (!db.Database.IsSqlServer())
+    {
+        return;
+    }
+
+    const string sql = @"
+IF OBJECT_ID(N'dbo.GameNightRsvps', N'U') IS NULL
+BEGIN
+    CREATE TABLE [dbo].[GameNightRsvps] (
+        [Id] int NOT NULL IDENTITY(1,1),
+        [GameNightId] uniqueidentifier NOT NULL,
+        [MemberId] uniqueidentifier NOT NULL,
+        [IsAttending] bit NOT NULL,
+        [CreatedOn] bigint NOT NULL,
+        CONSTRAINT [PK_GameNightRsvps] PRIMARY KEY ([Id]),
+        CONSTRAINT [FK_GameNightRsvps_GameNights_GameNightId] FOREIGN KEY ([GameNightId]) REFERENCES [dbo].[GameNights]([Id]) ON DELETE CASCADE,
+        CONSTRAINT [FK_GameNightRsvps_Members_MemberId] FOREIGN KEY ([MemberId]) REFERENCES [dbo].[Members]([Id]) ON DELETE CASCADE
+    );
+END;
+
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = N'IX_GameNightRsvps_Night_Member'
+      AND object_id = OBJECT_ID(N'dbo.GameNightRsvps')
+)
+BEGIN
+    CREATE UNIQUE INDEX [IX_GameNightRsvps_Night_Member] ON [dbo].[GameNightRsvps]([GameNightId], [MemberId]);
+END;
+
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = N'IX_GameNightRsvps_MemberId'
+      AND object_id = OBJECT_ID(N'dbo.GameNightRsvps')
+)
+BEGIN
+    CREATE INDEX [IX_GameNightRsvps_MemberId] ON [dbo].[GameNightRsvps]([MemberId]);
+END;
+";
+
+    try
+    {
+        var affected = await db.Database.ExecuteSqlRawAsync(sql);
+        if (affected != 0)
+        {
+            logger.LogWarning("Ensured GameNightRsvps table exists in SQL Server schema.");
+        }
+    }
+    catch (Exception ex)
+    {
+        logger.LogCritical(ex, "Failed to ensure GameNightRsvps exists in SQL Server schema.");
         throw;
     }
 }
@@ -737,6 +796,22 @@ CREATE TABLE IF NOT EXISTS GameNightAttendees (
             await createGameNightAttendees.ExecuteNonQueryAsync();
         }
 
+        await using (var createGameNightRsvps = connection.CreateCommand())
+        {
+            createGameNightRsvps.CommandText = @"
+CREATE TABLE IF NOT EXISTS GameNightRsvps (
+    Id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    GameNightId TEXT NOT NULL,
+    MemberId TEXT NOT NULL,
+    IsAttending INTEGER NOT NULL,
+    CreatedOn INTEGER NOT NULL,
+    FOREIGN KEY (GameNightId) REFERENCES GameNights(Id) ON DELETE CASCADE,
+    FOREIGN KEY (MemberId) REFERENCES Members(Id) ON DELETE CASCADE
+);
+";
+            await createGameNightRsvps.ExecuteNonQueryAsync();
+        }
+
         await using (var createGameNightGames = connection.CreateCommand())
         {
             createGameNightGames.CommandText = @"
@@ -946,11 +1021,13 @@ CREATE TABLE IF NOT EXISTS GameNightGameBets (
             createGameNightIndexes.CommandText = @"
 CREATE UNIQUE INDEX IF NOT EXISTS IX_GameNights_DateKey ON GameNights(DateKey);
 CREATE UNIQUE INDEX IF NOT EXISTS IX_GameNightAttendees_Night_Member ON GameNightAttendees(GameNightId, MemberId);
+CREATE UNIQUE INDEX IF NOT EXISTS IX_GameNightRsvps_Night_Member ON GameNightRsvps(GameNightId, MemberId);
 CREATE UNIQUE INDEX IF NOT EXISTS IX_GameNightGames_Night_Game ON GameNightGames(GameNightId, GameId);
 CREATE UNIQUE INDEX IF NOT EXISTS IX_GameNightGamePlayers_NightGame_Member ON GameNightGamePlayers(GameNightGameId, MemberId);
 CREATE UNIQUE INDEX IF NOT EXISTS IX_GameNightGameOdds_NightGame_Member ON GameNightGameOdds(GameNightGameId, MemberId);
 CREATE UNIQUE INDEX IF NOT EXISTS IX_GameNightGameBets_NightGame_User ON GameNightGameBets(GameNightGameId, UserId);
 CREATE INDEX IF NOT EXISTS IX_GameNightAttendees_MemberId ON GameNightAttendees(MemberId);
+CREATE INDEX IF NOT EXISTS IX_GameNightRsvps_MemberId ON GameNightRsvps(MemberId);
 CREATE INDEX IF NOT EXISTS IX_GameNightGames_GameId ON GameNightGames(GameId);
 CREATE INDEX IF NOT EXISTS IX_GameNightGamePlayers_MemberId ON GameNightGamePlayers(MemberId);
 CREATE INDEX IF NOT EXISTS IX_GameNightGameOdds_MemberId ON GameNightGameOdds(MemberId);

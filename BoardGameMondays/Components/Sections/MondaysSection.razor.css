@@ -260,6 +260,7 @@
     margin: 0;
 }
 .bgm-teamBubble__oddsRow input[type="number"] {
+    appearance: textfield;
     -moz-appearance: textfield;
 }
 

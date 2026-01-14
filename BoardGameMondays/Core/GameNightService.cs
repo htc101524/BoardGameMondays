@@ -17,6 +17,8 @@ public sealed class GameNightService
         => query
             .Include(n => n.Attendees)
             .ThenInclude(a => a.Member)
+            .Include(n => n.Rsvps)
+            .ThenInclude(r => r.Member)
             .Include(n => n.Games)
             .ThenInclude(g => g.Game)
             .Include(n => n.Games)
@@ -106,7 +108,12 @@ public sealed class GameNightService
         return entity is null ? null : ToDomain(entity);
     }
 
-    public async Task<GameNight?> SetAttendingAsync(Guid gameNightId, Guid memberId, bool attending, CancellationToken ct = default)
+    /// <summary>
+    /// Updates a member's RSVP for this night.
+    /// - Records explicit "not going" and "going" decisions.
+    /// - Keeps the Attendees list in sync (IsAttending=true => attendee exists; false => attendee removed).
+    /// </summary>
+    public async Task<GameNight?> SetRsvpAsync(Guid gameNightId, Guid memberId, bool attending, CancellationToken ct = default)
     {
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
         var exists = await db.GameNights.AnyAsync(n => n.Id == gameNightId, ct);
@@ -115,6 +122,29 @@ public sealed class GameNightService
             return null;
         }
 
+        var now = DateTimeOffset.UtcNow;
+
+        var rsvp = await db.GameNightRsvps
+            .FirstOrDefaultAsync(r => r.GameNightId == gameNightId && r.MemberId == memberId, ct);
+
+        if (rsvp is null)
+        {
+            rsvp = new GameNightRsvpEntity
+            {
+                GameNightId = gameNightId,
+                MemberId = memberId,
+                IsAttending = attending,
+                CreatedOn = now
+            };
+            db.GameNightRsvps.Add(rsvp);
+        }
+        else
+        {
+            rsvp.IsAttending = attending;
+            rsvp.CreatedOn = now;
+        }
+
+        // Keep attendee table in sync.
         var existing = await db.GameNightAttendees
             .FirstOrDefaultAsync(a => a.GameNightId == gameNightId && a.MemberId == memberId, ct);
 
@@ -126,9 +156,61 @@ public sealed class GameNightService
                 {
                     GameNightId = gameNightId,
                     MemberId = memberId,
-                    CreatedOn = DateTimeOffset.UtcNow
+                    CreatedOn = now
                 });
+            }
+        }
+        else
+        {
+            if (existing is not null)
+            {
+                db.GameNightAttendees.Remove(existing);
+            }
+        }
 
+        await db.SaveChangesAsync(ct);
+        return await GetByIdAsync(gameNightId, ct);
+    }
+
+    /// <summary>
+    /// Updates attendance without changing RSVP intent.
+    /// Intended for admin after-the-fact corrections on past nights.
+    /// </summary>
+    public async Task<GameNight?> SetAttendanceAsync(Guid gameNightId, Guid memberId, bool attending, bool respectExplicitDeclines = false, CancellationToken ct = default)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        var exists = await db.GameNights.AnyAsync(n => n.Id == gameNightId, ct);
+        if (!exists)
+        {
+            return null;
+        }
+
+        if (attending && respectExplicitDeclines)
+        {
+            var declined = await db.GameNightRsvps
+                .AsNoTracking()
+                .AnyAsync(r => r.GameNightId == gameNightId && r.MemberId == memberId && !r.IsAttending, ct);
+
+            if (declined)
+            {
+                return await GetByIdAsync(gameNightId, ct);
+            }
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        var existing = await db.GameNightAttendees
+            .FirstOrDefaultAsync(a => a.GameNightId == gameNightId && a.MemberId == memberId, ct);
+
+        if (attending)
+        {
+            if (existing is null)
+            {
+                db.GameNightAttendees.Add(new GameNightAttendeeEntity
+                {
+                    GameNightId = gameNightId,
+                    MemberId = memberId,
+                    CreatedOn = now
+                });
                 await db.SaveChangesAsync(ct);
             }
         }
@@ -141,6 +223,32 @@ public sealed class GameNightService
             }
         }
 
+        return await GetByIdAsync(gameNightId, ct);
+    }
+
+    // Back-compat: older callers use SetAttendingAsync for RSVP.
+    public Task<GameNight?> SetAttendingAsync(Guid gameNightId, Guid memberId, bool attending, CancellationToken ct = default)
+        => SetRsvpAsync(gameNightId, memberId, attending, ct);
+
+    public async Task<GameNight?> RemoveGameAsync(Guid gameNightId, int gameNightGameId, CancellationToken ct = default)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        var game = await db.GameNightGames
+            .FirstOrDefaultAsync(g => g.Id == gameNightGameId && g.GameNightId == gameNightId, ct);
+
+        if (game is null)
+        {
+            return null;
+        }
+
+        // Safety: don't allow removing confirmed games.
+        if (game.IsConfirmed)
+        {
+            return await GetByIdAsync(gameNightId, ct);
+        }
+
+        db.GameNightGames.Remove(game);
+        await db.SaveChangesAsync(ct);
         return await GetByIdAsync(gameNightId, ct);
     }
 
@@ -582,6 +690,11 @@ public sealed class GameNightService
             .Select(a => new GameNightAttendee(a.MemberId, a.Member.Name))
             .ToArray();
 
+        var rsvps = entity.Rsvps
+            .OrderBy(r => r.Member.Name)
+            .Select(r => new GameNightRsvp(r.MemberId, r.Member.Name, r.IsAttending))
+            .ToArray();
+
         var games = entity.Games
             .OrderBy(g => g.Game.Name)
             .Select(g =>
@@ -617,7 +730,7 @@ public sealed class GameNightService
             })
             .ToArray();
 
-        return new GameNight(entity.Id, date, entity.Recap, attendees, games);
+        return new GameNight(entity.Id, date, entity.Recap, attendees, rsvps, games);
     }
 
     public static int ToDateKey(DateOnly date)
@@ -631,9 +744,11 @@ public sealed class GameNightService
         return new DateOnly(year, month, day);
     }
 
-    public sealed record GameNight(Guid Id, DateOnly Date, string? Recap, IReadOnlyList<GameNightAttendee> Attendees, IReadOnlyList<GameNightGame> Games);
+    public sealed record GameNight(Guid Id, DateOnly Date, string? Recap, IReadOnlyList<GameNightAttendee> Attendees, IReadOnlyList<GameNightRsvp> Rsvps, IReadOnlyList<GameNightGame> Games);
 
     public sealed record GameNightAttendee(Guid MemberId, string MemberName);
+
+    public sealed record GameNightRsvp(Guid MemberId, string MemberName, bool IsAttending);
 
     public sealed record GameNightGame(int Id, Guid GameId, string GameName, bool IsPlayed, bool IsConfirmed, bool IsSettled, IReadOnlyList<GameNightGamePlayer> Players, IReadOnlyList<GameNightGameOdds> Odds, IReadOnlyList<GameNightGameTeam> Teams, GameNightWinner? Winner);
 
