@@ -1,6 +1,7 @@
 ﻿<script type="module" src="@Assets["Components/Layout/ReconnectModal.razor.js"]"></script>
 
-<dialog id="components-reconnect-modal" data-nosnippet>
+<!-- Non-blocking reconnect banner: visible when the Blazor circuit is lost. -->
+<div id="components-reconnect-banner" class="components-reconnect-hidden" data-nosnippet role="status" aria-live="polite">
     <div class="components-reconnect-container">
         <div class="components-rejoining-animation" aria-hidden="true">
             <div></div>
@@ -28,4 +29,4 @@
             Failed to resume the session.<br />Please reload the page.
         </p>
     </div>
-</dialog>
+</div>
