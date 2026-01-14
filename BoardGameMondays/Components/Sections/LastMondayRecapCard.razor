@@ -27,13 +27,10 @@ else
                 </div>
 
             @{
-                var played = _night.Games
+                var playedGames = _night.Games
                     .Where(g => g.IsPlayed)
-                    .Select(g => g.GameName)
                     .ToArray();
-                var playedText = played.Length > 0
-                    ? string.Join(", ", played)
-                    : string.Join(", ", _night.Games.Select(g => g.GameName));
+                var gamesToShow = playedGames.Length > 0 ? playedGames : _night.Games.ToArray();
 
                 var winners = _net
                     .Where(x => x.Net > 0)
@@ -48,11 +45,18 @@ else
                     .ToArray();
             }
 
-            @if (!string.IsNullOrWhiteSpace(playedText))
+            @if (gamesToShow.Length > 0)
             {
                 <div class="mt-2">
                     <div class="text-muted small">Played</div>
-                    <div class="fw-semibold">@playedText</div>
+                    <div class="fw-semibold">
+                        <ul class="mb-0">
+                        @foreach (var g in gamesToShow)
+                        {
+                            <li>@g.GameName</li>
+                        }
+                        </ul>
+                    </div>
                 </div>
             }
 
