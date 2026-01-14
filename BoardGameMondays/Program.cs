@@ -283,6 +283,7 @@ try
         await EnsureSqlServerGameNightRsvpTableAsync(db, app.Logger);
         await EnsureSqlServerMemberProfileColumnsAsync(db, app.Logger);
         await EnsureSqlServerGameNightAttendeeSnackColumnAsync(db, app.Logger);
+        await EnsureSqlServerVictoryRoutesAsync(db, app.Logger);
     }
 
     // Ensure identity tables exist before assigning roles.
@@ -486,6 +487,84 @@ END;
     {
         logger.LogCritical(ex, "Failed to ensure GameNightAttendees.SnackBrought exists in SQL Server schema.");
         throw;
+    }
+}
+
+static async Task EnsureSqlServerVictoryRoutesAsync(ApplicationDbContext db, ILogger logger)
+{
+    if (!db.Database.IsSqlServer())
+    {
+        return;
+    }
+
+    const string sql = @"
+IF OBJECT_ID(N'dbo.VictoryRoutes', N'U') IS NULL
+BEGIN
+    CREATE TABLE [dbo].[VictoryRoutes] (
+        [Id] uniqueidentifier NOT NULL,
+        [GameId] uniqueidentifier NOT NULL,
+        [Name] nvarchar(128) NOT NULL,
+        [Type] int NOT NULL,
+        [IsRequired] bit NOT NULL,
+        [SortOrder] int NOT NULL,
+        CONSTRAINT [PK_VictoryRoutes] PRIMARY KEY ([Id]),
+        CONSTRAINT [FK_VictoryRoutes_Games_GameId] FOREIGN KEY ([GameId]) REFERENCES [dbo].[Games]([Id]) ON DELETE CASCADE
+    );
+END;
+
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_VictoryRoutes_GameId_SortOrder' AND object_id = OBJECT_ID(N'dbo.VictoryRoutes'))
+BEGIN
+    CREATE UNIQUE INDEX [IX_VictoryRoutes_GameId_SortOrder] ON [dbo].[VictoryRoutes]([GameId],[SortOrder]);
+END;
+
+IF OBJECT_ID(N'dbo.VictoryRouteOptions', N'U') IS NULL
+BEGIN
+    CREATE TABLE [dbo].[VictoryRouteOptions] (
+        [Id] uniqueidentifier NOT NULL,
+        [VictoryRouteId] uniqueidentifier NOT NULL,
+        [Value] nvarchar(128) NOT NULL,
+        [SortOrder] int NOT NULL,
+        CONSTRAINT [PK_VictoryRouteOptions] PRIMARY KEY ([Id]),
+        CONSTRAINT [FK_VictoryRouteOptions_VictoryRoutes_VictoryRouteId] FOREIGN KEY ([VictoryRouteId]) REFERENCES [dbo].[VictoryRoutes]([Id]) ON DELETE CASCADE
+    );
+END;
+
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_VictoryRouteOptions_RouteId_SortOrder' AND object_id = OBJECT_ID(N'dbo.VictoryRouteOptions'))
+BEGIN
+    CREATE UNIQUE INDEX [IX_VictoryRouteOptions_RouteId_SortOrder] ON [dbo].[VictoryRouteOptions]([VictoryRouteId],[SortOrder]);
+END;
+
+IF OBJECT_ID(N'dbo.GameNightGameVictoryRouteValues', N'U') IS NULL
+BEGIN
+    CREATE TABLE [dbo].[GameNightGameVictoryRouteValues] (
+        [Id] int IDENTITY(1,1) NOT NULL,
+        [GameNightGameId] int NOT NULL,
+        [VictoryRouteId] uniqueidentifier NOT NULL,
+        [ValueString] nvarchar(256) NULL,
+        [ValueBool] bit NULL,
+        CONSTRAINT [PK_GameNightGameVictoryRouteValues] PRIMARY KEY ([Id]),
+        CONSTRAINT [FK_GNGVRV_GameNightGames_GameNightGameId] FOREIGN KEY ([GameNightGameId]) REFERENCES [dbo].[GameNightGames]([Id]) ON DELETE CASCADE,
+        CONSTRAINT [FK_GNGVRV_VictoryRoutes_VictoryRouteId] FOREIGN KEY ([VictoryRouteId]) REFERENCES [dbo].[VictoryRoutes]([Id]) ON DELETE CASCADE
+    );
+END;
+
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_GameNightGameVictoryRouteValues_Game_Route' AND object_id = OBJECT_ID(N'dbo.GameNightGameVictoryRouteValues'))
+BEGIN
+    CREATE UNIQUE INDEX [IX_GameNightGameVictoryRouteValues_Game_Route] ON [dbo].[GameNightGameVictoryRouteValues]([GameNightGameId],[VictoryRouteId]);
+END;
+";
+
+    try
+    {
+        var affected = await db.Database.ExecuteSqlRawAsync(sql);
+        if (affected != 0)
+        {
+            logger.LogInformation("Ensured VictoryRoutes schema (affected {Count}).", affected);
+        }
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Failed ensuring VictoryRoutes schema.");
     }
 }
 
@@ -974,6 +1053,63 @@ CREATE TABLE IF NOT EXISTS GameNightGames (
 );
 ";
             await createGameNightGames.ExecuteNonQueryAsync();
+        }
+
+        // Victory routes (per-game templates)
+        await using (var createVictoryRoutes = connection.CreateCommand())
+        {
+            createVictoryRoutes.CommandText = @"
+CREATE TABLE IF NOT EXISTS VictoryRoutes (
+    Id TEXT NOT NULL PRIMARY KEY,
+    GameId TEXT NOT NULL,
+    Name TEXT NOT NULL,
+    Type INTEGER NOT NULL,
+    IsRequired INTEGER NOT NULL,
+    SortOrder INTEGER NOT NULL,
+    FOREIGN KEY (GameId) REFERENCES Games(Id) ON DELETE CASCADE
+);
+";
+            await createVictoryRoutes.ExecuteNonQueryAsync();
+        }
+
+        await using (var createVictoryRouteOptions = connection.CreateCommand())
+        {
+            createVictoryRouteOptions.CommandText = @"
+CREATE TABLE IF NOT EXISTS VictoryRouteOptions (
+    Id TEXT NOT NULL PRIMARY KEY,
+    VictoryRouteId TEXT NOT NULL,
+    Value TEXT NOT NULL,
+    SortOrder INTEGER NOT NULL,
+    FOREIGN KEY (VictoryRouteId) REFERENCES VictoryRoutes(Id) ON DELETE CASCADE
+);
+";
+            await createVictoryRouteOptions.ExecuteNonQueryAsync();
+        }
+
+        await using (var createVictoryRouteValues = connection.CreateCommand())
+        {
+            createVictoryRouteValues.CommandText = @"
+CREATE TABLE IF NOT EXISTS GameNightGameVictoryRouteValues (
+    Id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    GameNightGameId INTEGER NOT NULL,
+    VictoryRouteId TEXT NOT NULL,
+    ValueString TEXT NULL,
+    ValueBool INTEGER NULL,
+    FOREIGN KEY (GameNightGameId) REFERENCES GameNightGames(Id) ON DELETE CASCADE,
+    FOREIGN KEY (VictoryRouteId) REFERENCES VictoryRoutes(Id) ON DELETE CASCADE
+);
+";
+            await createVictoryRouteValues.ExecuteNonQueryAsync();
+        }
+
+        await using (var createVictoryRouteIndexes = connection.CreateCommand())
+        {
+            createVictoryRouteIndexes.CommandText = @"
+CREATE UNIQUE INDEX IF NOT EXISTS IX_VictoryRoutes_GameId_SortOrder ON VictoryRoutes(GameId, SortOrder);
+CREATE UNIQUE INDEX IF NOT EXISTS IX_VictoryRouteOptions_RouteId_SortOrder ON VictoryRouteOptions(VictoryRouteId, SortOrder);
+CREATE UNIQUE INDEX IF NOT EXISTS IX_GameNightGameVictoryRouteValues_Game_Route ON GameNightGameVictoryRouteValues(GameNightGameId, VictoryRouteId);
+";
+            await createVictoryRouteIndexes.ExecuteNonQueryAsync();
         }
 
         var hasIsConfirmed = false;

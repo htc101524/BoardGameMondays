@@ -7,6 +7,7 @@ public sealed class BoardGame
         GameStatus status = GameStatus.Queued,
         Overview? overview = null,
         IEnumerable<Review>? reviews = null,
+        IEnumerable<VictoryRoute>? victoryRoutes = null,
         string? tagline = null,
         string? imageUrl = null,
         int? minPlayers = null,
@@ -23,6 +24,7 @@ public sealed class BoardGame
         Status = status;
         Overview = overview ?? EmptyOverview.Instance;
         Reviews = (reviews ?? Array.Empty<Review>()).ToArray();
+        VictoryRoutes = (victoryRoutes ?? Array.Empty<VictoryRoute>()).ToArray();
         Tagline = tagline;
         ImageUrl = imageUrl;
 
@@ -44,6 +46,8 @@ public sealed class BoardGame
     public Overview Overview { get; }
 
     public IReadOnlyList<Review> Reviews { get; }
+
+    public IReadOnlyList<VictoryRoute> VictoryRoutes { get; }
 
     public DateTimeOffset? ReviewedOn
         => Reviews.Count == 0 ? null : Reviews.Max(r => r.CreatedOn);
@@ -67,6 +71,16 @@ public sealed class BoardGame
     public double? BoardGameGeekScore { get; }
 
     public string? BoardGameGeekUrl { get; }
+}
+
+public sealed record VictoryRoute(Guid Id, string Name, VictoryRouteType Type, bool IsRequired, int SortOrder, IReadOnlyList<VictoryRouteOption> Options);
+
+public sealed record VictoryRouteOption(Guid Id, string Value, int SortOrder);
+
+public enum VictoryRouteType
+{
+    Dropdown = 0,
+    Checkbox = 1
 }
 
 public enum GameStatus

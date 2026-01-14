@@ -277,6 +277,103 @@ public sealed class GameNightService
         return await GetByIdAsync(gameNightId, ct);
     }
 
+    public async Task<IReadOnlyList<VictoryRouteTemplate>> GetVictoryRoutesForGameAsync(Guid gameId, CancellationToken ct = default)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+
+        var routes = await db.VictoryRoutes
+            .AsNoTracking()
+            .Include(r => r.Options)
+            .Where(r => r.GameId == gameId)
+            .OrderBy(r => r.SortOrder)
+            .ToListAsync(ct);
+
+        return routes
+            .Select(r => new VictoryRouteTemplate(
+                r.Id,
+                r.GameId,
+                r.Name,
+                (VictoryRouteType)r.Type,
+                r.IsRequired,
+                r.SortOrder,
+                r.Options
+                    .OrderBy(o => o.SortOrder)
+                    .Select(o => new VictoryRouteTemplateOption(o.Id, o.VictoryRouteId, o.Value, o.SortOrder))
+                    .ToArray()))
+            .ToArray();
+    }
+
+    public async Task<IReadOnlyList<VictoryRouteValue>> GetVictoryRouteValuesAsync(int gameNightGameId, CancellationToken ct = default)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+
+        var values = await db.GameNightGameVictoryRouteValues
+            .AsNoTracking()
+            .Where(v => v.GameNightGameId == gameNightGameId)
+            .Select(v => new VictoryRouteValue(v.VictoryRouteId, v.ValueString, v.ValueBool))
+            .ToListAsync(ct);
+
+        return values;
+    }
+
+    public async Task<bool> UpsertVictoryRouteValuesAsync(Guid gameNightId, int gameNightGameId, IReadOnlyList<VictoryRouteValue> values, CancellationToken ct = default)
+    {
+        if (values is null)
+        {
+            throw new ArgumentNullException(nameof(values));
+        }
+
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+
+        var game = await db.GameNightGames
+            .AsNoTracking()
+            .FirstOrDefaultAsync(g => g.Id == gameNightGameId && g.GameNightId == gameNightId, ct);
+
+        if (game is null)
+        {
+            return false;
+        }
+
+        var routeIds = values.Select(v => v.VictoryRouteId).Distinct().ToArray();
+        var validRouteIds = await db.VictoryRoutes
+            .AsNoTracking()
+            .Where(r => r.GameId == game.GameId && routeIds.Contains(r.Id))
+            .Select(r => r.Id)
+            .ToListAsync(ct);
+
+        foreach (var v in values)
+        {
+            if (!validRouteIds.Contains(v.VictoryRouteId))
+            {
+                continue;
+            }
+
+            var existing = await db.GameNightGameVictoryRouteValues
+                .FirstOrDefaultAsync(x => x.GameNightGameId == gameNightGameId && x.VictoryRouteId == v.VictoryRouteId, ct);
+
+            var valueString = InputGuards.OptionalTrimToNull(v.ValueString, maxLength: 256, nameof(v.ValueString));
+
+            if (existing is null)
+            {
+                db.GameNightGameVictoryRouteValues.Add(new GameNightGameVictoryRouteValueEntity
+                {
+                    GameNightGameId = gameNightGameId,
+                    VictoryRouteId = v.VictoryRouteId,
+                    ValueString = valueString,
+                    ValueBool = v.ValueBool
+                });
+            }
+            else
+            {
+                existing.ValueString = valueString;
+                existing.ValueBool = v.ValueBool;
+            }
+        }
+
+        await db.SaveChangesAsync(ct);
+        return true;
+    }
+
     public async Task<GameNight?> AddGameAsync(Guid gameNightId, Guid gameId, bool isPlayed, CancellationToken ct = default)
     {
         await using var db = await _dbFactory.CreateDbContextAsync(ct);

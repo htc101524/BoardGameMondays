@@ -41,6 +41,8 @@ public sealed class GameNightGameEntity
 
     public List<GameNightGameBetEntity> Bets { get; set; } = new();
 
+    public List<GameNightGameVictoryRouteValueEntity> VictoryRouteValues { get; set; } = new();
+
     [Required]
     public DateTimeOffset CreatedOn { get; set; }
 }

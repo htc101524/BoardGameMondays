@@ -26,6 +26,9 @@ public sealed class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<GameNightGameTeamEntity> GameNightGameTeams => Set<GameNightGameTeamEntity>();
     public DbSet<GameNightGameOddsEntity> GameNightGameOdds => Set<GameNightGameOddsEntity>();
     public DbSet<GameNightGameBetEntity> GameNightGameBets => Set<GameNightGameBetEntity>();
+    public DbSet<VictoryRouteEntity> VictoryRoutes => Set<VictoryRouteEntity>();
+    public DbSet<VictoryRouteOptionEntity> VictoryRouteOptions => Set<VictoryRouteOptionEntity>();
+    public DbSet<GameNightGameVictoryRouteValueEntity> GameNightGameVictoryRouteValues => Set<GameNightGameVictoryRouteValueEntity>();
     public DbSet<BlogPostEntity> BlogPosts => Set<BlogPostEntity>();
 
     protected override void OnModelCreating(ModelBuilder builder)
@@ -274,6 +277,42 @@ public sealed class ApplicationDbContext : IdentityDbContext<ApplicationUser>
 
         builder.Entity<GameNightGameBetEntity>()
             .HasIndex(x => new { x.GameNightGameId, x.UserId })
+            .IsUnique();
+
+        builder.Entity<VictoryRouteEntity>()
+            .HasOne(x => x.Game)
+            .WithMany(x => x.VictoryRoutes)
+            .HasForeignKey(x => x.GameId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Entity<VictoryRouteEntity>()
+            .HasIndex(x => new { x.GameId, x.SortOrder })
+            .IsUnique();
+
+        builder.Entity<VictoryRouteOptionEntity>()
+            .HasOne(x => x.VictoryRoute)
+            .WithMany(x => x.Options)
+            .HasForeignKey(x => x.VictoryRouteId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Entity<VictoryRouteOptionEntity>()
+            .HasIndex(x => new { x.VictoryRouteId, x.SortOrder })
+            .IsUnique();
+
+        builder.Entity<GameNightGameVictoryRouteValueEntity>()
+            .HasOne(x => x.GameNightGame)
+            .WithMany(x => x.VictoryRouteValues)
+            .HasForeignKey(x => x.GameNightGameId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Entity<GameNightGameVictoryRouteValueEntity>()
+            .HasOne(x => x.VictoryRoute)
+            .WithMany()
+            .HasForeignKey(x => x.VictoryRouteId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Entity<GameNightGameVictoryRouteValueEntity>()
+            .HasIndex(x => new { x.GameNightGameId, x.VictoryRouteId })
             .IsUnique();
 
         builder.Entity<BlogPostEntity>()

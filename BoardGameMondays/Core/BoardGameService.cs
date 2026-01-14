@@ -72,6 +72,8 @@ public sealed class BoardGameService
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
         var games = await db.Games
             .AsNoTracking()
+            .Include(g => g.VictoryRoutes)
+            .ThenInclude(r => r.Options)
             .Include(g => g.Reviews)
             .ThenInclude(r => r.Reviewer)
             .OrderBy(g => g.Name)
@@ -85,6 +87,8 @@ public sealed class BoardGameService
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
         var game = await db.Games
             .AsNoTracking()
+            .Include(g => g.VictoryRoutes)
+            .ThenInclude(r => r.Options)
             .Include(g => g.Reviews)
             .ThenInclude(r => r.Reviewer)
             .FirstOrDefaultAsync(g => g.Id == id, ct);
@@ -97,6 +101,8 @@ public sealed class BoardGameService
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
         var games = await db.Games
             .AsNoTracking()
+            .Include(g => g.VictoryRoutes)
+            .ThenInclude(r => r.Options)
             .Include(g => g.Reviews)
             .ThenInclude(r => r.Reviewer)
             .Where(g => g.Status == (int)status)
@@ -245,6 +251,107 @@ public sealed class BoardGameService
         return await GetByIdAsync(gameId, ct);
     }
 
+    public async Task<BoardGame?> AddVictoryRouteAsync(Guid gameId, string name, VictoryRouteType type, bool isRequired, CancellationToken ct = default)
+    {
+        name = InputGuards.RequireTrimmed(name, maxLength: 128, nameof(name), "Name is required.");
+
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+
+        var exists = await db.Games.AnyAsync(g => g.Id == gameId, ct);
+        if (!exists)
+        {
+            return null;
+        }
+
+        var nextSort = await db.VictoryRoutes
+            .Where(r => r.GameId == gameId)
+            .Select(r => (int?)r.SortOrder)
+            .MaxAsync(ct) ?? -1;
+        nextSort += 1;
+
+        db.VictoryRoutes.Add(new VictoryRouteEntity
+        {
+            Id = Guid.NewGuid(),
+            GameId = gameId,
+            Name = name,
+            Type = (int)type,
+            IsRequired = isRequired,
+            SortOrder = nextSort
+        });
+
+        await db.SaveChangesAsync(ct);
+        Changed?.Invoke();
+        return await GetByIdAsync(gameId, ct);
+    }
+
+    public async Task<BoardGame?> RemoveVictoryRouteAsync(Guid gameId, Guid routeId, CancellationToken ct = default)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+
+        var route = await db.VictoryRoutes
+            .FirstOrDefaultAsync(r => r.Id == routeId && r.GameId == gameId, ct);
+
+        if (route is null)
+        {
+            return await GetByIdAsync(gameId, ct);
+        }
+
+        db.VictoryRoutes.Remove(route);
+        await db.SaveChangesAsync(ct);
+        Changed?.Invoke();
+        return await GetByIdAsync(gameId, ct);
+    }
+
+    public async Task<BoardGame?> AddVictoryRouteOptionAsync(Guid gameId, Guid routeId, string value, CancellationToken ct = default)
+    {
+        value = InputGuards.RequireTrimmed(value, maxLength: 128, nameof(value), "Value is required.");
+
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+
+        var route = await db.VictoryRoutes.FirstOrDefaultAsync(r => r.Id == routeId && r.GameId == gameId, ct);
+        if (route is null)
+        {
+            return null;
+        }
+
+        var nextSort = await db.VictoryRouteOptions
+            .Where(o => o.VictoryRouteId == routeId)
+            .Select(o => (int?)o.SortOrder)
+            .MaxAsync(ct) ?? -1;
+        nextSort += 1;
+
+        db.VictoryRouteOptions.Add(new VictoryRouteOptionEntity
+        {
+            Id = Guid.NewGuid(),
+            VictoryRouteId = routeId,
+            Value = value,
+            SortOrder = nextSort
+        });
+
+        await db.SaveChangesAsync(ct);
+        Changed?.Invoke();
+        return await GetByIdAsync(gameId, ct);
+    }
+
+    public async Task<BoardGame?> RemoveVictoryRouteOptionAsync(Guid gameId, Guid routeId, Guid optionId, CancellationToken ct = default)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+
+        var option = await db.VictoryRouteOptions
+            .Include(o => o.VictoryRoute)
+            .FirstOrDefaultAsync(o => o.Id == optionId && o.VictoryRouteId == routeId && o.VictoryRoute.GameId == gameId, ct);
+
+        if (option is null)
+        {
+            return await GetByIdAsync(gameId, ct);
+        }
+
+        db.VictoryRouteOptions.Remove(option);
+        await db.SaveChangesAsync(ct);
+        Changed?.Invoke();
+        return await GetByIdAsync(gameId, ct);
+    }
+
     public async Task<int?> IncrementReviewTimesPlayedAsync(Guid reviewId, CancellationToken ct = default)
     {
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
@@ -292,6 +399,20 @@ public sealed class BoardGameService
 
     private static BoardGame ToDomain(BoardGameEntity entity)
     {
+        var victoryRoutes = entity.VictoryRoutes
+            .OrderBy(r => r.SortOrder)
+            .Select(r => new VictoryRoute(
+                r.Id,
+                r.Name,
+                (VictoryRouteType)r.Type,
+                r.IsRequired,
+                r.SortOrder,
+                r.Options
+                    .OrderBy(o => o.SortOrder)
+                    .Select(o => new VictoryRouteOption(o.Id, o.Value, o.SortOrder))
+                    .ToArray()))
+            .ToArray();
+
         var reviews = entity.Reviews
             .OrderByDescending(r => r.CreatedOn)
             .Select(r => (Review)new MemberReview(
@@ -309,6 +430,7 @@ public sealed class BoardGameService
             status: (GameStatus)entity.Status,
             overview: EmptyOverview.Instance,
             reviews: reviews,
+            victoryRoutes: victoryRoutes,
             tagline: entity.Tagline,
             imageUrl: entity.ImageUrl,
             minPlayers: entity.MinPlayers,

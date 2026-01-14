@@ -36,4 +36,6 @@ public sealed class BoardGameEntity
     public string? BoardGameGeekUrl { get; set; }
 
     public List<ReviewEntity> Reviews { get; set; } = new();
+
+    public List<VictoryRouteEntity> VictoryRoutes { get; set; } = new();
 }

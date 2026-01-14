@@ -786,6 +786,74 @@
                                                         }
                                                     }
                                                 </div>
+
+                                                @if (game.Winner is not null)
+                                                {
+                                                    <div class="mt-2">
+                                                        <button type="button"
+                                                                class="btn btn-sm btn-outline-secondary"
+                                                                disabled="@_saving"
+                                                                @onclick="() => ToggleVictoryRoutesAsync(game)">
+                                                            How did they win?
+                                                        </button>
+
+                                                        @if (_victoryRouteStatusByGameId.TryGetValue(game.Id, out var vrStatus) && !string.IsNullOrWhiteSpace(vrStatus))
+                                                        {
+                                                            <span class="text-muted ms-2">@vrStatus</span>
+                                                        }
+                                                    </div>
+
+                                                    @if (_victoryRoutesOpen.Contains(game.Id))
+                                                    {
+                                                        var routes = GetVictoryRoutes(game.Id);
+                                                        if (routes.Count == 0)
+                                                        {
+                                                            <div class="text-muted mt-2">No routes configured for this game.</div>
+                                                        }
+                                                        else
+                                                        {
+                                                            <div class="border rounded p-2 mt-2 bg-body" aria-label="Victory routes">
+                                                                <div class="fw-semibold mb-2">How did they win?</div>
+
+                                                                <div class="d-grid gap-2">
+                                                                    @foreach (var route in routes)
+                                                                    {
+                                                                        <div class="d-flex gap-2 align-items-center flex-wrap">
+                                                                            <div style="min-width: 180px" class="text-muted">@route.Name</div>
+
+                                                                            @if (route.Type == VictoryRouteType.Dropdown)
+                                                                            {
+                                                                                <select class="form-select form-select-sm" style="max-width: 360px"
+                                                                                        value="@GetVictoryRouteString(game.Id, route.Id)"
+                                                                                        disabled="@_saving"
+                                                                                        @onchange="e => SetVictoryRouteString(game.Id, route.Id, e.Value?.ToString())">
+                                                                                    <option value="">—</option>
+                                                                                    @foreach (var opt in route.Options)
+                                                                                    {
+                                                                                        <option value="@opt.Value">@opt.Value</option>
+                                                                                    }
+                                                                                </select>
+                                                                            }
+                                                                            else if (route.Type == VictoryRouteType.Checkbox)
+                                                                            {
+                                                                                <div class="form-check">
+                                                                                    <input class="form-check-input" type="checkbox"
+                                                                                           checked="@GetVictoryRouteBool(game.Id, route.Id)"
+                                                                                           disabled="@_saving"
+                                                                                           @onchange="e => SetVictoryRouteBool(game.Id, route.Id, e.Value?.ToString())" />
+                                                                                </div>
+                                                                            }
+                                                                        </div>
+                                                                    }
+                                                                </div>
+
+                                                                <div class="mt-2">
+                                                                    <button type="button" class="btn btn-sm btn-outline-primary" disabled="@_saving" @onclick="() => SaveVictoryRoutesAsync(game)">Save</button>
+                                                                </div>
+                                                            </div>
+                                                        }
+                                                    }
+                                                }
                                             </div>
                                         }
                                     </div>
@@ -887,6 +955,12 @@
 
     private readonly Dictionary<Guid, string?> _snackDraftByMemberId = new();
     private readonly Dictionary<Guid, string?> _snackStatusByMemberId = new();
+
+    private readonly Dictionary<int, IReadOnlyList<VictoryRouteTemplate>> _victoryRoutesByGameId = new();
+    private readonly Dictionary<int, Dictionary<Guid, string?>> _victoryRouteStringDraftByGameId = new();
+    private readonly Dictionary<int, Dictionary<Guid, bool>> _victoryRouteBoolDraftByGameId = new();
+    private readonly HashSet<int> _victoryRoutesOpen = new();
+    private readonly Dictionary<int, string?> _victoryRouteStatusByGameId = new();
 
     private ElementReference _mondaysSectionRef;
     private string? _mondaysSectionBackgroundHex;
@@ -1511,6 +1585,12 @@
             _selectedNight = await GameNightService.SetWinnerAsync(_selectedNight.Id, gameNightGameId, winnerId);
             _settleStatusByGameId[gameNightGameId] = null;
             _confirmWinnerPending.Remove(gameNightGameId);
+
+            var updatedGame = _selectedNight?.Games.FirstOrDefault(g => g.Id == gameNightGameId);
+            if (updatedGame?.Winner is not null)
+            {
+                await OpenVictoryRoutesAsync(updatedGame);
+            }
         }
         finally
         {
@@ -1609,6 +1689,146 @@
             _selectedNight = await GameNightService.SetTeamWinnerAsync(_selectedNight.Id, gameNightGameId, value);
             _settleStatusByGameId[gameNightGameId] = null;
             _confirmWinnerPending.Remove(gameNightGameId);
+
+            var updatedGame = _selectedNight?.Games.FirstOrDefault(g => g.Id == gameNightGameId);
+            if (updatedGame?.Winner is not null)
+            {
+                await OpenVictoryRoutesAsync(updatedGame);
+            }
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private IReadOnlyList<VictoryRouteTemplate> GetVictoryRoutes(int gameNightGameId)
+        => _victoryRoutesByGameId.TryGetValue(gameNightGameId, out var routes) ? routes : Array.Empty<VictoryRouteTemplate>();
+
+    private async Task ToggleVictoryRoutesAsync(GameNightService.GameNightGame game)
+    {
+        if (_victoryRoutesOpen.Contains(game.Id))
+        {
+            _victoryRoutesOpen.Remove(game.Id);
+            return;
+        }
+
+        await OpenVictoryRoutesAsync(game);
+    }
+
+    private async Task OpenVictoryRoutesAsync(GameNightService.GameNightGame game)
+    {
+        _victoryRoutesOpen.Add(game.Id);
+        await EnsureVictoryRoutesLoadedAsync(game);
+    }
+
+    private async Task EnsureVictoryRoutesLoadedAsync(GameNightService.GameNightGame game)
+    {
+        if (_victoryRoutesByGameId.ContainsKey(game.Id))
+        {
+            return;
+        }
+
+        try
+        {
+            var routes = await GameNightService.GetVictoryRoutesForGameAsync(game.GameId);
+            _victoryRoutesByGameId[game.Id] = routes;
+
+            var existingValues = await GameNightService.GetVictoryRouteValuesAsync(game.Id);
+            var byId = existingValues.ToDictionary(v => v.VictoryRouteId, v => v);
+
+            var stringDraft = new Dictionary<Guid, string?>();
+            var boolDraft = new Dictionary<Guid, bool>();
+
+            foreach (var r in routes)
+            {
+                byId.TryGetValue(r.Id, out var v);
+
+                if (r.Type == VictoryRouteType.Dropdown)
+                {
+                    stringDraft[r.Id] = v?.ValueString;
+                }
+                else if (r.Type == VictoryRouteType.Checkbox)
+                {
+                    boolDraft[r.Id] = v?.ValueBool ?? false;
+                }
+            }
+
+            _victoryRouteStringDraftByGameId[game.Id] = stringDraft;
+            _victoryRouteBoolDraftByGameId[game.Id] = boolDraft;
+        }
+        catch
+        {
+            _victoryRoutesByGameId[game.Id] = Array.Empty<VictoryRouteTemplate>();
+        }
+    }
+
+    private string GetVictoryRouteString(int gameNightGameId, Guid routeId)
+        => _victoryRouteStringDraftByGameId.TryGetValue(gameNightGameId, out var dict) && dict.TryGetValue(routeId, out var v) ? v ?? string.Empty : string.Empty;
+
+    private void SetVictoryRouteString(int gameNightGameId, Guid routeId, string? value)
+    {
+        if (!_victoryRouteStringDraftByGameId.TryGetValue(gameNightGameId, out var dict))
+        {
+            dict = new Dictionary<Guid, string?>();
+            _victoryRouteStringDraftByGameId[gameNightGameId] = dict;
+        }
+
+        dict[routeId] = value;
+    }
+
+    private bool GetVictoryRouteBool(int gameNightGameId, Guid routeId)
+        => _victoryRouteBoolDraftByGameId.TryGetValue(gameNightGameId, out var dict) && dict.TryGetValue(routeId, out var v) && v;
+
+    private void SetVictoryRouteBool(int gameNightGameId, Guid routeId, string? raw)
+    {
+        if (!_victoryRouteBoolDraftByGameId.TryGetValue(gameNightGameId, out var dict))
+        {
+            dict = new Dictionary<Guid, bool>();
+            _victoryRouteBoolDraftByGameId[gameNightGameId] = dict;
+        }
+
+        dict[routeId] = string.Equals(raw, "true", StringComparison.OrdinalIgnoreCase) || string.Equals(raw, "on", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private async Task SaveVictoryRoutesAsync(GameNightService.GameNightGame game)
+    {
+        if (!_isAdmin || _selectedNight is null)
+        {
+            return;
+        }
+
+        var routes = GetVictoryRoutes(game.Id);
+        if (routes.Count == 0)
+        {
+            return;
+        }
+
+        _saving = true;
+        _victoryRouteStatusByGameId[game.Id] = null;
+
+        try
+        {
+            var values = new List<VictoryRouteValue>();
+            foreach (var r in routes)
+            {
+                if (r.Type == VictoryRouteType.Dropdown)
+                {
+                    var v = GetVictoryRouteString(game.Id, r.Id);
+                    values.Add(new VictoryRouteValue(r.Id, string.IsNullOrWhiteSpace(v) ? null : v, null));
+                }
+                else if (r.Type == VictoryRouteType.Checkbox)
+                {
+                    values.Add(new VictoryRouteValue(r.Id, null, GetVictoryRouteBool(game.Id, r.Id)));
+                }
+            }
+
+            var ok = await GameNightService.UpsertVictoryRouteValuesAsync(_selectedNight.Id, game.Id, values);
+            _victoryRouteStatusByGameId[game.Id] = ok ? "Saved" : "Failed";
+        }
+        catch
+        {
+            _victoryRouteStatusByGameId[game.Id] = "Failed";
         }
         finally
         {
