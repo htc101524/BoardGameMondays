@@ -69,10 +69,8 @@
                             {
                                 var key = id.ToString();
                                 var excluded = (key == _bugTop3.Second) || (key == _bugTop3.Third);
-                                if (!excluded || key == _bugTop3.First)
-                                {
-                                    <option value="@key">@title</option>
-                                }
+                                var disabled = excluded && key != _bugTop3.First;
+                                <option value="@key" disabled="@disabled">@title</option>
                             }
                         </InputSelect>
                     </div>
@@ -85,10 +83,8 @@
                             {
                                 var key = id.ToString();
                                 var excluded = (key == _bugTop3.First) || (key == _bugTop3.Third);
-                                if (!excluded || key == _bugTop3.Second)
-                                {
-                                    <option value="@key">@title</option>
-                                }
+                                var disabled = excluded && key != _bugTop3.Second;
+                                <option value="@key" disabled="@disabled">@title</option>
                             }
                         </InputSelect>
                     </div>
@@ -101,10 +97,8 @@
                             {
                                 var key = id.ToString();
                                 var excluded = (key == _bugTop3.First) || (key == _bugTop3.Second);
-                                if (!excluded || key == _bugTop3.Third)
-                                {
-                                    <option value="@key">@title</option>
-                                }
+                                var disabled = excluded && key != _bugTop3.Third;
+                                <option value="@key" disabled="@disabled">@title</option>
                             }
                         </InputSelect>
                     </div>
@@ -219,10 +213,8 @@
                             {
                                 var key = id.ToString();
                                 var excluded = (key == _featureTop3.Second) || (key == _featureTop3.Third);
-                                if (!excluded || key == _featureTop3.First)
-                                {
-                                    <option value="@key">@title</option>
-                                }
+                                var disabled = excluded && key != _featureTop3.First;
+                                <option value="@key" disabled="@disabled">@title</option>
                             }
                         </InputSelect>
                     </div>
@@ -235,10 +227,8 @@
                             {
                                 var key = id.ToString();
                                 var excluded = (key == _featureTop3.First) || (key == _featureTop3.Third);
-                                if (!excluded || key == _featureTop3.Second)
-                                {
-                                    <option value="@key">@title</option>
-                                }
+                                var disabled = excluded && key != _featureTop3.Second;
+                                <option value="@key" disabled="@disabled">@title</option>
                             }
                         </InputSelect>
                     </div>
@@ -251,10 +241,8 @@
                             {
                                 var key = id.ToString();
                                 var excluded = (key == _featureTop3.First) || (key == _featureTop3.Second);
-                                if (!excluded || key == _featureTop3.Third)
-                                {
-                                    <option value="@key">@title</option>
-                                }
+                                var disabled = excluded && key != _featureTop3.Third;
+                                <option value="@key" disabled="@disabled">@title</option>
                             }
                         </InputSelect>
                     </div>

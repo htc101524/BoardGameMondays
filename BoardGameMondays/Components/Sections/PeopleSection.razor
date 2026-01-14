@@ -12,7 +12,7 @@
     <div class="home-section__inner">
         <h1>People</h1>
 
-        <AuthorizeView>
+        <AuthorizeView Roles="Admin">
             <Authorized>
                 <form class="mb-3" method="post" action="/account/avatar" enctype="multipart/form-data">
                     @* Antiforgery is handled by ASP.NET Core; no explicit token component needed here. *@
@@ -21,9 +21,10 @@
                         <input id="avatar-file" class="form-control" style="max-width: 420px" type="file" name="avatar" accept="image/*" required />
                         <button type="submit" class="btn btn-outline-primary">Upload</button>
                     </div>
+                    <div class="form-text">Supported formats: JPG, PNG, WEBP, GIF. Max size: 10MB.</div>
                     @if (!string.IsNullOrWhiteSpace(_avatarMessage))
                     {
-                        <div class="text-muted mt-2">@_avatarMessage</div>
+                        <div class="alert mt-2 @_avatarMessageCss" role="alert">@_avatarMessage</div>
                     }
                 </form>
             </Authorized>
@@ -70,6 +71,7 @@
 
 @code {
     private string? _avatarMessage;
+    private string _avatarMessageCss = "alert-info";
 
     protected override void OnParametersSet()
     {
@@ -79,14 +81,17 @@
         if (query.TryGetValue("avatarError", out var error) && !string.IsNullOrWhiteSpace(error))
         {
             _avatarMessage = error.ToString();
+            _avatarMessageCss = "alert-danger";
         }
         else if (query.TryGetValue("avatarUpdated", out var updated) && updated == "1")
         {
             _avatarMessage = "Avatar updated.";
+            _avatarMessageCss = "alert-success";
         }
         else
         {
             _avatarMessage = null;
+            _avatarMessageCss = "alert-info";
         }
     }
 }

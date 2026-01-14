@@ -1288,23 +1288,40 @@ app.MapPost("/account/avatar", async (
     IFormFile? avatar,
     UserManager<ApplicationUser> userManager,
     ApplicationDbContext db,
-    IAssetStorage storage) =>
+    IAssetStorage storage,
+    ILoggerFactory loggerFactory) =>
 {
+    var logger = loggerFactory.CreateLogger("AvatarUpload");
+
     if (avatar is null || avatar.Length == 0)
     {
         return Results.Redirect($"/?avatarError={Uri.EscapeDataString("Please choose an image.")}#people");
     }
 
-    const long maxBytes = 2 * 1024 * 1024; // 2MB
+    const long maxBytes = 10 * 1024 * 1024; // 10MB
     if (avatar.Length > maxBytes)
     {
-        return Results.Redirect($"/?avatarError={Uri.EscapeDataString("Image must be 2MB or smaller.")}#people");
+        return Results.Redirect($"/?avatarError={Uri.EscapeDataString("Image must be 10MB or smaller.")}#people");
+    }
+
+    if (!string.IsNullOrWhiteSpace(avatar.ContentType)
+        && !avatar.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+    {
+        return Results.Redirect($"/?avatarError={Uri.EscapeDataString("That file doesn't look like an image.")}#people");
     }
 
     string? extension;
-    await using (var sniffStream = avatar.OpenReadStream())
+    try
     {
-        extension = await ImageFileSniffer.DetectExtensionAsync(sniffStream);
+        await using (var sniffStream = avatar.OpenReadStream())
+        {
+            extension = await ImageFileSniffer.DetectExtensionAsync(sniffStream);
+        }
+    }
+    catch (Exception ex)
+    {
+        logger.LogWarning(ex, "Failed to read avatar upload stream.");
+        return Results.Redirect($"/?avatarError={Uri.EscapeDataString("Couldn't read that image. Try a different file.")}#people");
     }
 
     if (string.IsNullOrWhiteSpace(extension))
@@ -1360,9 +1377,17 @@ app.MapPost("/account/avatar", async (
         await db.SaveChangesAsync();
     }
 
-    await using var avatarStream = avatar.OpenReadStream();
-    member.AvatarUrl = await storage.SaveAvatarAsync(member.Id, avatarStream, extension);
-    await db.SaveChangesAsync();
+    try
+    {
+        await using var avatarStream = avatar.OpenReadStream();
+        member.AvatarUrl = await storage.SaveAvatarAsync(member.Id, avatarStream, extension);
+        await db.SaveChangesAsync();
+    }
+    catch (Exception ex)
+    {
+        logger.LogWarning(ex, "Avatar upload failed for user '{UserName}'.", userName);
+        return Results.Redirect($"/?avatarError={Uri.EscapeDataString("Upload failed. Try a smaller image or a different format.")}#people");
+    }
 
     return Results.Redirect("/?avatarUpdated=1#people");
 })
