@@ -53,6 +53,17 @@
 
         @if (_userId is not null)
         {
+            @if (_userIsRealAdmin)
+            {
+                <div class="bgm-popup__link bgm-popup__toggleRow" aria-label="Admin view mode">
+                    <div class="form-check form-switch m-0">
+                        <input class="form-check-input" type="checkbox" role="switch" id="bgm-viewAsNonAdmin"
+                               checked="@_viewAsNonAdmin" @onchange="OnViewAsNonAdminChanged">
+                        <label class="form-check-label" for="bgm-viewAsNonAdmin">View as non-admin</label>
+                    </div>
+                </div>
+            }
+
             <AuthorizeView Roles="Admin">
                 <Authorized>
                     <a class="bgm-popup__link" href="/admin" @onclick="CloseMenu">Admin</a>
@@ -73,10 +84,14 @@
 </aside>
 
 @code {
+    private const string ViewAsNonAdminCookie = "bgm_viewAsNonAdmin";
+
     private bool _menuOpen;
     private string? _userId;
     private int? _coins;
     private bool _userIsAdmin;
+    private bool _userIsRealAdmin;
+    private bool _viewAsNonAdmin;
 
     protected override async Task OnInitializedAsync()
     {
@@ -121,6 +136,24 @@
 
         _userId = user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
         _userIsAdmin = user.IsInRole("Admin");
+        _userIsRealAdmin = _userIsAdmin || user.HasClaim(c => c.Type == "bgm:realAdmin" && c.Value == "1");
+
+        if (_userIsRealAdmin)
+        {
+            try
+            {
+                var cookie = await JS.InvokeAsync<string?>("bgm.getCookie", ViewAsNonAdminCookie);
+                _viewAsNonAdmin = string.Equals(cookie, "1", StringComparison.Ordinal);
+            }
+            catch
+            {
+                _viewAsNonAdmin = false;
+            }
+        }
+        else
+        {
+            _viewAsNonAdmin = false;
+        }
 
         if (string.IsNullOrWhiteSpace(_userId))
         {
@@ -131,6 +164,36 @@
 
         _coins = await Coins.GetCoinsAsync(_userId);
         StateHasChanged();
+    }
+
+    private async Task OnViewAsNonAdminChanged(ChangeEventArgs e)
+    {
+        if (!_userIsRealAdmin)
+        {
+            return;
+        }
+
+        var enabled = e.Value is bool b
+            ? b
+            : string.Equals(e.Value?.ToString(), "true", StringComparison.OrdinalIgnoreCase)
+              || string.Equals(e.Value?.ToString(), "on", StringComparison.OrdinalIgnoreCase)
+              || string.Equals(e.Value?.ToString(), "1", StringComparison.OrdinalIgnoreCase);
+
+        _viewAsNonAdmin = enabled;
+
+        try
+        {
+            await JS.InvokeVoidAsync("bgm.setViewAsNonAdmin", enabled);
+        }
+        catch
+        {
+            // If cookies are blocked, fail safe: don't change view mode.
+            _viewAsNonAdmin = false;
+            return;
+        }
+
+        CloseMenu();
+        Navigation.NavigateTo(Navigation.Uri, forceLoad: true);
     }
 
     private void ToggleMenu() => _menuOpen = !_menuOpen;

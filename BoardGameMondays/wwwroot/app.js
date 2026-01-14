@@ -1,5 +1,31 @@
 window.bgm = window.bgm || {};
 
+window.bgm.getCookie = (name) => {
+    if (!name) return null;
+    const encoded = encodeURIComponent(name) + "=";
+    const parts = document.cookie.split(";");
+    for (const part of parts) {
+        const trimmed = part.trim();
+        if (trimmed.startsWith(encoded)) {
+            return decodeURIComponent(trimmed.substring(encoded.length));
+        }
+    }
+    return null;
+};
+
+window.bgm.setViewAsNonAdmin = (enabled) => {
+    const name = "bgm_viewAsNonAdmin";
+    const base = `${encodeURIComponent(name)}=${enabled ? "1" : ""}; path=/; samesite=lax`;
+    const secure = window.location && window.location.protocol === "https:" ? "; secure" : "";
+
+    if (enabled) {
+        // 1 year
+        document.cookie = base + "; max-age=" + (60 * 60 * 24 * 365) + secure;
+    } else {
+        document.cookie = base + "; max-age=0" + secure;
+    }
+};
+
 window.bgm.scrollToTopNextFrame = (behavior) => {
     const resolvedBehavior = behavior || "smooth";
 

@@ -157,6 +157,25 @@
     border: 1px solid rgba(75, 58, 26, 0.14);
 }
 
+.bgm-popup__toggleRow {
+    display: flex;
+    align-items: center;
+}
+
+.bgm-popup__toggleRow .form-check {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    width: 100%;
+}
+
+.bgm-popup__toggleRow .form-check-label {
+    color: rgba(34, 49, 28, 0.92);
+    font-weight: 600;
+    cursor: pointer;
+}
+
 @media (max-width: 480px) {
     .bgm-brand__text {
         display: none;
