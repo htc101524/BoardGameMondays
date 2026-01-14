@@ -15,6 +15,24 @@
     padding: 16px;
 }
 
+.bgm-peopleCard--link {
+    display: block;
+    text-decoration: none;
+    color: inherit;
+    transition: transform 120ms ease, box-shadow 120ms ease, background-color 120ms ease;
+}
+
+.bgm-peopleCard--link:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
+    background: rgba(255, 255, 255, 0.75);
+}
+
+.bgm-peopleCard--link:focus-visible {
+    outline: 3px solid rgba(107, 158, 210, 0.55);
+    outline-offset: 2px;
+}
+
 .bgm-peopleCard__top {
     display: flex;
     align-items: center;

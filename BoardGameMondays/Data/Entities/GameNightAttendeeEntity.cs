@@ -19,4 +19,7 @@ public sealed class GameNightAttendeeEntity
 
     [Required]
     public DateTimeOffset CreatedOn { get; set; }
+
+    [MaxLength(128)]
+    public string? SnackBrought { get; set; }
 }

@@ -1,0 +1,445 @@
+@page "/people/{MemberId:guid}"
+@using BoardGameMondays.Data
+@using BoardGameMondays.Data.Entities
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.EntityFrameworkCore
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject AuthenticationStateProvider AuthStateProvider
+@inject NavigationManager Navigation
+
+@if (_loading)
+{
+    <div class="container py-4">
+        <h1>Member</h1>
+        <div class="text-muted">Loading…</div>
+    </div>
+}
+else if (_member is null)
+{
+    <div class="container py-4">
+        <h1>Member not found</h1>
+        <a class="btn btn-link px-0" href="/#people">Back to People</a>
+    </div>
+}
+else
+{
+    <div class="container py-4">
+        <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+            <div class="d-flex align-items-center gap-3">
+                <div class="bgm-memberHero__avatar" aria-hidden="true">
+                    @if (!string.IsNullOrWhiteSpace(_member.AvatarUrl))
+                    {
+                        <img src="@_member.AvatarUrl" alt="" />
+                    }
+                    else
+                    {
+                        @(string.IsNullOrWhiteSpace(_member.Name) ? "?" : _member.Name[..1].ToUpperInvariant())
+                    }
+                </div>
+                <div>
+                    <h1 class="mb-0">@_member.Name</h1>
+                    @if (!string.IsNullOrWhiteSpace(_member.ProfileTagline))
+                    {
+                        <div class="text-muted">@_member.ProfileTagline</div>
+                    }
+                </div>
+            </div>
+
+            <div class="d-flex gap-2 align-items-center">
+                <a class="btn btn-outline-secondary" href="/#people">People</a>
+                @if (_canEdit)
+                {
+                    <button class="btn btn-primary" @onclick="ToggleEdit">@(_editMode ? "Done" : "Edit")</button>
+                }
+            </div>
+        </div>
+
+        <div class="bgm-memberStats mt-4" aria-label="Member stats">
+            <div class="bgm-memberStat">
+                <div class="bgm-memberStat__label">Attendances</div>
+                <div class="bgm-memberStat__value">@_stats.Attendances</div>
+            </div>
+            <div class="bgm-memberStat">
+                <div class="bgm-memberStat__label">Games played</div>
+                <div class="bgm-memberStat__value">@_stats.GamesPlayed</div>
+            </div>
+            <div class="bgm-memberStat">
+                <div class="bgm-memberStat__label">Games won</div>
+                <div class="bgm-memberStat__value">@_stats.GamesWon</div>
+            </div>
+            <div class="bgm-memberStat">
+                <div class="bgm-memberStat__label">Team wins</div>
+                <div class="bgm-memberStat__value">@_stats.TeamWins</div>
+            </div>
+            <div class="bgm-memberStat">
+                <div class="bgm-memberStat__label">Snacks brought</div>
+                <div class="bgm-memberStat__value">@_stats.SnacksBrought</div>
+            </div>
+        </div>
+
+        <div class="row g-4 mt-1">
+            <div class="col-12 col-lg-6">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <h2 class="h5 mb-0">Profile</h2>
+                        </div>
+
+                        @if (_editMode)
+                        {
+                            <EditForm Model="_edit" OnValidSubmit="SaveProfileAsync">
+                                <DataAnnotationsValidator />
+
+                                <div class="mb-3">
+                                    <label class="form-label">Tagline</label>
+                                    <InputText class="form-control" @bind-Value="_edit.ProfileTagline" />
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label">Favourite game</label>
+                                    <InputText class="form-control" @bind-Value="_edit.FavoriteGame" />
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label">Play style</label>
+                                    <InputText class="form-control" @bind-Value="_edit.PlayStyle" />
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label">Fun fact</label>
+                                    <InputText class="form-control" @bind-Value="_edit.FunFact" />
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label">Bio</label>
+                                    <InputTextArea class="form-control" rows="4" @bind-Value="_edit.Summary" />
+                                    <div class="form-text">Shown on your profile and in People cards.</div>
+                                </div>
+
+                                @if (!string.IsNullOrWhiteSpace(_saveMessage))
+                                {
+                                    <div class="alert @_saveMessageCss" role="alert">@_saveMessage</div>
+                                }
+
+                                <button class="btn btn-primary" type="submit" disabled="@_saving">Save profile</button>
+                            </EditForm>
+                        }
+                        else
+                        {
+                            @if (!string.IsNullOrWhiteSpace(_member.FavoriteGame) || !string.IsNullOrWhiteSpace(_member.PlayStyle) || !string.IsNullOrWhiteSpace(_member.FunFact))
+                            {
+                                <dl class="row mb-3">
+                                    @if (!string.IsNullOrWhiteSpace(_member.FavoriteGame))
+                                    {
+                                        <dt class="col-5">Favourite game</dt>
+                                        <dd class="col-7">@_member.FavoriteGame</dd>
+                                    }
+                                    @if (!string.IsNullOrWhiteSpace(_member.PlayStyle))
+                                    {
+                                        <dt class="col-5">Play style</dt>
+                                        <dd class="col-7">@_member.PlayStyle</dd>
+                                    }
+                                    @if (!string.IsNullOrWhiteSpace(_member.FunFact))
+                                    {
+                                        <dt class="col-5">Fun fact</dt>
+                                        <dd class="col-7">@_member.FunFact</dd>
+                                    }
+                                </dl>
+                            }
+
+                            @if (!string.IsNullOrWhiteSpace(_member.Summary))
+                            {
+                                <div>@_member.Summary</div>
+                            }
+                            else
+                            {
+                                <div class="text-muted">No bio yet.</div>
+                            }
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-12 col-lg-6">
+                <div class="card">
+                    <div class="card-body">
+                        <h2 class="h5">Top games</h2>
+                        @if (_topGames.Count == 0)
+                        {
+                            <div class="text-muted">No games recorded yet.</div>
+                        }
+                        else
+                        {
+                            <div class="list-group list-group-flush">
+                                @foreach (var tg in _topGames)
+                                {
+                                    <div class="list-group-item d-flex justify-content-between align-items-center px-0">
+                                        <div class="text-truncate">@tg.GameName</div>
+                                        <div class="text-muted text-nowrap">@tg.Plays plays</div>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <div class="card mt-4">
+                    <div class="card-body">
+                        <h2 class="h5">Snack log</h2>
+                        @if (_recentAttendances.Count == 0)
+                        {
+                            <div class="text-muted">No attendances yet.</div>
+                        }
+                        else
+                        {
+                            <div class="list-group list-group-flush">
+                                @foreach (var row in _recentAttendances)
+                                {
+                                    <div class="list-group-item px-0">
+                                        <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap">
+                                            <div class="text-muted">@FormatLongDate(row.Date)</div>
+                                            <div class="fw-semibold">@(string.IsNullOrWhiteSpace(row.SnackBrought) ? "—" : row.SnackBrought)</div>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public Guid MemberId { get; set; }
+
+    private bool _loading = true;
+    private bool _saving;
+    private bool _editMode;
+    private bool _canEdit;
+
+    private MemberEntity? _member;
+
+    private MemberStats _stats = new();
+    private List<TopGame> _topGames = new();
+    private List<AttendanceRow> _recentAttendances = new();
+
+    private EditModel _edit = new();
+    private string? _saveMessage;
+    private string _saveMessageCss = "alert-info";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+        _saveMessage = null;
+        await LoadAsync();
+        _loading = false;
+    }
+
+    private void ToggleEdit()
+    {
+        _editMode = !_editMode;
+        _saveMessage = null;
+
+        if (_editMode && _member is not null)
+        {
+            _edit = new EditModel
+            {
+                ProfileTagline = _member.ProfileTagline,
+                FavoriteGame = _member.FavoriteGame,
+                PlayStyle = _member.PlayStyle,
+                FunFact = _member.FunFact,
+                Summary = _member.Summary
+            };
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        var auth = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = auth.User;
+
+        var currentMemberId = user.FindFirst("bgm:memberId")?.Value;
+        _canEdit = user.IsInRole("Admin") || (Guid.TryParse(currentMemberId, out var me) && me == MemberId);
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        _member = await db.Members
+            .AsNoTracking()
+            .FirstOrDefaultAsync(m => m.Id == MemberId && m.IsBgmMember);
+
+        if (_member is null)
+        {
+            _stats = new();
+            _topGames = new();
+            _recentAttendances = new();
+            _edit = new();
+            return;
+        }
+
+        // Stats
+        var attendances = await db.GameNightAttendees.CountAsync(a => a.MemberId == MemberId);
+        var snacksBrought = await db.GameNightAttendees.CountAsync(a => a.MemberId == MemberId && a.SnackBrought != null && a.SnackBrought != "");
+
+        var gamesPlayed = await db.GameNightGamePlayers
+            .Where(p => p.MemberId == MemberId)
+            .Join(db.GameNightGames.Where(g => g.IsPlayed), p => p.GameNightGameId, g => g.Id, (p, g) => g.Id)
+            .Distinct()
+            .CountAsync();
+
+        var soloWins = await db.GameNightGames.CountAsync(g => g.IsPlayed && g.WinnerMemberId == MemberId);
+
+        var teamWinIds = await db.GameNightGames
+            .Where(g => g.IsPlayed && g.WinnerTeamName != null)
+            .Join(db.GameNightGamePlayers.Where(p => p.MemberId == MemberId), g => g.Id, p => p.GameNightGameId, (g, p) => new { g.Id, g.WinnerTeamName, p.TeamName })
+            .Where(x => x.TeamName != null && x.TeamName == x.WinnerTeamName)
+            .Select(x => x.Id)
+            .Distinct()
+            .ToListAsync();
+
+        _stats = new MemberStats
+        {
+            Attendances = attendances,
+            SnacksBrought = snacksBrought,
+            GamesPlayed = gamesPlayed,
+            TeamWins = teamWinIds.Count,
+            GamesWon = soloWins + teamWinIds.Count
+        };
+
+        // Top games (query shape kept EF-translatable: group by scalar key, then join)
+        var topGamesRaw = await db.GameNightGamePlayers
+            .Where(p => p.MemberId == MemberId)
+            .Join(
+                db.GameNightGames.Where(g => g.IsPlayed),
+                p => p.GameNightGameId,
+                g => g.Id,
+                (p, g) => g.GameId)
+            .GroupBy(gameId => gameId)
+            .Select(g => new { GameId = g.Key, Plays = g.Count() })
+            .Join(db.Games, x => x.GameId, game => game.Id, (x, game) => new { x.GameId, GameName = game.Name, x.Plays })
+            .OrderByDescending(x => x.Plays)
+            .ThenBy(x => x.GameName)
+            .Take(5)
+            .ToListAsync();
+
+        _topGames = topGamesRaw
+            .Select(x => new TopGame(x.GameId, x.GameName, x.Plays))
+            .ToList();
+
+        // Recent attendances (for snack log)
+        _recentAttendances = await db.GameNightAttendees
+            .Where(a => a.MemberId == MemberId)
+            .Join(db.GameNights, a => a.GameNightId, n => n.Id, (a, n) => new AttendanceRow
+            {
+                GameNightId = a.GameNightId,
+                DateKey = n.DateKey,
+                SnackBrought = a.SnackBrought
+            })
+            .OrderByDescending(x => x.DateKey)
+            .Take(12)
+            .ToListAsync();
+
+        foreach (var row in _recentAttendances)
+        {
+            row.Date = FromDateKey(row.DateKey);
+        }
+    }
+
+    private async Task SaveProfileAsync()
+    {
+        if (!_canEdit || _member is null)
+        {
+            return;
+        }
+
+        _saving = true;
+        _saveMessage = null;
+
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var member = await db.Members.FirstOrDefaultAsync(m => m.Id == MemberId);
+            if (member is null)
+            {
+                _saveMessage = "Member not found.";
+                _saveMessageCss = "alert-danger";
+                return;
+            }
+
+            member.ProfileTagline = OptionalTrimToNull(_edit.ProfileTagline, 128);
+            member.FavoriteGame = OptionalTrimToNull(_edit.FavoriteGame, 128);
+            member.PlayStyle = OptionalTrimToNull(_edit.PlayStyle, 128);
+            member.FunFact = OptionalTrimToNull(_edit.FunFact, 256);
+            member.Summary = OptionalTrimToNull(_edit.Summary, 512);
+
+            await db.SaveChangesAsync();
+
+            _saveMessage = "Profile saved.";
+            _saveMessageCss = "alert-success";
+        }
+        catch
+        {
+            _saveMessage = "Failed to save profile.";
+            _saveMessageCss = "alert-danger";
+        }
+        finally
+        {
+            _saving = false;
+        }
+
+        await LoadAsync();
+    }
+
+    private static string FormatLongDate(DateOnly date)
+        => date.ToString("dddd d MMMM yyyy");
+
+    private static DateOnly FromDateKey(int key)
+    {
+        var year = key / 10000;
+        var month = (key / 100) % 100;
+        var day = key % 100;
+        return new DateOnly(year, month, day);
+    }
+
+    private static string? OptionalTrimToNull(string? value, int maxLen)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        value = value.Trim();
+        return value.Length <= maxLen ? value : value[..maxLen];
+    }
+
+    private sealed class MemberStats
+    {
+        public int Attendances { get; set; }
+        public int GamesPlayed { get; set; }
+        public int GamesWon { get; set; }
+        public int TeamWins { get; set; }
+        public int SnacksBrought { get; set; }
+    }
+
+    private sealed record TopGame(Guid GameId, string GameName, int Plays);
+
+    private sealed class AttendanceRow
+    {
+        public Guid GameNightId { get; set; }
+        public int DateKey { get; set; }
+        public DateOnly Date { get; set; }
+        public string? SnackBrought { get; set; }
+    }
+
+    private sealed class EditModel
+    {
+        public string? ProfileTagline { get; set; }
+        public string? FavoriteGame { get; set; }
+        public string? PlayStyle { get; set; }
+        public string? FunFact { get; set; }
+        public string? Summary { get; set; }
+    }
+}

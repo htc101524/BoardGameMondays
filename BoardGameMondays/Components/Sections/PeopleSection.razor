@@ -1,10 +1,12 @@
 @using BoardGameMondays.Core
+@using BoardGameMondays.Data
 @using Microsoft.AspNetCore.Components.Authorization
 @using Microsoft.AspNetCore.Components.Forms
 @using Microsoft.AspNetCore.Components.Web
 @using Microsoft.AspNetCore.WebUtilities
-@inject BgmMemberDirectoryService MemberDirectory
+@using Microsoft.EntityFrameworkCore
 @inject NavigationManager Navigation
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
 
 <section id="people" class="home-section" aria-label="People">
     @* PageTitle is normally provided by the hosting shell; omit here to avoid component resolution issues. *@
@@ -31,9 +33,9 @@
         </AuthorizeView>
 
         <div class="bgm-peopleGrid" role="list" aria-label="Members">
-            @foreach (var member in MemberDirectory.GetAdmins())
+            @foreach (var member in _members)
             {
-                <article class="bgm-peopleCard" role="listitem" aria-label="@member.Name">
+                <a class="bgm-peopleCard bgm-peopleCard--link" role="listitem" aria-label="@member.Name" href="/people/@member.Id">
                     <div class="bgm-peopleCard__top">
                         <div class="bgm-peopleCard__avatar" aria-hidden="true">
                             @if (!string.IsNullOrWhiteSpace(member.AvatarUrl))
@@ -63,7 +65,7 @@
                     {
                         <p class="bgm-peopleCard__summary">Board Game Mondays member.</p>
                     }
-                </article>
+                </a>
             }
         </div>
     </div>
@@ -72,6 +74,18 @@
 @code {
     private string? _avatarMessage;
     private string _avatarMessageCss = "alert-info";
+    private IReadOnlyList<MemberCard> _members = Array.Empty<MemberCard>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _members = await db.Members
+            .AsNoTracking()
+            .Where(m => m.IsBgmMember)
+            .OrderBy(m => m.Name)
+            .Select(m => new MemberCard(m.Id, m.Name, m.Email, m.Summary, m.AvatarUrl))
+            .ToListAsync();
+    }
 
     protected override void OnParametersSet()
     {
@@ -94,4 +108,6 @@
             _avatarMessageCss = "alert-info";
         }
     }
+
+    private sealed record MemberCard(Guid Id, string Name, string Email, string? Summary, string? AvatarUrl);
 }

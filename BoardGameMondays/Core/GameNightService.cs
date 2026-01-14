@@ -226,6 +226,31 @@ public sealed class GameNightService
         return await GetByIdAsync(gameNightId, ct);
     }
 
+    public async Task<GameNight?> SetSnackBroughtAsync(Guid gameNightId, Guid memberId, string? snackBrought, CancellationToken ct = default)
+    {
+        snackBrought = InputGuards.OptionalTrimToNull(snackBrought, maxLength: 128, nameof(snackBrought));
+
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        var exists = await db.GameNights.AnyAsync(n => n.Id == gameNightId, ct);
+        if (!exists)
+        {
+            return null;
+        }
+
+        var attendee = await db.GameNightAttendees
+            .FirstOrDefaultAsync(a => a.GameNightId == gameNightId && a.MemberId == memberId, ct);
+
+        if (attendee is null)
+        {
+            // Snack is only tracked for attending members.
+            return await GetByIdAsync(gameNightId, ct);
+        }
+
+        attendee.SnackBrought = snackBrought;
+        await db.SaveChangesAsync(ct);
+        return await GetByIdAsync(gameNightId, ct);
+    }
+
     // Back-compat: older callers use SetAttendingAsync for RSVP.
     public Task<GameNight?> SetAttendingAsync(Guid gameNightId, Guid memberId, bool attending, CancellationToken ct = default)
         => SetRsvpAsync(gameNightId, memberId, attending, ct);
@@ -687,7 +712,7 @@ public sealed class GameNightService
 
         var attendees = entity.Attendees
             .OrderBy(a => a.Member.Name)
-            .Select(a => new GameNightAttendee(a.MemberId, a.Member.Name))
+            .Select(a => new GameNightAttendee(a.MemberId, a.Member.Name, a.SnackBrought))
             .ToArray();
 
         var rsvps = entity.Rsvps
@@ -746,7 +771,7 @@ public sealed class GameNightService
 
     public sealed record GameNight(Guid Id, DateOnly Date, string? Recap, IReadOnlyList<GameNightAttendee> Attendees, IReadOnlyList<GameNightRsvp> Rsvps, IReadOnlyList<GameNightGame> Games);
 
-    public sealed record GameNightAttendee(Guid MemberId, string MemberName);
+    public sealed record GameNightAttendee(Guid MemberId, string MemberName, string? SnackBrought);
 
     public sealed record GameNightRsvp(Guid MemberId, string MemberName, bool IsAttending);
 

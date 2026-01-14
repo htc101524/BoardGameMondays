@@ -281,6 +281,8 @@ try
         await EnsureSqlServerTeamColumnsAsync(db, app.Logger);
         await EnsureSqlServerTicketColumnsAsync(db, app.Logger);
         await EnsureSqlServerGameNightRsvpTableAsync(db, app.Logger);
+        await EnsureSqlServerMemberProfileColumnsAsync(db, app.Logger);
+        await EnsureSqlServerGameNightAttendeeSnackColumnAsync(db, app.Logger);
     }
 
     // Ensure identity tables exist before assigning roles.
@@ -410,6 +412,79 @@ END;
     catch (Exception ex)
     {
         logger.LogCritical(ex, "Failed to ensure GameNightRsvps exists in SQL Server schema.");
+        throw;
+    }
+}
+
+static async Task EnsureSqlServerMemberProfileColumnsAsync(ApplicationDbContext db, ILogger logger)
+{
+    if (!db.Database.IsSqlServer())
+    {
+        return;
+    }
+
+    const string sql = @"
+IF COL_LENGTH(N'dbo.Members', N'ProfileTagline') IS NULL
+BEGIN
+    ALTER TABLE [dbo].[Members] ADD [ProfileTagline] nvarchar(128) NULL;
+END;
+
+IF COL_LENGTH(N'dbo.Members', N'FavoriteGame') IS NULL
+BEGIN
+    ALTER TABLE [dbo].[Members] ADD [FavoriteGame] nvarchar(128) NULL;
+END;
+
+IF COL_LENGTH(N'dbo.Members', N'PlayStyle') IS NULL
+BEGIN
+    ALTER TABLE [dbo].[Members] ADD [PlayStyle] nvarchar(128) NULL;
+END;
+
+IF COL_LENGTH(N'dbo.Members', N'FunFact') IS NULL
+BEGIN
+    ALTER TABLE [dbo].[Members] ADD [FunFact] nvarchar(256) NULL;
+END;
+";
+
+    try
+    {
+        var affected = await db.Database.ExecuteSqlRawAsync(sql);
+        if (affected != 0)
+        {
+            logger.LogWarning("Ensured member profile columns exist in SQL Server schema.");
+        }
+    }
+    catch (Exception ex)
+    {
+        logger.LogCritical(ex, "Failed to ensure member profile columns exist in SQL Server schema.");
+        throw;
+    }
+}
+
+static async Task EnsureSqlServerGameNightAttendeeSnackColumnAsync(ApplicationDbContext db, ILogger logger)
+{
+    if (!db.Database.IsSqlServer())
+    {
+        return;
+    }
+
+    const string sql = @"
+IF COL_LENGTH(N'dbo.GameNightAttendees', N'SnackBrought') IS NULL
+BEGIN
+    ALTER TABLE [dbo].[GameNightAttendees] ADD [SnackBrought] nvarchar(128) NULL;
+END;
+";
+
+    try
+    {
+        var affected = await db.Database.ExecuteSqlRawAsync(sql);
+        if (affected != 0)
+        {
+            logger.LogWarning("Ensured GameNightAttendees.SnackBrought exists in SQL Server schema.");
+        }
+    }
+    catch (Exception ex)
+    {
+        logger.LogCritical(ex, "Failed to ensure GameNightAttendees.SnackBrought exists in SQL Server schema.");
         throw;
     }
 }
@@ -553,6 +628,53 @@ static async Task EnsureSqliteSchemaUpToDateAsync(ApplicationDbContext db)
         {
             await using var alter = connection.CreateCommand();
             alter.CommandText = "ALTER TABLE Members ADD COLUMN IsBgmMember INTEGER NOT NULL DEFAULT 1;";
+            await alter.ExecuteNonQueryAsync();
+        }
+
+        // Members profile columns
+        var hasProfileTagline = false;
+        var hasFavoriteGame = false;
+        var hasPlayStyle = false;
+        var hasFunFact = false;
+        await using (var cmd = connection.CreateCommand())
+        {
+            cmd.CommandText = "PRAGMA table_info('Members');";
+            await using var reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                var name = reader.GetString(1);
+                if (string.Equals(name, "ProfileTagline", StringComparison.OrdinalIgnoreCase)) hasProfileTagline = true;
+                if (string.Equals(name, "FavoriteGame", StringComparison.OrdinalIgnoreCase)) hasFavoriteGame = true;
+                if (string.Equals(name, "PlayStyle", StringComparison.OrdinalIgnoreCase)) hasPlayStyle = true;
+                if (string.Equals(name, "FunFact", StringComparison.OrdinalIgnoreCase)) hasFunFact = true;
+            }
+        }
+
+        if (!hasProfileTagline)
+        {
+            await using var alter = connection.CreateCommand();
+            alter.CommandText = "ALTER TABLE Members ADD COLUMN ProfileTagline TEXT NULL;";
+            await alter.ExecuteNonQueryAsync();
+        }
+
+        if (!hasFavoriteGame)
+        {
+            await using var alter = connection.CreateCommand();
+            alter.CommandText = "ALTER TABLE Members ADD COLUMN FavoriteGame TEXT NULL;";
+            await alter.ExecuteNonQueryAsync();
+        }
+
+        if (!hasPlayStyle)
+        {
+            await using var alter = connection.CreateCommand();
+            alter.CommandText = "ALTER TABLE Members ADD COLUMN PlayStyle TEXT NULL;";
+            await alter.ExecuteNonQueryAsync();
+        }
+
+        if (!hasFunFact)
+        {
+            await using var alter = connection.CreateCommand();
+            alter.CommandText = "ALTER TABLE Members ADD COLUMN FunFact TEXT NULL;";
             await alter.ExecuteNonQueryAsync();
         }
 
@@ -789,11 +911,35 @@ CREATE TABLE IF NOT EXISTS GameNightAttendees (
     GameNightId TEXT NOT NULL,
     MemberId TEXT NOT NULL,
     CreatedOn INTEGER NOT NULL,
+    SnackBrought TEXT NULL,
     FOREIGN KEY (GameNightId) REFERENCES GameNights(Id) ON DELETE CASCADE,
     FOREIGN KEY (MemberId) REFERENCES Members(Id) ON DELETE CASCADE
 );
 ";
             await createGameNightAttendees.ExecuteNonQueryAsync();
+        }
+
+        var hasSnackBrought = false;
+        await using (var cmd = connection.CreateCommand())
+        {
+            cmd.CommandText = "PRAGMA table_info('GameNightAttendees');";
+            await using var reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                var name = reader.GetString(1);
+                if (string.Equals(name, "SnackBrought", StringComparison.OrdinalIgnoreCase))
+                {
+                    hasSnackBrought = true;
+                    break;
+                }
+            }
+        }
+
+        if (!hasSnackBrought)
+        {
+            await using var alter = connection.CreateCommand();
+            alter.CommandText = "ALTER TABLE GameNightAttendees ADD COLUMN SnackBrought TEXT NULL;";
+            await alter.ExecuteNonQueryAsync();
         }
 
         await using (var createGameNightRsvps = connection.CreateCommand())

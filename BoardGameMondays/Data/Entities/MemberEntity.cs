@@ -20,6 +20,18 @@ public sealed class MemberEntity
     [MaxLength(512)]
     public string? Summary { get; set; }
 
+    [MaxLength(128)]
+    public string? ProfileTagline { get; set; }
+
+    [MaxLength(128)]
+    public string? FavoriteGame { get; set; }
+
+    [MaxLength(128)]
+    public string? PlayStyle { get; set; }
+
+    [MaxLength(256)]
+    public string? FunFact { get; set; }
+
     [MaxLength(512)]
     public string? AvatarUrl { get; set; }
 }

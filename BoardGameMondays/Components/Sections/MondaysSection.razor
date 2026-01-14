@@ -139,6 +139,57 @@
                         }
                     </div>
 
+                    @if (_selected < _nextMonday)
+                    {
+                        <div class="mt-3" aria-label="Snacks brought">
+                            <div class="fw-semibold mb-1">Snacks brought</div>
+                            @if (_selectedNight.Attendees.Count == 0)
+                            {
+                                <div class="text-muted">No attendees yet.</div>
+                            }
+                            else
+                            {
+                                <div class="d-grid gap-2">
+                                    @foreach (var attendee in _selectedNight.Attendees)
+                                    {
+                                        var status = _snackStatusByMemberId.TryGetValue(attendee.MemberId, out var s) ? s : null;
+
+                                        <div class="d-flex align-items-center gap-2 flex-wrap">
+                                            <div style="min-width: 160px" class="fw-semibold">@attendee.MemberName</div>
+
+                                            @if (_isAdmin)
+                                            {
+                                                <input type="text"
+                                                       class="form-control form-control-sm"
+                                                       style="min-width: 240px; max-width: 420px"
+                                                       placeholder="—"
+                                                       value="@GetSnackDraft(attendee.MemberId)"
+                                                       disabled="@_saving"
+                                                       @onchange="e => SetSnackDraft(attendee.MemberId, e.Value?.ToString())" />
+
+                                                <button type="button"
+                                                        class="btn btn-sm btn-outline-primary"
+                                                        disabled="@_saving"
+                                                        @onclick="() => SaveSnackAsync(attendee.MemberId)">
+                                                    Save
+                                                </button>
+
+                                                @if (!string.IsNullOrWhiteSpace(status))
+                                                {
+                                                    <span class="text-muted small">@status</span>
+                                                }
+                                            }
+                                            else
+                                            {
+                                                <div class="fw-semibold">@(string.IsNullOrWhiteSpace(attendee.SnackBrought) ? "—" : attendee.SnackBrought)</div>
+                                            }
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    }
+
                     <div class="mt-3" aria-label="Planned games">
                         <div class="fw-semibold mb-1">@(_selected < _nextMonday ? "Games played" : "Games planned")</div>
                         @if (_selectedNight.Games.Count == 0)
@@ -834,6 +885,9 @@
     private readonly Dictionary<int, List<string>> _clientTeams = new();
     private readonly Dictionary<int, string?> _paletteImageUrlByGame = new();
 
+    private readonly Dictionary<Guid, string?> _snackDraftByMemberId = new();
+    private readonly Dictionary<Guid, string?> _snackStatusByMemberId = new();
+
     private ElementReference _mondaysSectionRef;
     private string? _mondaysSectionBackgroundHex;
 
@@ -993,6 +1047,8 @@
             _recapEdit = _selectedNight?.Recap ?? string.Empty;
             _recapStatus = null;
 
+            SyncSnackStateForSelectedNight(clearStatuses: true);
+
             if (_selectedNight is not null && !string.IsNullOrWhiteSpace(_userId))
             {
                 _myBets = await BettingService.GetUserBetsForNightAsync(_selectedNight.Id, _userId);
@@ -1005,6 +1061,65 @@
         finally
         {
             _loading = false;
+        }
+    }
+
+    private void SyncSnackStateForSelectedNight(bool clearStatuses)
+    {
+        _snackDraftByMemberId.Clear();
+
+        if (clearStatuses)
+        {
+            _snackStatusByMemberId.Clear();
+        }
+
+        if (_selectedNight is null)
+        {
+            return;
+        }
+
+        var attendeeIds = _selectedNight.Attendees.Select(a => a.MemberId).ToHashSet();
+        foreach (var k in _snackStatusByMemberId.Keys.Where(k => !attendeeIds.Contains(k)).ToArray())
+        {
+            _snackStatusByMemberId.Remove(k);
+        }
+
+        foreach (var a in _selectedNight.Attendees)
+        {
+            _snackDraftByMemberId[a.MemberId] = a.SnackBrought;
+        }
+    }
+
+    private string? GetSnackDraft(Guid memberId)
+        => _snackDraftByMemberId.TryGetValue(memberId, out var v) ? v : null;
+
+    private void SetSnackDraft(Guid memberId, string? value)
+        => _snackDraftByMemberId[memberId] = value;
+
+    private async Task SaveSnackAsync(Guid memberId)
+    {
+        if (!_isAdmin || _selectedNight is null || _selected >= _nextMonday)
+        {
+            return;
+        }
+
+        _saving = true;
+        _snackStatusByMemberId[memberId] = null;
+
+        try
+        {
+            var snack = GetSnackDraft(memberId);
+            _selectedNight = await GameNightService.SetSnackBroughtAsync(_selectedNight.Id, memberId, snack);
+            SyncSnackStateForSelectedNight(clearStatuses: false);
+            _snackStatusByMemberId[memberId] = "Saved";
+        }
+        catch
+        {
+            _snackStatusByMemberId[memberId] = "Failed";
+        }
+        finally
+        {
+            _saving = false;
         }
     }
 
@@ -1575,6 +1690,7 @@
             _selectedNight = await GameNightService.SetAttendanceAsync(_selectedNight.Id, memberId, attending, respectExplicitDeclines: attending);
             _amAttending = _memberId is { } me && _selectedNight?.Attendees.Any(a => a.MemberId == me) == true;
             _declinedMemberIds = _selectedNight?.Rsvps.Where(r => !r.IsAttending).Select(r => r.MemberId).ToHashSet() ?? new();
+            SyncSnackStateForSelectedNight(clearStatuses: false);
         }
         finally
         {
