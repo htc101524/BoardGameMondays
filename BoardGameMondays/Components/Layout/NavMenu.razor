@@ -3,6 +3,7 @@
 @inject IJSRuntime JS
 @inject AuthenticationStateProvider AuthStateProvider
 @inject BoardGameMondays.Core.BgmCoinService Coins
+@inject IHttpContextAccessor HttpContextAccessor
 
 @implements IDisposable
 
@@ -92,12 +93,22 @@
     private bool _userIsAdmin;
     private bool _userIsRealAdmin;
     private bool _viewAsNonAdmin;
+    private bool _isInteractive;
 
     protected override async Task OnInitializedAsync()
     {
         AuthStateProvider.AuthenticationStateChanged += OnAuthStateChanged;
         Coins.Changed += OnCoinsChanged;
         await RefreshCoinsAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _isInteractive = true;
+            await RefreshCoinsAsync();
+        }
     }
 
     public void Dispose()
@@ -140,12 +151,25 @@
 
         if (_userIsRealAdmin)
         {
-            try
+            // During prerender, JS interop is unavailable. Prefer server-side cookie access when possible.
+            var serverCookie = HttpContextAccessor.HttpContext?.Request.Cookies[ViewAsNonAdminCookie];
+            if (!string.IsNullOrWhiteSpace(serverCookie))
             {
-                var cookie = await JS.InvokeAsync<string?>("bgm.getCookie", ViewAsNonAdminCookie);
-                _viewAsNonAdmin = string.Equals(cookie, "1", StringComparison.Ordinal);
+                _viewAsNonAdmin = string.Equals(serverCookie, "1", StringComparison.Ordinal);
             }
-            catch
+            else if (_isInteractive)
+            {
+                try
+                {
+                    var cookie = await JS.InvokeAsync<string?>("bgm.getCookie", ViewAsNonAdminCookie);
+                    _viewAsNonAdmin = string.Equals(cookie, "1", StringComparison.Ordinal);
+                }
+                catch
+                {
+                    _viewAsNonAdmin = false;
+                }
+            }
+            else
             {
                 _viewAsNonAdmin = false;
             }

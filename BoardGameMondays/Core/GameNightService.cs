@@ -335,11 +335,17 @@ public sealed class GameNightService
         }
 
         var routeIds = values.Select(v => v.VictoryRouteId).Distinct().ToArray();
-        var validRouteIds = await db.VictoryRoutes
+
+        // Avoid translating a local array "Contains" into an expression that may cause
+        // runtime/type issues with the EF provider. Load route ids for the game first
+        // and intersect in-memory.
+        var candidateIds = await db.VictoryRoutes
             .AsNoTracking()
-            .Where(r => r.GameId == game.GameId && routeIds.Contains(r.Id))
+            .Where(r => r.GameId == game.GameId)
             .Select(r => r.Id)
             .ToListAsync(ct);
+
+        var validRouteIds = candidateIds.Intersect(routeIds).ToList();
 
         foreach (var v in values)
         {
@@ -846,9 +852,11 @@ public sealed class GameNightService
                     winner = new GameNightWinner(w, g.WinnerMember.Name, false);
                 }
 
-                var isSettled = g.Bets.Count == 0 || g.Bets.All(b => b.IsResolved);
+                var hasBets = g.Bets.Count != 0;
+                // "Settled" is about betting resolution. Games with no bets should still allow winner editing.
+                var isSettled = hasBets && g.Bets.All(b => b.IsResolved);
 
-                return new GameNightGame(g.Id, g.GameId, g.Game.Name, g.IsPlayed, g.IsConfirmed, isSettled, players, odds, teams, winner);
+                return new GameNightGame(g.Id, g.GameId, g.Game.Name, g.IsPlayed, g.IsConfirmed, hasBets, isSettled, players, odds, teams, winner);
             })
             .ToArray();
 
@@ -872,7 +880,7 @@ public sealed class GameNightService
 
     public sealed record GameNightRsvp(Guid MemberId, string MemberName, bool IsAttending);
 
-    public sealed record GameNightGame(int Id, Guid GameId, string GameName, bool IsPlayed, bool IsConfirmed, bool IsSettled, IReadOnlyList<GameNightGamePlayer> Players, IReadOnlyList<GameNightGameOdds> Odds, IReadOnlyList<GameNightGameTeam> Teams, GameNightWinner? Winner);
+    public sealed record GameNightGame(int Id, Guid GameId, string GameName, bool IsPlayed, bool IsConfirmed, bool HasBets, bool IsSettled, IReadOnlyList<GameNightGamePlayer> Players, IReadOnlyList<GameNightGameOdds> Odds, IReadOnlyList<GameNightGameTeam> Teams, GameNightWinner? Winner);
 
     public sealed record GameNightGamePlayer(Guid MemberId, string MemberName, string? TeamName);
 

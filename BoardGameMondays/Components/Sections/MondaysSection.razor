@@ -205,21 +205,18 @@
                                         <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
                                             <div class="fw-semibold">@game.GameName</div>
 
-                                            @if (_selected >= _nextMonday)
+                                            @if (game.IsConfirmed)
                                             {
-                                                @if (game.IsConfirmed)
-                                                {
-                                                    <span class="badge text-bg-primary">Confirmed</span>
-                                                }
-                                                else if (_isAdmin)
-                                                {
-                                                    <button type="button"
-                                                            class="btn btn-sm btn-primary"
-                                                            disabled="@_saving"
-                                                            @onclick="() => ConfirmGameAsync(game.Id)">
-                                                        Confirm
-                                                    </button>
-                                                }
+                                                <span class="badge text-bg-primary">Confirmed</span>
+                                            }
+                                            else if (_isAdmin)
+                                            {
+                                                <button type="button"
+                                                        class="btn btn-sm btn-primary"
+                                                        disabled="@_saving"
+                                                        @onclick="() => ConfirmGameAsync(game.Id)">
+                                                    Confirm
+                                                </button>
                                             }
 
                                             @if (_isAdmin && !game.IsConfirmed)
@@ -723,7 +720,7 @@
                                                     {
                                                         <select class="form-select form-select-sm" style="max-width: 360px"
                                                                 value="@(game.Winner?.IsTeam == true ? (game.Winner?.Name ?? string.Empty) : string.Empty)"
-                                                                disabled="@(_saving || game.IsSettled)"
+                                                                disabled="@(_saving || !game.IsConfirmed || (game.HasBets && game.IsSettled))"
                                                                 @onchange="e => SetTeamWinnerAsync(game.Id, e.Value?.ToString())">
                                                             <option value="">No winner</option>
                                                             @foreach (var team in GetTeams(game))
@@ -736,7 +733,7 @@
                                                     {
                                                         <select class="form-select form-select-sm" style="max-width: 360px"
                                                                 value="@(game.Winner?.MemberId?.ToString() ?? string.Empty)"
-                                                                disabled="@(_saving || game.IsSettled)"
+                                                                disabled="@(_saving || !game.IsConfirmed || (game.HasBets && game.IsSettled))"
                                                                 @onchange="e => SetWinnerAsync(game.Id, e.Value?.ToString())">
                                                             <option value="">No winner</option>
                                                             @foreach (var p in game.Players)
@@ -754,34 +751,41 @@
                                                         }
                                                         else
                                                         {
-                                                            @if (_confirmWinnerPending.Contains(game.Id))
+                                                            @if (game.HasBets)
                                                             {
-                                                                <button type="button"
-                                                                        class="btn btn-sm btn-danger"
-                                                                        disabled="@_saving"
-                                                                        @onclick="() => ConfirmWinnerAsync(game.Id)">
-                                                                    Are you sure?
-                                                                </button>
-                                                                <button type="button"
-                                                                        class="btn btn-sm btn-outline-secondary"
-                                                                        disabled="@_saving"
-                                                                        @onclick="() => CancelConfirmWinner(game.Id)">
-                                                                    Cancel
-                                                                </button>
+                                                                @if (_confirmWinnerPending.Contains(game.Id))
+                                                                {
+                                                                    <button type="button"
+                                                                            class="btn btn-sm btn-danger"
+                                                                            disabled="@_saving"
+                                                                            @onclick="() => ConfirmWinnerAsync(game.Id)">
+                                                                        Are you sure?
+                                                                    </button>
+                                                                    <button type="button"
+                                                                            class="btn btn-sm btn-outline-secondary"
+                                                                            disabled="@_saving"
+                                                                            @onclick="() => CancelConfirmWinner(game.Id)">
+                                                                        Cancel
+                                                                    </button>
+                                                                }
+                                                                else
+                                                                {
+                                                                    <button type="button"
+                                                                            class="btn btn-sm btn-success"
+                                                                            disabled="@_saving"
+                                                                            @onclick="() => BeginConfirmWinner(game.Id)">
+                                                                        Confirm
+                                                                    </button>
+                                                                }
+
+                                                                @if (_settleStatusByGameId.TryGetValue(game.Id, out var status) && !string.IsNullOrWhiteSpace(status))
+                                                                {
+                                                                    <span class="text-muted">@status</span>
+                                                                }
                                                             }
                                                             else
                                                             {
-                                                                <button type="button"
-                                                                        class="btn btn-sm btn-success"
-                                                                        disabled="@_saving"
-                                                                        @onclick="() => BeginConfirmWinner(game.Id)">
-                                                                    Confirm
-                                                                </button>
-                                                            }
-
-                                                            @if (_settleStatusByGameId.TryGetValue(game.Id, out var status) && !string.IsNullOrWhiteSpace(status))
-                                                            {
-                                                                <span class="text-muted">@status</span>
+                                                                <span class="badge text-bg-secondary">No bets</span>
                                                             }
                                                         }
                                                     }

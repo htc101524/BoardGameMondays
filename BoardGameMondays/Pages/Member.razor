@@ -66,7 +66,9 @@ else
             </div>
             <div class="bgm-memberStat">
                 <div class="bgm-memberStat__label">Games won</div>
-                <div class="bgm-memberStat__value">@_stats.GamesWon</div>
+                <div class="bgm-memberStat__value">
+                    <button class="btn btn-link p-0 bgm-memberStat__value" @onclick="ToggleWinsAsync" aria-label="Show wins">@_stats.GamesWon</button>
+                </div>
             </div>
             <div class="bgm-memberStat">
                 <div class="bgm-memberStat__label">Team wins</div>
@@ -77,6 +79,55 @@ else
                 <div class="bgm-memberStat__value">@_stats.SnacksBrought</div>
             </div>
         </div>
+
+        @if (_winsVisible)
+        {
+            <div class="card mt-3">
+                <div class="card-body">
+                    <h2 class="h5">Wins</h2>
+                    @if (_wins.Count == 0)
+                    {
+                        <div class="text-muted">No wins recorded.</div>
+                    }
+                    else
+                    {
+                        <div class="list-group list-group-flush">
+                            @foreach (var w in _wins)
+                            {
+                                <div class="list-group-item px-0">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <div class="fw-semibold">@w.GameName</div>
+                                            <div class="text-muted">@FormatLongDate(w.Date)</div>
+                                        </div>
+                                        <div class="text-end">
+                                            @if (w.IsTeamWin)
+                                            {
+                                                <div class="text-muted">Team win</div>
+                                            }
+                                            else
+                                            {
+                                                <div class="text-muted">Solo win</div>
+                                            }
+                                        </div>
+                                    </div>
+
+                                    @if (w.Routes?.Count > 0)
+                                    {
+                                        <div class="mt-2">
+                                            @foreach (var r in w.Routes)
+                                            {
+                                                <div class="small text-muted">@r.Name: @((r.ValueString ?? (r.ValueBool == true ? "Yes" : r.ValueBool == false ? "No" : "—")))</div>
+                                            }
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        }
 
         <div class="row g-4 mt-1">
             <div class="col-12 col-lg-6">
@@ -226,6 +277,8 @@ else
     private MemberStats _stats = new();
     private List<TopGame> _topGames = new();
     private List<AttendanceRow> _recentAttendances = new();
+    private bool _winsVisible;
+    private List<WinRow> _wins = new();
 
     private EditModel _edit = new();
     private string? _saveMessage;
@@ -290,7 +343,12 @@ else
             .Distinct()
             .CountAsync();
 
-        var soloWins = await db.GameNightGames.CountAsync(g => g.IsPlayed && g.WinnerMemberId == MemberId);
+        var soloWinIds = await db.GameNightGames
+            .Where(g => g.IsPlayed && g.WinnerMemberId == MemberId)
+            .Select(g => g.Id)
+            .ToListAsync();
+
+        var soloWins = soloWinIds.Count;
 
         var teamWinIds = await db.GameNightGames
             .Where(g => g.IsPlayed && g.WinnerTeamName != null)
@@ -413,6 +471,87 @@ else
 
         value = value.Trim();
         return value.Length <= maxLen ? value : value[..maxLen];
+    }
+
+    private async Task ToggleWinsAsync()
+    {
+        _winsVisible = !_winsVisible;
+        if (_winsVisible && _wins.Count == 0)
+        {
+            await LoadWinsAsync();
+        }
+    }
+
+    private async Task LoadWinsAsync()
+    {
+        if (_member is null)
+        {
+            return;
+        }
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        // Solo wins
+        var solo = await db.GameNightGames
+            .Where(g => g.IsPlayed && g.WinnerMemberId == MemberId)
+            .Select(g => new { g.Id, g.GameNightId, DateKey = g.GameNight.DateKey, GameName = g.Game.Name })
+            .ToListAsync();
+
+        // Team wins where this member was on the winning team
+        var team = await db.GameNightGames
+            .Where(g => g.IsPlayed && g.WinnerTeamName != null)
+            .Join(db.GameNightGamePlayers.Where(p => p.MemberId == MemberId), g => g.Id, p => p.GameNightGameId, (g, p) => new { g.Id, g.GameNightId, DateKey = g.GameNight.DateKey, GameName = g.Game.Name })
+            .ToListAsync();
+
+        var all = solo.Select(s => (Id: s.Id, s.GameNightId, s.DateKey, s.GameName, IsTeam:false))
+            .Concat(team.Select(t => (Id: t.Id, t.GameNightId, t.DateKey, t.GameName, IsTeam:true)))
+            .OrderByDescending(x => x.DateKey)
+            .ToList();
+
+        var ids = all.Select(a => a.Id).ToList();
+
+        var routeVals = await db.GameNightGameVictoryRouteValues
+            .Where(v => ids.Contains(v.GameNightGameId))
+            .Join(db.VictoryRoutes, v => v.VictoryRouteId, r => r.Id, (v, r) => new { v.GameNightGameId, RouteName = r.Name, RouteType = r.Type, v.ValueString, v.ValueBool })
+            .ToListAsync();
+
+        _wins = all.Select(a => new WinRow
+        {
+            GameNightId = a.GameNightId,
+            GameNightGameId = a.Id,
+            DateKey = a.DateKey,
+            Date = FromDateKey(a.DateKey),
+            GameName = a.GameName,
+            IsTeamWin = a.IsTeam,
+            Routes = routeVals.Where(rv => rv.GameNightGameId == a.Id).Select(rv => new RouteValue(rv.RouteName, rv.ValueString, rv.ValueBool, rv.RouteType)).ToList()
+        }).ToList();
+    }
+
+    private sealed class WinRow
+    {
+        public Guid GameNightId { get; set; }
+        public int GameNightGameId { get; set; }
+        public int DateKey { get; set; }
+        public DateOnly Date { get; set; }
+        public string GameName { get; set; } = string.Empty;
+        public bool IsTeamWin { get; set; }
+        public List<RouteValue> Routes { get; set; } = new();
+    }
+
+    private sealed class RouteValue
+    {
+        public string Name { get; }
+        public string? ValueString { get; }
+        public bool? ValueBool { get; }
+        public int Type { get; }
+
+        public RouteValue(string name, string? valueString, bool? valueBool, int type)
+        {
+            Name = name;
+            ValueString = valueString;
+            ValueBool = valueBool;
+            Type = type;
+        }
     }
 
     private sealed class MemberStats
