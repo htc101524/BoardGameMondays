@@ -48,7 +48,24 @@ else
                             <div class="bgm-newspaper__byline text-muted">@post.CreatedOn.LocalDateTime.ToString("d MMMM yyyy")</div>
                         </header>
 
-                        <div class="bgm-newspaper__body">@post.Body</div>
+                        <div class="bgm-newspaper__body">
+                            @{
+                                var body = post.Body ?? string.Empty;
+                                var i = 0;
+                                while (i < body.Length && char.IsWhiteSpace(body[i])) i++;
+
+                                if (i < body.Length && char.IsLetter(body[i]))
+                                {
+                                    @body.Substring(0, i)
+                                    <span class="bgm-newspaper__dropcap">@body[i]</span>
+                                    @((body.Length > i + 1) ? body.Substring(i + 1) : string.Empty)
+                                }
+                                else
+                                {
+                                    @body
+                                }
+                            }
+                        </div>
 
                         <footer class="bgm-newspaper__footer">
                             <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">

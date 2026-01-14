@@ -51,7 +51,7 @@
     line-height: 1.55;
 }
 
-.bgm-newspaper__body::first-letter {
+.bgm-newspaper__dropcap {
     float: left;
     font-size: 2.8rem;
     line-height: 0.95;
