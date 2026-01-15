@@ -147,8 +147,17 @@ public sealed class WantToPlayService
 
     public sealed record WantToPlayEntry(Guid GameId, string Name, string? ImageUrl, int Votes);
 
-    public sealed record WantToPlayVoteResult(bool Success, string? Message)
+    public sealed class WantToPlayVoteResult
     {
+        public bool Success { get; init; }
+        public string? Message { get; init; }
+
+        private WantToPlayVoteResult(bool success, string? message)
+        {
+            Success = success;
+            Message = message;
+        }
+
         public static WantToPlayVoteResult Ok { get; } = new(true, null);
         public static WantToPlayVoteResult Failed(string message) => new(false, message);
     }

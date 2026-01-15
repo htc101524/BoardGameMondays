@@ -7,6 +7,8 @@
 @using Microsoft.EntityFrameworkCore
 @inject NavigationManager Navigation
 @inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject AuthenticationStateProvider AuthStateProvider
+@inject IHttpContextAccessor HttpContextAccessor
 
 <section id="people" class="home-section" aria-label="People">
     @* PageTitle is normally provided by the hosting shell; omit here to avoid component resolution issues. *@
@@ -14,23 +16,22 @@
     <div class="home-section__inner">
         <h1>People</h1>
 
-        <AuthorizeView Roles="Admin">
-            <Authorized>
-                <form class="mb-3" method="post" action="/account/avatar" enctype="multipart/form-data">
-                    @* Antiforgery is handled by ASP.NET Core; no explicit token component needed here. *@
-                    <label class="form-label" for="avatar-file">Your avatar</label>
-                    <div class="d-flex gap-2 align-items-center flex-wrap">
-                        <input id="avatar-file" class="form-control" style="max-width: 420px" type="file" name="avatar" accept="image/*" required />
-                        <button type="submit" class="btn btn-outline-primary">Upload</button>
-                    </div>
-                    <div class="form-text">Supported formats: JPG, PNG, WEBP, GIF. Max size: 10MB.</div>
-                    @if (!string.IsNullOrWhiteSpace(_avatarMessage))
-                    {
-                        <div class="alert mt-2 @_avatarMessageCss" role="alert">@_avatarMessage</div>
-                    }
-                </form>
-            </Authorized>
-        </AuthorizeView>
+        @if (_isAdmin)
+        {
+            <form class="mb-3" method="post" action="/account/avatar" enctype="multipart/form-data">
+                @* Antiforgery is handled by ASP.NET Core; no explicit token component needed here. *@
+                <label class="form-label" for="avatar-file">Your avatar</label>
+                <div class="d-flex gap-2 align-items-center flex-wrap">
+                    <input id="avatar-file" class="form-control" style="max-width: 420px" type="file" name="avatar" accept="image/*" required />
+                    <button type="submit" class="btn btn-outline-primary">Upload</button>
+                </div>
+                <div class="form-text">Supported formats: JPG, PNG, WEBP, GIF. Max size: 10MB.</div>
+                @if (!string.IsNullOrWhiteSpace(_avatarMessage))
+                {
+                    <div class="alert mt-2 @_avatarMessageCss" role="alert">@_avatarMessage</div>
+                }
+            </form>
+        }
 
         <div class="bgm-peopleGrid" role="list" aria-label="Members">
             @foreach (var member in _members)
@@ -49,11 +50,10 @@
                         </div>
                         <div class="bgm-peopleCard__who">
                             <div class="bgm-peopleCard__name">@member.Name</div>
-                            <AuthorizeView Roles="Admin">
-                                <Authorized>
-                                    <div class="bgm-peopleCard__email">@member.Email</div>
-                                </Authorized>
-                            </AuthorizeView>
+                            @if (_isAdmin)
+                            {
+                                <div class="bgm-peopleCard__email">@member.Email</div>
+                            }
                         </div>
                     </div>
 
@@ -75,9 +75,17 @@
     private string? _avatarMessage;
     private string _avatarMessageCss = "alert-info";
     private IReadOnlyList<MemberCard> _members = Array.Empty<MemberCard>();
+    private bool _isAdmin;
 
     protected override async Task OnInitializedAsync()
     {
+        var auth = await AuthStateProvider.GetAuthenticationStateAsync();
+        var viewAsNonAdmin = string.Equals(
+            HttpContextAccessor.HttpContext?.Request.Cookies["bgm_viewAsNonAdmin"],
+            "1",
+            StringComparison.Ordinal);
+        _isAdmin = auth.User.Identity?.IsAuthenticated == true && auth.User.IsInRole("Admin") && !viewAsNonAdmin;
+
         await using var db = await DbFactory.CreateDbContextAsync();
         _members = await db.Members
             .AsNoTracking()

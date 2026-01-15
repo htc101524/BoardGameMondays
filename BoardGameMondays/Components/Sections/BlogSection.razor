@@ -4,6 +4,7 @@
 @using System.Security.Claims
 @inject BlogService BlogService
 @inject AuthenticationStateProvider AuthStateProvider
+@inject IHttpContextAccessor HttpContextAccessor
 
 @implements IDisposable
 
@@ -90,28 +91,27 @@ else
                 }
             </div>
 
-            <AuthorizeView Roles="Admin">
-                <Authorized>
-                    <div class="card mt-4" aria-label="Add blog post">
-                        <div class="card-body">
-                            <div class="fw-semibold mb-2">Add post</div>
+            @if (_isAdmin)
+            {
+                <div class="card mt-4" aria-label="Add blog post">
+                    <div class="card-body">
+                        <div class="fw-semibold mb-2">Add post</div>
 
-                            <div class="d-grid gap-2" style="max-width: 860px">
-                                <input class="form-control" placeholder="Title" @bind="_newTitle" />
-                                <textarea class="form-control" rows="8" placeholder="Write your post…" @bind="_newBody"></textarea>
+                        <div class="d-grid gap-2" style="max-width: 860px">
+                            <input class="form-control" placeholder="Title" @bind="_newTitle" />
+                            <textarea class="form-control" rows="8" placeholder="Write your post…" @bind="_newBody"></textarea>
 
-                                <div class="d-flex align-items-center gap-2 flex-wrap">
-                                    <button type="button" class="btn btn-primary" disabled="@_saving" @onclick="AddAsync">Publish</button>
-                                    @if (!string.IsNullOrWhiteSpace(_status))
-                                    {
-                                        <span class="text-muted">@_status</span>
-                                    }
-                                </div>
+                            <div class="d-flex align-items-center gap-2 flex-wrap">
+                                <button type="button" class="btn btn-primary" disabled="@_saving" @onclick="AddAsync">Publish</button>
+                                @if (!string.IsNullOrWhiteSpace(_status))
+                                {
+                                    <span class="text-muted">@_status</span>
+                                }
                             </div>
                         </div>
                     </div>
-                </Authorized>
-            </AuthorizeView>
+                </div>
+            }
         </div>
     </section>
 }
@@ -133,7 +133,11 @@ else
     {
         BlogService.Changed += OnChanged;
         var auth = await AuthStateProvider.GetAuthenticationStateAsync();
-        _isAdmin = auth.User.Identity?.IsAuthenticated == true && auth.User.IsInRole("Admin");
+        var viewAsNonAdmin = string.Equals(
+            HttpContextAccessor.HttpContext?.Request.Cookies["bgm_viewAsNonAdmin"],
+            "1",
+            StringComparison.Ordinal);
+        _isAdmin = auth.User.Identity?.IsAuthenticated == true && auth.User.IsInRole("Admin") && !viewAsNonAdmin;
         await RefreshAsync();
     }
 

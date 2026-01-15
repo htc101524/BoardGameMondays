@@ -48,9 +48,17 @@ namespace BoardGameMondays.Core
 
             if (!enforce)
             {
-                if (isConfiguredAdmin && !principal.IsInRole(AdminRole))
+                var isAdmin = principal.IsInRole(AdminRole);
+
+                if (isConfiguredAdmin && !isAdmin)
                 {
                     AddAdminRoleClaim(principal);
+                    isAdmin = true;
+                }
+
+                if (isAdmin || isConfiguredAdmin)
+                {
+                    EnsureRealAdminClaim(principal);
                 }
 
                 return Task.FromResult(principal);
@@ -69,14 +77,6 @@ namespace BoardGameMondays.Core
 
             // Tag real admins so the UI can show the toggle even when impersonating.
             EnsureRealAdminClaim(principal);
-
-            // Optional UX feature: let a real admin temporarily view the app as a non-admin.
-            // This removes the Admin role claim, so built-in [Authorize(Roles="Admin")] and AuthorizeView
-            // behave exactly as they would for a normal user.
-            if (ShouldViewAsNonAdmin())
-            {
-                RemoveAdminRoleClaims(principal);
-            }
 
             return Task.FromResult(principal);
         }

@@ -9,6 +9,7 @@
 @inject BgmCoinService CoinService
 @inject WantToPlayService WantToPlayService
 @inject IJSRuntime JS
+@inject IHttpContextAccessor HttpContextAccessor
 
 @implements IDisposable
 
@@ -1007,7 +1008,11 @@
 
         var auth = await AuthStateProvider.GetAuthenticationStateAsync();
         var user = auth.User;
-        _isAdmin = user.Identity?.IsAuthenticated == true && user.IsInRole("Admin");
+        var viewAsNonAdmin = string.Equals(
+            HttpContextAccessor.HttpContext?.Request.Cookies["bgm_viewAsNonAdmin"],
+            "1",
+            StringComparison.Ordinal);
+        _isAdmin = user.Identity?.IsAuthenticated == true && user.IsInRole("Admin") && !viewAsNonAdmin;
         _userId = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         _memberId = TryGetMemberId(user);
 
