@@ -1,0 +1,34 @@
+@page "/confirm-email"
+
+@using Microsoft.AspNetCore.WebUtilities
+@inject NavigationManager Navigation
+
+<h1>Confirm email</h1>
+
+@if (_success)
+{
+    <div class="alert alert-success" role="alert">Your email has been confirmed. You can log in now.</div>
+    <a class="btn btn-link" href="/login">Back to login</a>
+}
+else if (!string.IsNullOrWhiteSpace(_error))
+{
+    <div class="alert alert-danger" role="alert">@_error</div>
+    <a class="btn btn-link" href="/login">Back to login</a>
+}
+else
+{
+    <div class="text-muted">Waiting for confirmation…</div>
+}
+
+@code {
+    private bool _success;
+    private string? _error;
+
+    protected override void OnParametersSet()
+    {
+        var uri = Navigation.ToAbsoluteUri(Navigation.Uri);
+        var query = QueryHelpers.ParseQuery(uri.Query);
+        _success = query.TryGetValue("success", out var success) && success.ToString() == "1";
+        _error = query.TryGetValue("error", out var error) ? error.ToString() : null;
+    }
+}

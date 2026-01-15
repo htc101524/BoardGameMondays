@@ -16,8 +16,20 @@ using System.Data;
 using System.Threading.RateLimiting;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Options;
+using Microsoft.AspNetCore.WebUtilities;
+using System.ComponentModel.DataAnnotations;
+using System.Text;
+using Azure.Identity;
+using Azure.Extensions.AspNetCore.Configuration.Secrets;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Optional: load secrets from Azure Key Vault (managed identity in production).
+var keyVaultUrl = builder.Configuration["KeyVault:Url"];
+if (!string.IsNullOrWhiteSpace(keyVaultUrl))
+{
+    builder.Configuration.AddAzureKeyVault(new Uri(keyVaultUrl), new DefaultAzureCredential());
+}
 
 // Add services to the container.
 builder.Services.AddRazorComponents()
@@ -108,6 +120,19 @@ builder.Services.AddSingleton<IAssetStorage>(sp =>
         sp.GetRequiredService<IOptions<StorageOptions>>());
 });
 
+builder.Services.Configure<EmailOptions>(builder.Configuration.GetSection("Email"));
+// Choose email sender implementation: API-based (e.g., Mailtrap send API) or SMTP.
+var useApi = builder.Configuration.GetValue<bool>("Email:UseApi");
+if (useApi)
+{
+    builder.Services.AddHttpClient("email-api");
+    builder.Services.AddSingleton<IEmailSender, ApiEmailSender>();
+}
+else
+{
+    builder.Services.AddSingleton<IEmailSender, SmtpEmailSender>();
+}
+
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
     {
         if (builder.Environment.IsDevelopment())
@@ -135,6 +160,7 @@ builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
         }
 
         options.User.RequireUniqueEmail = false;
+        options.SignIn.RequireConfirmedEmail = builder.Configuration.GetValue<bool>("Email:RequireConfirmedEmail");
     })
     .AddEntityFrameworkStores<ApplicationDbContext>()
     .AddDefaultTokenProviders();
@@ -1485,13 +1511,28 @@ app.MapPost("/account/register", async (
     SignInManager<ApplicationUser> signInManager,
     RoleManager<IdentityRole> roleManager,
     BoardGameMondays.Core.BgmMemberDirectoryService members,
-    IWebHostEnvironment env) =>
+    IWebHostEnvironment env,
+    HttpContext http,
+    IEmailSender emailSender,
+    IConfiguration configuration) =>
 {
     var userName = request.UserName?.Trim();
+    var email = request.Email?.Trim();
     var displayName = request.DisplayName?.Trim();
     if (string.IsNullOrWhiteSpace(userName) || string.IsNullOrWhiteSpace(request.Password))
     {
         return Results.Redirect($"/register?error={Uri.EscapeDataString("Username and password are required.")}");
+    }
+
+    if (string.IsNullOrWhiteSpace(email))
+    {
+        return Results.Redirect($"/register?error={Uri.EscapeDataString("Email is required for password recovery.")}");
+    }
+
+    var emailValidator = new EmailAddressAttribute();
+    if (!emailValidator.IsValid(email))
+    {
+        return Results.Redirect($"/register?error={Uri.EscapeDataString("Please enter a valid email address.")}");
     }
 
     if (userName.Length < 3)
@@ -1519,7 +1560,13 @@ app.MapPost("/account/register", async (
         return Results.Redirect($"/register?error={Uri.EscapeDataString("Passwords do not match.")}");
     }
 
-    var user = new ApplicationUser { UserName = userName };
+    var existingEmailUser = await userManager.FindByEmailAsync(email);
+    if (existingEmailUser is not null)
+    {
+        return Results.Redirect($"/register?error={Uri.EscapeDataString("That email address is already in use.")}");
+    }
+
+    var user = new ApplicationUser { UserName = userName, Email = email };
     var createResult = await userManager.CreateAsync(user, request.Password);
     if (!createResult.Succeeded)
     {
@@ -1533,6 +1580,8 @@ app.MapPost("/account/register", async (
     var memberId = members.GetOrCreateMemberId(displayName);
     await userManager.AddClaimAsync(user, new Claim(BgmClaimTypes.MemberId, memberId.ToString()));
 
+    await SendEmailConfirmationAsync(userManager, emailSender, user, http);
+
     // Dev convenience: automatically grant Admin role so existing admin tooling works.
     if (env.IsDevelopment())
     {
@@ -1545,6 +1594,12 @@ app.MapPost("/account/register", async (
         await userManager.AddToRoleAsync(user, adminRole);
     }
 
+    var requireConfirmed = configuration.GetValue<bool>("Email:RequireConfirmedEmail");
+    if (requireConfirmed)
+    {
+        return Results.Redirect("/login?confirm=1");
+    }
+
     await signInManager.SignInAsync(user, isPersistent: true);
     members.GetOrCreate(displayName);
     return Results.Redirect("/");
@@ -1555,7 +1610,9 @@ app.MapPost("/account/login", async (
     SignInManager<ApplicationUser> signInManager,
     UserManager<ApplicationUser> userManager,
     BoardGameMondays.Core.BgmMemberDirectoryService members,
-    IWebHostEnvironment env) =>
+    IWebHostEnvironment env,
+    HttpContext http,
+    IEmailSender emailSender) =>
 {
     var userName = request.UserName?.Trim();
     if (string.IsNullOrWhiteSpace(userName) || string.IsNullOrWhiteSpace(request.Password))
@@ -1577,6 +1634,20 @@ app.MapPost("/account/login", async (
     var result = await signInManager.PasswordSignInAsync(userName, request.Password, request.RememberMe, lockoutOnFailure);
     if (!result.Succeeded)
     {
+        if (result.IsNotAllowed)
+        {
+            var notAllowedUser = await userManager.FindByNameAsync(userName);
+            if (notAllowedUser is not null && !await userManager.IsEmailConfirmedAsync(notAllowedUser))
+            {
+                if (!string.IsNullOrWhiteSpace(notAllowedUser.Email))
+                {
+                    await SendEmailConfirmationAsync(userManager, emailSender, notAllowedUser, http);
+                }
+
+                return Results.Redirect($"/login?error={Uri.EscapeDataString("Please confirm your email to sign in.")}&confirm=1");
+            }
+        }
+
         return Results.Redirect($"/login?error={Uri.EscapeDataString("Invalid username or password.")}");
     }
 
@@ -1591,6 +1662,194 @@ app.MapPost("/account/login", async (
     members.GetOrCreate(displayName);
     return Results.Redirect("/");
 }).RequireRateLimiting("account");
+
+app.MapPost("/account/forgot", async (
+    [FromForm] ForgotPasswordRequest request,
+    UserManager<ApplicationUser> userManager,
+    IEmailSender emailSender,
+    HttpContext http) =>
+{
+    var email = request.Email?.Trim();
+    if (string.IsNullOrWhiteSpace(email))
+    {
+        return Results.Redirect($"/forgot-password?error={Uri.EscapeDataString("Email is required.")}");
+    }
+
+    var emailValidator = new EmailAddressAttribute();
+    if (!emailValidator.IsValid(email))
+    {
+        return Results.Redirect($"/forgot-password?error={Uri.EscapeDataString("Please enter a valid email address.")}");
+    }
+
+    var user = await userManager.FindByEmailAsync(email);
+    if (user is not null)
+    {
+        var token = await userManager.GeneratePasswordResetTokenAsync(user);
+        var encodedToken = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(token));
+        var callbackUrl = $"{http.Request.Scheme}://{http.Request.Host}/reset-password?email={Uri.EscapeDataString(email)}&token={Uri.EscapeDataString(encodedToken)}";
+
+        var body = $"<p>We received a password reset request for your Board Game Mondays account.</p>" +
+                   $"<p><a href=\"{callbackUrl}\">Reset your password</a></p>" +
+                   $"<p>If you didn't request this, you can ignore this email.</p>";
+
+        await emailSender.SendEmailAsync(email, "Reset your Board Game Mondays password", body);
+    }
+
+    return Results.Redirect("/forgot-password?sent=1");
+}).RequireRateLimiting("account");
+
+app.MapPost("/account/reset", async (
+    [FromForm] ResetPasswordRequest request,
+    UserManager<ApplicationUser> userManager) =>
+{
+    var email = request.Email?.Trim();
+    var token = request.Token?.Trim();
+
+    if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(token))
+    {
+        return Results.Redirect($"/reset-password?error={Uri.EscapeDataString("The reset link is missing or invalid.")}");
+    }
+
+    if (string.IsNullOrWhiteSpace(request.Password))
+    {
+        return Results.Redirect($"/reset-password?error={Uri.EscapeDataString("Password is required.")}&email={Uri.EscapeDataString(email)}&token={Uri.EscapeDataString(token)}");
+    }
+
+    if (!string.Equals(request.Password, request.ConfirmPassword, StringComparison.Ordinal))
+    {
+        return Results.Redirect($"/reset-password?error={Uri.EscapeDataString("Passwords do not match.")}&email={Uri.EscapeDataString(email)}&token={Uri.EscapeDataString(token)}");
+    }
+
+    var user = await userManager.FindByEmailAsync(email);
+    if (user is null)
+    {
+        return Results.Redirect("/login?reset=1");
+    }
+
+    string decodedToken;
+    try
+    {
+        decodedToken = Encoding.UTF8.GetString(WebEncoders.Base64UrlDecode(token));
+    }
+    catch
+    {
+        return Results.Redirect($"/reset-password?error={Uri.EscapeDataString("The reset token is invalid.")}&email={Uri.EscapeDataString(email)}");
+    }
+
+    var result = await userManager.ResetPasswordAsync(user, decodedToken, request.Password);
+    if (!result.Succeeded)
+    {
+        var message = string.Join(" ", result.Errors.Select(e => e.Description));
+        return Results.Redirect($"/reset-password?error={Uri.EscapeDataString(message)}&email={Uri.EscapeDataString(email)}&token={Uri.EscapeDataString(token)}");
+    }
+
+    return Results.Redirect("/login?reset=1");
+}).RequireRateLimiting("account");
+
+app.MapGet("/account/confirm-email", async (
+    string userId,
+    string token,
+    UserManager<ApplicationUser> userManager) =>
+{
+    if (string.IsNullOrWhiteSpace(userId) || string.IsNullOrWhiteSpace(token))
+    {
+        return Results.Redirect($"/confirm-email?error={Uri.EscapeDataString("The confirmation link is invalid.")}");
+    }
+
+    var user = await userManager.FindByIdAsync(userId);
+    if (user is null)
+    {
+        return Results.Redirect($"/confirm-email?error={Uri.EscapeDataString("The confirmation link is invalid.")}");
+    }
+
+    string decodedToken;
+    try
+    {
+        decodedToken = Encoding.UTF8.GetString(WebEncoders.Base64UrlDecode(token));
+    }
+    catch
+    {
+        return Results.Redirect($"/confirm-email?error={Uri.EscapeDataString("The confirmation token is invalid.")}");
+    }
+
+    var result = await userManager.ConfirmEmailAsync(user, decodedToken);
+    if (!result.Succeeded)
+    {
+        var message = string.Join(" ", result.Errors.Select(e => e.Description));
+        return Results.Redirect($"/confirm-email?error={Uri.EscapeDataString(message)}");
+    }
+
+    return Results.Redirect("/confirm-email?success=1");
+});
+
+app.MapPost("/account/email", async (
+    [FromForm] UpdateEmailRequest request,
+    UserManager<ApplicationUser> userManager,
+    HttpContext http,
+    IEmailSender emailSender) =>
+{
+    var email = request.Email?.Trim();
+    if (string.IsNullOrWhiteSpace(email))
+    {
+        return Results.Redirect($"/account/email?error={Uri.EscapeDataString("Email is required.")}");
+    }
+
+    var emailValidator = new EmailAddressAttribute();
+    if (!emailValidator.IsValid(email))
+    {
+        return Results.Redirect($"/account/email?error={Uri.EscapeDataString("Please enter a valid email address.")}");
+    }
+
+    var currentUser = await userManager.GetUserAsync(http.User);
+    if (currentUser is null)
+    {
+        return Results.Redirect("/login");
+    }
+
+    var existing = await userManager.FindByEmailAsync(email);
+    if (existing is not null && existing.Id != currentUser.Id)
+    {
+        return Results.Redirect($"/account/email?error={Uri.EscapeDataString("That email address is already in use.")}");
+    }
+
+    if (string.Equals(currentUser.Email, email, StringComparison.OrdinalIgnoreCase)
+        && await userManager.IsEmailConfirmedAsync(currentUser))
+    {
+        return Results.Redirect("/account/email?updated=1");
+    }
+
+    var result = await userManager.SetEmailAsync(currentUser, email);
+    if (!result.Succeeded)
+    {
+        var message = string.Join(" ", result.Errors.Select(e => e.Description));
+        return Results.Redirect($"/account/email?error={Uri.EscapeDataString(message)}");
+    }
+
+    currentUser.EmailConfirmed = false;
+    await userManager.UpdateAsync(currentUser);
+    await SendEmailConfirmationAsync(userManager, emailSender, currentUser, http);
+
+    return Results.Redirect("/account/email?updated=1&confirm=1");
+}).RequireAuthorization();
+
+app.MapPost("/account/resend-confirmation", async (
+    UserManager<ApplicationUser> userManager,
+    HttpContext http,
+    IEmailSender emailSender) =>
+{
+    var currentUser = await userManager.GetUserAsync(http.User);
+    if (currentUser is null)
+    {
+        return Results.Redirect("/login");
+    }
+
+    if (!string.IsNullOrWhiteSpace(currentUser.Email) && !await userManager.IsEmailConfirmedAsync(currentUser))
+    {
+        await SendEmailConfirmationAsync(userManager, emailSender, currentUser, http);
+    }
+
+    return Results.Redirect("/account/email?sent=1");
+}).RequireAuthorization();
 
 app.MapPost("/account/avatar", async (
     HttpContext http,
@@ -1708,6 +1967,28 @@ app.MapRazorComponents<App>()
 
 app.Run();
 
+static async Task SendEmailConfirmationAsync(
+    UserManager<ApplicationUser> userManager,
+    IEmailSender emailSender,
+    ApplicationUser user,
+    HttpContext http)
+{
+    if (string.IsNullOrWhiteSpace(user.Email))
+    {
+        return;
+    }
+
+    var token = await userManager.GenerateEmailConfirmationTokenAsync(user);
+    var encodedToken = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(token));
+    var callbackUrl = $"{http.Request.Scheme}://{http.Request.Host}/account/confirm-email?userId={Uri.EscapeDataString(user.Id)}&token={Uri.EscapeDataString(encodedToken)}";
+
+    var body = $"<p>Please confirm your email address for Board Game Mondays.</p>" +
+               $"<p><a href=\"{callbackUrl}\">Confirm email</a></p>" +
+               $"<p>If you didn't request this, you can ignore this email.</p>";
+
+    await emailSender.SendEmailAsync(user.Email, "Confirm your Board Game Mondays email", body);
+}
+
 static bool IsMultipartBodyLengthLimitExceeded(Exception ex)
 {
     // Depending on runtime/provider, this can be InvalidDataException directly or wrapped.
@@ -1727,13 +2008,17 @@ static bool IsMultipartBodyLengthLimitExceeded(Exception ex)
     return false;
 }
 
-internal sealed record RegisterRequest(string UserName, string DisplayName, string Password, string ConfirmPassword);
+internal sealed record RegisterRequest(string UserName, string DisplayName, string Email, string Password, string ConfirmPassword);
 internal sealed class LoginRequest
 {
     public string UserName { get; set; } = string.Empty;
     public string Password { get; set; } = string.Empty;
     public bool RememberMe { get; set; } = false;
 }
+
+internal sealed record ForgotPasswordRequest(string Email);
+internal sealed record ResetPasswordRequest(string Email, string Token, string Password, string ConfirmPassword);
+internal sealed record UpdateEmailRequest(string Email);
 
 internal static class BgmClaimTypes
 {

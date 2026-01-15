@@ -1,0 +1,78 @@
+@page "/admin/test-email"
+@namespace BoardGameMondays.Pages.AdminTools
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Roles = "Admin")]
+
+@using Microsoft.AspNetCore.Components.Authorization
+@inject BoardGameMondays.Core.IEmailSender EmailSender
+@inject AuthenticationStateProvider AuthStateProvider
+
+<h1>Send test email</h1>
+
+<p class="text-muted">Use this page to verify the development SMTP configuration (Mailtrap, etc.).</p>
+
+<EditForm Model="this" OnValidSubmit="SendTestAsync">
+    <div class="mb-3">
+        <label class="form-label">To (email)</label>
+        <InputText class="form-control" @bind-Value="Recipient" />
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label">Subject</label>
+        <InputText class="form-control" @bind-Value="Subject" />
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label">HTML Body</label>
+        <InputTextArea class="form-control" rows="6" @bind-Value="Body" />
+    </div>
+
+    <button type="submit" class="btn btn-primary" disabled="@_sending">Send test email</button>
+    <a class="btn btn-link" href="/admin">Back to admin</a>
+</EditForm>
+
+@if (!string.IsNullOrEmpty(_message))
+{
+    <div class="alert @(_messageCss) mt-3" role="alert">@_message</div>
+}
+
+@code {
+    private bool _sending;
+    private string? _message;
+    private string _messageCss = "alert-success";
+
+    public string Recipient { get; set; } = string.Empty;
+    public string Subject { get; set; } = "Board Game Mondays - test email";
+    public string Body { get; set; } = "<p>This is a test message from Board Game Mondays.</p>";
+
+    protected override async Task OnInitializedAsync()
+    {
+        var auth = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = auth.User;
+        var email = user.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value;
+        if (!string.IsNullOrWhiteSpace(email))
+        {
+            Recipient = email;
+        }
+    }
+
+    private async Task SendTestAsync()
+    {
+        _sending = true;
+        _message = null;
+        try
+        {
+            await EmailSender.SendEmailAsync(Recipient, Subject, Body);
+            _message = "Test email sent (check Mailtrap or configured SMTP).";
+            _messageCss = "alert-success";
+        }
+        catch (Exception ex)
+        {
+            _message = "Failed to send test email: " + ex.Message;
+            _messageCss = "alert-danger";
+        }
+        finally
+        {
+            _sending = false;
+        }
+    }
+}

@@ -37,6 +37,17 @@
 
     <button type="submit" class="btn btn-primary">Login</button>
     <a class="btn btn-link" href="/register">Sign up</a>
+    <a class="btn btn-link" href="/forgot-password">Forgot password?</a>
+
+    @if (_confirmSent)
+    {
+        <div class="text-success mt-3">Check your email for a confirmation link.</div>
+    }
+
+    @if (_resetSuccess)
+    {
+        <div class="text-success mt-3">Your password has been reset. You can log in now.</div>
+    }
 
     @if (!string.IsNullOrWhiteSpace(_error))
     {
@@ -47,12 +58,16 @@
 @code {
     private string? _error;
     private bool _showPassword;
+    private bool _resetSuccess;
+    private bool _confirmSent;
 
     protected override void OnParametersSet()
     {
         var uri = Navigation.ToAbsoluteUri(Navigation.Uri);
         var query = QueryHelpers.ParseQuery(uri.Query);
         _error = query.TryGetValue("error", out var error) ? error.ToString() : null;
+        _resetSuccess = query.TryGetValue("reset", out var reset) && reset.ToString() == "1";
+        _confirmSent = query.TryGetValue("confirm", out var confirm) && confirm.ToString() == "1";
     }
 
     private void ShowPassword() => _showPassword = true;

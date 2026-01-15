@@ -1,0 +1,89 @@
+@page "/account/email"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+
+@using Microsoft.AspNetCore.WebUtilities
+@using Microsoft.AspNetCore.Components.Authorization
+@inject NavigationManager Navigation
+@inject AuthenticationStateProvider AuthStateProvider
+@inject Microsoft.AspNetCore.Identity.UserManager<BoardGameMondays.Data.ApplicationUser> UserManager
+
+<h1>Account email</h1>
+
+<form method="post" action="/account/email" data-enhance="false">
+    <AntiforgeryToken />
+    <div class="mb-3">
+        <label class="form-label" for="account-email">Email</label>
+        <input id="account-email" name="Email" class="form-control" value="@_email" autocomplete="email" />
+        <div class="form-text">Used for password recovery.</div>
+    </div>
+
+    <button type="submit" class="btn btn-primary">Save email</button>
+    <a class="btn btn-link" href="/">Back home</a>
+
+    @if (!string.IsNullOrWhiteSpace(_message))
+    {
+        <div class="alert @_messageCss mt-3" role="alert">@_message</div>
+    }
+</form>
+
+@if (!string.IsNullOrWhiteSpace(_email))
+{
+    @if (_isConfirmed)
+    {
+        <div class="text-success mt-3">Email confirmed.</div>
+    }
+    else
+    {
+        <div class="text-warning mt-3">Email not confirmed.</div>
+        <form method="post" action="/account/resend-confirmation" data-enhance="false">
+            <AntiforgeryToken />
+            <button type="submit" class="btn btn-outline-secondary mt-2">Resend confirmation email</button>
+        </form>
+    }
+}
+
+@code {
+    private string? _email;
+    private string? _message;
+    private string _messageCss = "alert-success";
+    private bool _isConfirmed;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var auth = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = await UserManager.GetUserAsync(auth.User);
+        _email = user?.Email ?? string.Empty;
+        _isConfirmed = user is not null && await UserManager.IsEmailConfirmedAsync(user);
+    }
+
+    protected override void OnParametersSet()
+    {
+        var uri = Navigation.ToAbsoluteUri(Navigation.Uri);
+        var query = QueryHelpers.ParseQuery(uri.Query);
+
+        if (query.TryGetValue("error", out var error))
+        {
+            _message = error.ToString();
+            _messageCss = "alert-danger";
+        }
+        else if (query.TryGetValue("updated", out var updated) && updated.ToString() == "1")
+        {
+            _message = "Email saved.";
+            _messageCss = "alert-success";
+        }
+        else if (query.TryGetValue("confirm", out var confirm) && confirm.ToString() == "1")
+        {
+            _message = "Confirmation email sent.";
+            _messageCss = "alert-success";
+        }
+        else if (query.TryGetValue("sent", out var sent) && sent.ToString() == "1")
+        {
+            _message = "Confirmation email sent.";
+            _messageCss = "alert-success";
+        }
+        else
+        {
+            _message = null;
+        }
+    }
+}
