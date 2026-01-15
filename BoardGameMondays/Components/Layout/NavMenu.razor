@@ -15,14 +15,14 @@
            @onclick:preventDefault="true"
            @onclick="OnBrandClick">
             <img class="bgm-brand__logo" src="images/bgm-logo.svg" alt="" />
-            <span class="bgm-brand__text">Board Game Mondays</span>
+            <span class="bgm-brand__text">BGM</span>
         </a>
 
         <div class="bgm-header__right">
             @if (_userId is not null)
             {
                 <div class="bgm-coins" aria-label="BGM Coins">
-                    <span class="bgm-coins__label">BGM Coins:</span>
+                    <span class="bgm-coins__label">£:</span>
                     <span class="bgm-coins__value">@(_coins?.ToString() ?? "…")</span>
                 </div>
             }

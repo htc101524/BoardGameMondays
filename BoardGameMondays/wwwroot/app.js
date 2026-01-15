@@ -58,6 +58,68 @@ window.bgm.scrollToIdNextFrame = (id, behavior) => {
     });
 };
 
+// Home-only: hide the fixed header until the user scrolls.
+(() => {
+    let enabled = false;
+    let threshold = 40;
+    let onScroll = null;
+    let ticking = false;
+
+    const update = () => {
+        ticking = false;
+
+        // If we're not on the home page anymore, fail-safe: remove visibility.
+        const isHome = !!document.querySelector('.page--home');
+        if (!isHome) {
+            document.documentElement.classList.remove('bgm-homeNavVisible');
+            return;
+        }
+
+        const y = window.scrollY || document.documentElement.scrollTop || 0;
+        const shouldShow = y > threshold;
+        document.documentElement.classList.toggle('bgm-homeNavVisible', shouldShow);
+    };
+
+    const schedule = () => {
+        if (ticking) return;
+        ticking = true;
+        window.requestAnimationFrame(update);
+    };
+
+    window.bgm.enableHomeNavAutoHide = (scrollThreshold) => {
+        threshold = Number(scrollThreshold) || 40;
+
+        if (enabled) {
+            update();
+            return;
+        }
+
+        enabled = true;
+        onScroll = schedule;
+        window.addEventListener('scroll', onScroll, { passive: true });
+        window.addEventListener('resize', onScroll, { passive: true });
+        update();
+    };
+
+    window.bgm.disableHomeNavAutoHide = () => {
+        if (!enabled) {
+            document.documentElement.classList.remove('bgm-homeNavVisible');
+            return;
+        }
+
+        enabled = false;
+        document.documentElement.classList.remove('bgm-homeNavVisible');
+
+        if (onScroll) {
+            window.removeEventListener('scroll', onScroll);
+            window.removeEventListener('resize', onScroll);
+        }
+
+        onScroll = null;
+        ticking = false;
+    };
+})();
+
 window.bgm.getBackgroundHex = (element) => {
     const toHex2 = (n) => {
         const h = Number(n).toString(16);

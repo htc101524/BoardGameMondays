@@ -18,44 +18,59 @@
 
 
 <section id="latest" class="home-hero" aria-label="Latest reviewed game">
+    <div class="home-hero__brand" aria-label="Board Game Mondays">BOARD GAME MONDAYS</div>
     <div class="home-hero__grid" aria-label="Highlights">
         @if (_latestReviewed is null)
         {
-            <div class="home-hero__panel" aria-label="Latest reviewed game">
-                <div class="home-hero__kicker">Latest review</div>
-                <h1 class="home-hero__title">No reviews yet</h1>
-                <p class="home-hero__subtitle">Add your first review to feature it here.</p>
+            <div class="home-hero__card home-hero__card--review" aria-label="Latest reviewed game">
+                <div class="home-hero__cardInner">
+                    <div class="home-hero__cardHeader">
+                        <div class="home-hero__kicker">Latest review</div>
+                    </div>
+                    <div class="home-hero__cardBody">
+                        <h1 class="home-hero__title">No reviews yet</h1>
+                        <p class="home-hero__subtitle">Add your first review to feature it here.</p>
+                    </div>
+                </div>
             </div>
         }
         else
         {
             <button type="button"
-                    class="home-hero__panel home-hero__panelButton"
+                    class="home-hero__card home-hero__cardButton home-hero__card--review"
                     aria-label="Jump to what we thought about @_latestReviewed.Name"
                     @onclick="GoToLatestThoughtsAsync">
-                <div class="home-hero__kicker">Latest review</div>
-
-                <h1 class="home-hero__title">@_latestReviewed.Name</h1>
-
-                @if (!string.IsNullOrWhiteSpace(_latestReviewed.Tagline))
-                {
-                    <p class="home-hero__subtitle">@_latestReviewed.Tagline</p>
-                }
-
-                @if (!string.IsNullOrWhiteSpace(_latestReviewed.ImageUrl))
-                {
-                    <div class="home-hero__media">
-                        <img src="@_latestReviewed.ImageUrl" alt="@($"{_latestReviewed.Name} cover")" />
+                <div class="home-hero__cardInner">
+                    <div class="home-hero__cardHeader">
+                        <div class="home-hero__kicker">Latest review</div>
                     </div>
-                }
+
+                    <div class="home-hero__cardBody">
+                        <h1 class="home-hero__title">@_latestReviewed.Name</h1>
+
+                        @if (!string.IsNullOrWhiteSpace(_latestReviewed.Tagline))
+                        {
+                            <p class="home-hero__subtitle">@_latestReviewed.Tagline</p>
+                        }
+
+                        @if (!string.IsNullOrWhiteSpace(_latestReviewed.ImageUrl))
+                        {
+                            <div class="home-hero__media">
+                                <img src="@_latestReviewed.ImageUrl" alt="@($"{_latestReviewed.Name} cover")" />
+                            </div>
+                        }
+                    </div>
+                </div>
             </button>
         }
 
         <button type="button"
-                class="home-hero__panel home-hero__panelButton home-hero__panel--recap"
+                class="home-hero__card home-hero__cardButton home-hero__card--recap"
                 aria-label="Jump to Mondays"
                 @onclick="GoToMondaysAsync">
-            <LastMondayRecapCard />
+            <div class="home-hero__cardInner">
+                <LastMondayRecapCard />
+            </div>
         </button>
     </div>
 </section>
@@ -81,18 +96,43 @@
 
             var avgClass = string.Empty;
             var avgStyle = string.Empty;
+            var avgTier = string.Empty;
             if (avgScore is { } avg)
             {
-                if (avg < 7)
+                if (avg >= 9.5)
                 {
-                    avgClass = "bgm-scoreBadge--bad";
+                    avgClass = "bgm-scoreBadge--platinum";
+                    avgTier = "platinum";
+                }
+                else if (avg >= 8.5)
+                {
+                    avgClass = "bgm-scoreBadge--gold";
+                    avgTier = "gold";
+                }
+                else if (avg >= 7.5)
+                {
+                    avgClass = "bgm-scoreBadge--silver";
+                    avgTier = "silver";
+                }
+                else if (avg >= 6.5)
+                {
+                    avgClass = "bgm-scoreBadge--bronze";
+                    avgTier = "bronze";
+                }
+                else if (avg >= 5.5)
+                {
+                    avgClass = "bgm-scoreBadge--iron";
+                    avgTier = "iron";
+                }
+                else if (avg >= 4.0)
+                {
+                    avgClass = "bgm-scoreBadge--red";
+                    avgTier = "red";
                 }
                 else
                 {
-                    avgClass = "bgm-scoreBadge--avg";
-
-                    var mix = Math.Clamp((avg - 7) / 3d, 0d, 1d);
-                    avgStyle = $"--bgm-score-mix: {(mix * 100):0}%";
+                    avgClass = "bgm-scoreBadge--black";
+                    avgTier = "black";
                 }
             }
         }
@@ -121,7 +161,49 @@
                     <div class="bgm-thoughtsHero__rating" aria-label="Scores">
                         <div class="bgm-scoreSummary__label">BGM RATING:</div>
                         <div class="bgm-scoreBadges" aria-label="Average score">
-                            <div class="bgm-scoreBadge @avgClass" style="@avgStyle" aria-label="BGM rating">@FormatScore(avgScore.Value)</div>
+                            <svg class="bgm-scoreBadge bgm-scoreBadge--svg @avgClass" viewBox="0 0 120 104" aria-label="BGM rating" role="img" xmlns="http://www.w3.org/2000/svg">
+                                <defs>
+                                    <linearGradient id="g_platinum" x1="0%" y1="0%" x2="100%" y2="100%">
+                                        <stop offset="0%" stop-color="#eef6ff" />
+                                        <stop offset="50%" stop-color="#6fa6f5" />
+                                        <stop offset="100%" stop-color="#dcecff" />
+                                    </linearGradient>
+                                    <linearGradient id="g_gold" x1="0%" y1="0%" x2="100%" y2="100%">
+                                        <stop offset="0%" stop-color="#fff4c7" />
+                                        <stop offset="50%" stop-color="#f5d77a" />
+                                        <stop offset="100%" stop-color="#e5b84a" />
+                                    </linearGradient>
+                                    <linearGradient id="g_silver" x1="0%" y1="0%" x2="100%" y2="100%">
+                                        <stop offset="0%" stop-color="#f5f7fb" />
+                                        <stop offset="50%" stop-color="#ced5de" />
+                                        <stop offset="100%" stop-color="#9aa4b2" />
+                                    </linearGradient>
+                                    <linearGradient id="g_bronze" x1="0%" y1="0%" x2="100%" y2="100%">
+                                        <stop offset="0%" stop-color="#f3d2b8" />
+                                        <stop offset="50%" stop-color="#c9875b" />
+                                        <stop offset="100%" stop-color="#a0623f" />
+                                    </linearGradient>
+                                    <linearGradient id="g_iron" x1="0%" y1="0%" x2="100%" y2="100%">
+                                        <stop offset="0%" stop-color="#ffd3ad" />
+                                        <stop offset="50%" stop-color="#f1a66a" />
+                                        <stop offset="100%" stop-color="#d1783b" />
+                                    </linearGradient>
+                                    <linearGradient id="g_red" x1="0%" y1="0%" x2="100%" y2="100%">
+                                        <stop offset="0%" stop-color="#ff9c9c" />
+                                        <stop offset="60%" stop-color="#e35151" />
+                                        <stop offset="100%" stop-color="#b51f1f" />
+                                    </linearGradient>
+                                    <linearGradient id="g_black" x1="0%" y1="0%" x2="100%" y2="100%">
+                                        <stop offset="0%" stop-color="#3a3a3a" />
+                                        <stop offset="100%" stop-color="#050505" />
+                                    </linearGradient>
+                                </defs>
+                                @{
+                                    var grad = string.IsNullOrEmpty(avgTier) ? "g_gold" : "g_" + avgTier;
+                                }
+                                <polygon points="60,4 102,26 102,78 60,100 18,78 18,26" class="bgm-scorePoly" fill="url(#@grad)" />
+                                <text x="50%" y="54%" dominant-baseline="middle" text-anchor="middle" class="bgm-scoreText">@FormatScore(avgScore.Value)</text>
+                            </svg>
                         </div>
 
                         @if (Env.IsDevelopment())
@@ -373,6 +455,7 @@
     private string? _paletteImageUrl;
 
     private IJSObjectReference? _thoughtsScrollBinder;
+    private bool _homeNavAutoHideEnabled;
 
     private int? _myAgreement;
     private bool _savingAgreement;
@@ -393,6 +476,18 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        if (firstRender && !_homeNavAutoHideEnabled)
+        {
+            try
+            {
+                await JS.InvokeVoidAsync("bgm.enableHomeNavAutoHide", 40);
+                _homeNavAutoHideEnabled = true;
+            }
+            catch
+            {
+            }
+        }
+
         if (firstRender && _thoughtsScrollBinder is null)
         {
             try
@@ -484,25 +579,14 @@
 
     public async ValueTask DisposeAsync()
     {
+        if (_homeNavAutoHideEnabled)
+        {
+            _homeNavAutoHideEnabled = false;
+        }
+
         if (_thoughtsScrollBinder is null)
         {
             return;
-        }
-
-        try
-        {
-            await _thoughtsScrollBinder.InvokeVoidAsync("dispose");
-        }
-        catch
-        {
-        }
-
-        try
-        {
-            await _thoughtsScrollBinder.DisposeAsync();
-        }
-        catch
-        {
         }
 
         _thoughtsScrollBinder = null;

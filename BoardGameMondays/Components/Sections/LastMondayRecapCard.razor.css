@@ -3,23 +3,22 @@
     height: 100%;
     display: flex;
     align-items: stretch;
-    padding: 12px;
-    border-radius: 18px;
-    background: repeating-linear-gradient(
-        45deg,
-        rgba(191, 161, 74, 0.18) 0px,
-        rgba(191, 161, 74, 0.18) 12px,
-        rgba(255, 255, 255, 0.72) 12px,
-        rgba(255, 255, 255, 0.72) 24px
-    );
-    box-shadow: 0 10px 30px rgba(34, 24, 10, 0.10);
+    position: relative;
+    overflow: hidden;
+    padding: 0;
+    border-radius: 16px;
+    background: transparent;
+    border: none;
+    box-shadow: none;
     transition: box-shadow 140ms ease;
 }
 
+.bgm-recapFrame::before {
+    content: none;
+}
+
 .bgm-recapFrame:hover {
-    box-shadow:
-        0 0 0 4px rgba(191, 161, 74, 0.18),
-        0 26px 78px rgba(34, 24, 10, 0.14);
+    box-shadow: none;
 }
 
 .bgm-recapCard {
@@ -27,7 +26,9 @@
     height: 100%;
     border: none;
     border-radius: 14px;
-    background: rgba(255, 255, 255, 0.72);
+    background: transparent;
+    position: relative;
+    z-index: 1;
 }
 
 .bgm-mondayRecapTitle {

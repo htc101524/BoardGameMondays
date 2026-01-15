@@ -8,6 +8,8 @@
     --bgm-home-section-bg-people: transparent;
 }
 
+/* Header remains fixed; hiding is purely visual to avoid layout shifts. */
+
 /* Hide caret browsing cursor outside of actual text inputs */
 html,
 body {
@@ -90,15 +92,7 @@ textarea,
 }
 
 .bgm-thoughtsHeader::before {
-    content: "";
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 100vw;
-    background: rgb(var(--bgm-c1-rgb));
-    pointer-events: none;
+    content: none;
 }
 
 .bgm-thoughtsHeader > * {
@@ -202,8 +196,18 @@ textarea,
 #thoughts .bgm-thoughtsHero__rating .bgm-scoreBadge {
     --bgm-p: var(--bgm-thoughts-progress, 0);
     transform: translateY(calc(-2px * var(--bgm-p))) scale(calc(1 + var(--bgm-p) * 0.04));
-    box-shadow: none;
-    border: 1px solid color-mix(in srgb, rgb(var(--bgm-c1-rgb)) 84%, rgb(0 0 0) 16%);
+    box-shadow:
+        0 16px 30px rgba(0, 0, 0, 0.18),
+        0 0 24px rgba(191, 161, 74, 0.18),
+        inset 0 0 0 2px var(--bgm-score-border, rgba(0, 0, 0, 0.35));
+    border: none;
+    --bgm-score-border: rgba(0, 0, 0, 0.35);
+    font-weight: 900;
+    font-size: 2.75rem;
+    letter-spacing: 0.06em;
+    text-shadow:
+        0 2px 0 rgba(255, 255, 255, 0.35),
+        0 8px 18px rgba(0, 0, 0, 0.35);
     will-change: transform;
 }
 
@@ -239,12 +243,6 @@ textarea,
     flex-direction: column;
     align-items: flex-end;
     gap: 6px;
-
-    padding: 10px 10px 8px;
-    border-radius: 14px;
-    background: rgba(var(--bs-body-bg-rgb), 0.78);
-    border: 1px solid rgba(var(--bs-emphasis-color-rgb), 0.12);
-    backdrop-filter: blur(8px);
 }
 
 .bgm-paletteDebug {
@@ -339,7 +337,42 @@ textarea,
 
     box-shadow:
         0 12px 26px rgba(0, 0, 0, 0.10),
-        inset 0 0 0 1px rgba(var(--bs-body-bg-rgb), 0.60);
+        inset 0 0 0 2px var(--bgm-score-border, rgba(0, 0, 0, 0.22));
+    -webkit-background-clip: padding-box;
+    background-clip: padding-box;
+}
+
+.bgm-scoreBadge::before,
+.bgm-scoreBadge::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    clip-path: inherit;
+    pointer-events: none;
+}
+
+.bgm-scoreBadge--secondary::before,
+.bgm-scoreBadge--secondary::after {
+    content: none;
+}
+
+.bgm-scoreBadge::before {
+    background: linear-gradient(
+        135deg,
+        rgba(255, 255, 255, 0.75) 0%,
+        rgba(255, 255, 255, 0.18) 40%,
+        rgba(255, 255, 255, 0.0) 65%
+    );
+    opacity: 0.28;
+}
+
+.bgm-scoreBadge::after {
+    background: linear-gradient(
+        225deg,
+        rgba(0, 0, 0, 0.18) 0%,
+        rgba(0, 0, 0, 0.0) 55%
+    );
+    opacity: 0.22;
 }
 
 .bgm-scoreBadge--avg {
@@ -361,13 +394,78 @@ textarea,
     border: 1px solid rgba(var(--bgm-c3-rgb), 0.34);
 }
 
+.bgm-scoreBadge--platinum {
+    color: #0b1b2c;
+    background: linear-gradient(135deg, #eef6ff 0%, #b8d6ff 40%, #6fa6f5 70%, #dcecff 100%);
+    --bgm-score-border: rgba(43, 83, 140, 0.6);
+    box-shadow:
+        0 18px 36px rgba(19, 58, 99, 0.22),
+        inset 0 0 0 1px rgba(255, 255, 255, 0.75);
+}
+
+.bgm-scoreBadge--gold {
+    color: #3a2a09;
+    background: linear-gradient(135deg, #fff4c7 0%, #f5d77a 45%, #e5b84a 70%, #fff2bf 100%);
+    --bgm-score-border: rgba(159, 116, 35, 0.65);
+    box-shadow:
+        0 18px 34px rgba(132, 91, 22, 0.25),
+        inset 0 0 0 1px rgba(255, 255, 255, 0.65);
+}
+
+.bgm-scoreBadge--silver {
+    color: #1d2430;
+    background: linear-gradient(135deg, #f5f7fb 0%, #ced5de 45%, #9aa4b2 70%, #e8edf5 100%);
+    --bgm-score-border: rgba(95, 105, 118, 0.65);
+    box-shadow:
+        0 18px 34px rgba(70, 79, 92, 0.22),
+        inset 0 0 0 1px rgba(255, 255, 255, 0.7);
+}
+
+.bgm-scoreBadge--bronze {
+    color: #2f1a10;
+    background: linear-gradient(135deg, #f3d2b8 0%, #c9875b 45%, #a0623f 70%, #efc7aa 100%);
+    --bgm-score-border: rgba(116, 69, 44, 0.7);
+    box-shadow:
+        0 18px 34px rgba(96, 52, 30, 0.24),
+        inset 0 0 0 1px rgba(255, 255, 255, 0.6);
+}
+
+.bgm-scoreBadge--iron {
+    color: #2a1d14;
+    background: linear-gradient(135deg, #ffd3ad 0%, #f1a66a 45%, #d1783b 70%, #ffe0c6 100%);
+    --bgm-score-border: rgba(155, 93, 45, 0.7);
+    box-shadow:
+        0 18px 34px rgba(120, 65, 28, 0.24),
+        inset 0 0 0 1px rgba(255, 255, 255, 0.55);
+}
+
+.bgm-scoreBadge--red {
+    color: #fff4f4;
+    background: linear-gradient(135deg, #ff9c9c 0%, #e35151 50%, #b51f1f 85%);
+    --bgm-score-border: rgba(130, 22, 22, 0.8);
+    text-shadow:
+        0 2px 0 rgba(0, 0, 0, 0.25),
+        0 8px 18px rgba(0, 0, 0, 0.45);
+}
+
+.bgm-scoreBadge--black {
+    color: #f6f2ef;
+    background: radial-gradient(circle at 30% 30%, #3a3a3a 0%, #101010 55%, #050505 100%);
+    --bgm-score-border: rgba(0, 0, 0, 0.9);
+    text-shadow:
+        0 2px 0 rgba(0, 0, 0, 0.5),
+        0 10px 20px rgba(0, 0, 0, 0.6);
+}
+
 .bgm-scoreBadge--secondary {
     width: 64px;
     font-size: 1.2rem;
-    background: rgba(var(--bs-secondary-rgb), 0.18);
-    border: 1px solid rgba(var(--bs-secondary-rgb), 0.28);
+    background: rgba(var(--bs-secondary-rgb), 0.22);
+    border: none;
     color: var(--bs-body-color);
     text-shadow: none;
+    --bgm-score-border: transparent;
+    box-shadow: none;
 }
 
 .bgm-scoreBadge--review {
@@ -665,4 +763,33 @@ h1:focus {
 
 .form-floating > .form-control-plaintext:focus::placeholder, .form-floating > .form-control:focus::placeholder {
     text-align: start;
+}
+
+.bgm-scoreBadge--svg {
+    width: 120px;
+    height: 104px;
+    display: inline-block;
+    vertical-align: middle;
+    overflow: visible;
+    padding: 0;
+    background: transparent !important;
+    box-shadow: none !important;
+    border: none !important;
+    filter: none !important;
+    clip-path: none;
+    aspect-ratio: auto;
+}
+
+.bgm-scoreBadge--svg .bgm-scoreText {
+    font-family: ui-serif, Georgia, "Times New Roman", Times, serif;
+    font-weight: 800;
+    fill: rgba(14, 12, 8, 0.92);
+    font-size: 38px;
+    paint-order: stroke fill;
+    stroke: rgba(0,0,0,0.25);
+    stroke-width: 0.6px;
+}
+
+.bgm-scoreBadge--svg .bgm-scorePoly {
+    stroke-linejoin: round;
 }

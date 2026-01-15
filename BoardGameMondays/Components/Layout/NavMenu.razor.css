@@ -7,9 +7,42 @@
     inset: 0 0 auto 0;
     height: var(--bgm-header-height);
     z-index: 50;
-    background: rgba(15, 46, 31, 0.98);
-    border-bottom: 1px solid rgba(191, 161, 74, 0.22);
-    box-shadow: 0 10px 26px rgba(0, 0, 0, 0.18);
+    /* Make header visually transparent so content shows through */
+    background: transparent;
+    border-bottom: none;
+    box-shadow: none;
+    transition: transform 180ms ease, opacity 180ms ease;
+    will-change: transform, opacity;
+}
+
+/* Home pages: start with the header visually hidden to avoid a flash
+   at first paint. Client JS will add `html.bgm-homeNavVisible` to reveal it. */
+.page--home .bgm-header {
+    transform: translateY(-110%);
+    opacity: 0;
+    pointer-events: none;
+}
+
+/* When JS determines the header should be visible (user scrolled), add
+   this class on the root element to reveal the header without a layout jump. */
+html.bgm-homeNavVisible .page--home .bgm-header {
+    transform: none;
+    opacity: 1;
+    pointer-events: auto;
+}
+
+/* Dark icons/text specifically for home header (over the hero). More
+   specific selector wins over the default white styles below. */
+.page--home .bgm-header .bgm-brand__text,
+.page--home .bgm-header .bgm-coins,
+.page--home .bgm-header .bgm-menuIcon path {
+    color: rgba(34, 49, 28, 0.95);
+    stroke: rgba(34, 49, 28, 0.95);
+    fill: rgba(34, 49, 28, 0.95);
+}
+
+.page--home .bgm-header .bgm-menuButton {
+    color: rgba(34, 49, 28, 0.95);
 }
 
 .bgm-header__inner {
