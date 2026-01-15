@@ -27,6 +27,39 @@
                     Queued
                 </button>
             </div>
+
+            <div class="bgm-gamesSearch">
+                <input class="bgm-gamesSearch__input"
+                       placeholder="Search game"
+                       value="@_searchText"
+                       @oninput="OnSearchInput"
+                       @onfocus="() => _searchOpen = true"
+                       @onblur="OnSearchBlur"
+                       aria-label="Search games" />
+
+                @if (_searchOpen && !string.IsNullOrWhiteSpace(_searchText))
+                {
+                    <div class="bgm-gamesSearch__results" role="listbox" aria-label="Game search results">
+                        @if (_searchMatches.Count == 0)
+                        {
+                            <div class="bgm-gamesSearch__empty">No games match that name</div>
+                        }
+                        else
+                        {
+                            @foreach (var match in _searchMatches)
+                            {
+                                <button type="button"
+                                        class="bgm-gamesSearch__item"
+                                        role="option"
+                                        @onmousedown="() => SelectSearchMatchAsync(match)">
+                                    <span class="bgm-gamesSearch__name">@match.Name</span>
+                                    <span class="bgm-gamesSearch__status">@FormatStatus(match.Status)</span>
+                                </button>
+                            }
+                        }
+                    </div>
+                }
+            </div>
         </div>
 
         <h1>Games</h1>
@@ -67,6 +100,36 @@
                 </div>
             }
         </div>
+
+        @if (_pageCount > 1)
+        {
+            <div class="bgm-gamesPager" role="navigation" aria-label="Games pages">
+                <button type="button"
+                        class="bgm-gamesPager__btn"
+                        disabled="@(_pageIndex == 0)"
+                        @onclick="() => ChangePageAsync(_pageIndex - 1)">
+                    Prev
+                </button>
+
+                <div class="bgm-gamesPager__pages">
+                    @foreach (var page in GetPageNumbers())
+                    {
+                        <button type="button"
+                                class="bgm-gamesPager__page @(_pageIndex == page ? "is-active" : "")"
+                                @onclick="() => ChangePageAsync(page)">
+                            @(page + 1)
+                        </button>
+                    }
+                </div>
+
+                <button type="button"
+                        class="bgm-gamesPager__btn"
+                        disabled="@(_pageIndex >= _pageCount - 1)"
+                        @onclick="() => ChangePageAsync(_pageIndex + 1)">
+                    Next
+                </button>
+            </div>
+        }
     </div>
 </section>
 
@@ -76,8 +139,16 @@
     [Parameter]
     public EventCallback<BoardGameMondays.Core.BoardGame> OnGameSelected { get; set; }
 
+    private const int PageSize = 12;
     private GamesMode _mode = GamesMode.Decided;
+    private IReadOnlyList<BoardGameMondays.Core.BoardGame> _allGames = Array.Empty<BoardGameMondays.Core.BoardGame>();
     private IReadOnlyList<BoardGameMondays.Core.BoardGame> _games = Array.Empty<BoardGameMondays.Core.BoardGame>();
+    private readonly Dictionary<GamesMode, int> _pageByMode = new();
+    private int _pageIndex;
+    private int _pageCount;
+    private string _searchText = string.Empty;
+    private IReadOnlyList<BoardGameMondays.Core.BoardGame> _searchMatches = Array.Empty<BoardGameMondays.Core.BoardGame>();
+    private bool _searchOpen;
 
     protected override async Task OnInitializedAsync()
         => await LoadAsync();
@@ -95,13 +166,92 @@
 
     private async Task LoadAsync()
     {
-        _games = _mode switch
+        if (_allGames.Count == 0)
         {
-            GamesMode.Decided => await BoardGameService.GetByStatusAsync(BoardGameMondays.Core.GameStatus.Decided),
-            GamesMode.Playing => await BoardGameService.GetByStatusAsync(BoardGameMondays.Core.GameStatus.Playing),
-            GamesMode.Queued => await BoardGameService.GetByStatusAsync(BoardGameMondays.Core.GameStatus.Queued),
-            _ => Array.Empty<BoardGameMondays.Core.BoardGame>()
+            _allGames = await BoardGameService.GetAllAsync();
+        }
+
+        var status = _mode switch
+        {
+            GamesMode.Decided => BoardGameMondays.Core.GameStatus.Decided,
+            GamesMode.Playing => BoardGameMondays.Core.GameStatus.Playing,
+            GamesMode.Queued => BoardGameMondays.Core.GameStatus.Queued,
+            _ => BoardGameMondays.Core.GameStatus.Decided
         };
+
+        var gamesForMode = _allGames
+            .Where(g => g.Status == status)
+            .ToArray();
+
+        _pageIndex = _pageByMode.TryGetValue(_mode, out var page) ? page : 0;
+        _pageCount = Math.Max(1, (int)Math.Ceiling(gamesForMode.Length / (double)PageSize));
+        _pageIndex = Math.Clamp(_pageIndex, 0, _pageCount - 1);
+        _pageByMode[_mode] = _pageIndex;
+
+        _games = gamesForMode
+            .Skip(_pageIndex * PageSize)
+            .Take(PageSize)
+            .ToArray();
+
+        UpdateSearchMatches();
+    }
+
+    private async Task ChangePageAsync(int page)
+    {
+        _pageIndex = Math.Clamp(page, 0, _pageCount - 1);
+        _pageByMode[_mode] = _pageIndex;
+        await LoadAsync();
+    }
+
+    private void OnSearchInput(ChangeEventArgs args)
+    {
+        _searchText = args.Value?.ToString() ?? string.Empty;
+        _searchOpen = true;
+        UpdateSearchMatches();
+    }
+
+    private void OnSearchBlur(FocusEventArgs _)
+    {
+        _searchOpen = false;
+    }
+
+    private void UpdateSearchMatches()
+    {
+        if (string.IsNullOrWhiteSpace(_searchText))
+        {
+            _searchMatches = Array.Empty<BoardGameMondays.Core.BoardGame>();
+            return;
+        }
+
+        _searchMatches = _allGames
+            .Where(g => g.Name.Contains(_searchText, StringComparison.OrdinalIgnoreCase))
+            .Take(8)
+            .ToArray();
+    }
+
+    private async Task SelectSearchMatchAsync(BoardGameMondays.Core.BoardGame game)
+    {
+        _searchText = game.Name;
+        _searchOpen = false;
+
+        var mode = game.Status switch
+        {
+            BoardGameMondays.Core.GameStatus.Decided => GamesMode.Decided,
+            BoardGameMondays.Core.GameStatus.Playing => GamesMode.Playing,
+            BoardGameMondays.Core.GameStatus.Queued => GamesMode.Queued,
+            _ => GamesMode.Decided
+        };
+
+        var gamesForMode = _allGames
+            .Where(g => g.Status == game.Status)
+            .ToArray();
+
+        var index = Array.FindIndex(gamesForMode, g => g.Id == game.Id);
+        var page = index < 0 ? 0 : index / PageSize;
+        _pageByMode[mode] = page;
+
+        _mode = mode;
+        await LoadAsync();
     }
 
     private async Task SelectGameAsync(BoardGameMondays.Core.BoardGame game)
@@ -117,6 +267,32 @@
         Decided = 0,
         Playing = 1,
         Queued = 2
+    }
+
+    private static string FormatStatus(BoardGameMondays.Core.GameStatus status)
+        => status switch
+        {
+            BoardGameMondays.Core.GameStatus.Decided => "Decided",
+            BoardGameMondays.Core.GameStatus.Playing => "Playing",
+            BoardGameMondays.Core.GameStatus.Queued => "Queued",
+            _ => "Unknown"
+        };
+
+    private IEnumerable<int> GetPageNumbers()
+    {
+        if (_pageCount <= 1)
+        {
+            yield break;
+        }
+
+        var start = Math.Max(0, _pageIndex - 2);
+        var end = Math.Min(_pageCount - 1, start + 4);
+        start = Math.Max(0, end - 4);
+
+        for (var i = start; i <= end; i++)
+        {
+            yield return i;
+        }
     }
 
     private static string FormatReviewedOn(DateTimeOffset date)

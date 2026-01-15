@@ -1,7 +1,113 @@
 .bgm-gamesHeader {
     display: flex;
-    justify-content: flex-start;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
     margin-bottom: 18px;
+}
+
+.bgm-gamesSearch {
+    position: relative;
+    width: min(320px, 90vw);
+}
+
+.bgm-gamesSearch__input {
+    width: 100%;
+    border-radius: 999px;
+    border: 1px solid rgba(75, 58, 26, 0.18);
+    background: rgba(255, 255, 255, 0.7);
+    padding: 10px 16px;
+    font: inherit;
+    color: rgba(34, 49, 28, 0.92);
+}
+
+.bgm-gamesSearch__input:focus-visible {
+    outline: 2px solid rgba(191, 161, 74, 0.55);
+    outline-offset: 3px;
+}
+
+.bgm-gamesSearch__results {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    left: 0;
+    z-index: 5;
+    background: rgba(255, 255, 255, 0.95);
+    border: 1px solid rgba(75, 58, 26, 0.18);
+    border-radius: 14px;
+    box-shadow: 0 18px 48px rgba(34, 24, 10, 0.18);
+    overflow: hidden;
+}
+
+.bgm-gamesSearch__item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    border: 0;
+    background: transparent;
+    padding: 10px 14px;
+    text-align: left;
+    font: inherit;
+    cursor: pointer;
+    color: rgba(34, 49, 28, 0.92);
+}
+
+.bgm-gamesSearch__item:hover,
+.bgm-gamesSearch__item:focus-visible {
+    background: rgba(191, 161, 74, 0.14);
+    outline: none;
+}
+
+.bgm-gamesSearch__name {
+    font-weight: 600;
+}
+
+.bgm-gamesSearch__status {
+    font-size: 0.85rem;
+    color: rgba(34, 49, 28, 0.6);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+.bgm-gamesSearch__empty {
+    padding: 12px 14px;
+    color: rgba(34, 49, 28, 0.6);
+    font-style: italic;
+}
+
+.bgm-gamesPager {
+    margin-top: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.bgm-gamesPager__btn,
+.bgm-gamesPager__page {
+    border: 1px solid rgba(75, 58, 26, 0.2);
+    background: rgba(255, 255, 255, 0.65);
+    border-radius: 999px;
+    padding: 8px 12px;
+    font: inherit;
+    color: rgba(34, 49, 28, 0.9);
+}
+
+.bgm-gamesPager__page.is-active {
+    background: rgba(191, 161, 74, 0.2);
+    font-weight: 700;
+}
+
+.bgm-gamesPager__btn:disabled {
+    opacity: 0.45;
+    cursor: default;
+}
+
+.bgm-gamesPager__pages {
+    display: flex;
+    gap: 6px;
 }
 
 .bgm-segmented {
