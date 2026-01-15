@@ -7,6 +7,7 @@
 @inject AuthenticationStateProvider AuthStateProvider
 @inject BettingService BettingService
 @inject BgmCoinService CoinService
+@inject WantToPlayService WantToPlayService
 @inject IJSRuntime JS
 
 @implements IDisposable
@@ -911,6 +912,32 @@
                 }
             </div>
         </div>
+
+        <div class="card mt-3 bgm-wantToPlayCard" aria-label="Most wanted games">
+            <div class="card-body">
+                <div class="fw-semibold mb-2">Most wanted to play</div>
+
+                @if (_mostWanted.Count == 0)
+                {
+                    <div class="text-muted">No votes yet.</div>
+                }
+                else
+                {
+                    <div class="list-group list-group-flush">
+                        @foreach (var item in _mostWanted)
+                        {
+                            <div class="list-group-item d-flex align-items-center justify-content-between px-0">
+                                <div class="d-flex align-items-center gap-2">
+                                    <img class="bgm-wantToPlayThumb" src="@(item.ImageUrl ?? "images/placeholder-game-cover.svg")" alt="" />
+                                    <div class="fw-semibold">@item.Name</div>
+                                </div>
+                                <span class="badge text-bg-light">@item.Votes vote@(item.Votes == 1 ? "" : "s")</span>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
     </div>
 </section>
 
@@ -968,6 +995,7 @@
 
     private ElementReference _mondaysSectionRef;
     private string? _mondaysSectionBackgroundHex;
+    private IReadOnlyList<WantToPlayService.WantToPlayEntry> _mostWanted = Array.Empty<WantToPlayService.WantToPlayEntry>();
 
     protected override async Task OnInitializedAsync()
     {
@@ -984,6 +1012,7 @@
         _memberId = TryGetMemberId(user);
 
         CoinService.Changed += OnCoinsChanged;
+        WantToPlayService.Changed += OnWantToPlayChanged;
         await RefreshCoinsAsync();
 
         var dates = new HashSet<DateOnly>();
@@ -1030,6 +1059,7 @@
 
         _selected = _nextMonday;
         await LoadSelectedAsync();
+        await RefreshMostWantedAsync();
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -1099,6 +1129,21 @@
     public void Dispose()
     {
         CoinService.Changed -= OnCoinsChanged;
+        WantToPlayService.Changed -= OnWantToPlayChanged;
+    }
+
+    private async Task RefreshMostWantedAsync()
+    {
+        _mostWanted = await WantToPlayService.GetTopWantedAsync(5);
+    }
+
+    private void OnWantToPlayChanged()
+    {
+        _ = InvokeAsync(async () =>
+        {
+            await RefreshMostWantedAsync();
+            StateHasChanged();
+        });
     }
 
     private void OnCoinsChanged()

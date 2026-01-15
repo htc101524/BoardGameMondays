@@ -1,4 +1,7 @@
 @using Microsoft.AspNetCore.Components.Web
+@implements IDisposable
+@using Microsoft.AspNetCore.Components.Authorization
+@using System.Security.Claims
 
 <section id="games" class="home-section" aria-label="Games">
 
@@ -37,6 +40,11 @@
                        @onblur="OnSearchBlur"
                        aria-label="Search games" />
 
+                @if (_isAdmin)
+                {
+                    <div class="bgm-gamesSearch__meta">Votes left: @_votesRemaining / @_votesLimit</div>
+                }
+
                 @if (_searchOpen && !string.IsNullOrWhiteSpace(_searchText))
                 {
                     <div class="bgm-gamesSearch__results" role="listbox" aria-label="Game search results">
@@ -68,12 +76,10 @@
             @foreach (var game in _games)
             {
                 <div class="col">
-                    <button type="button"
-                            class="bgm-gameCardButton"
-                            aria-label="Show thoughts for @game.Name"
-                            @onclick="() => SelectGameAsync(game)">
+                    <div class="bgm-gameCardButton" role="button" tabindex="0" aria-label="@("Show thoughts for " + game.Name)"
+                        @onclick="() => SelectGameAsync(game)">
                         <div class="card h-100">
-                            <img class="card-img-top" src="@(game.ImageUrl ?? "images/placeholder-game-cover.svg")" alt="" />
+                            <img class="card-img-top" src='@(game.ImageUrl ?? "images/placeholder-game-cover.svg")' alt="" />
                             <div class="card-body">
                                 <h5 class="card-title">@game.Name</h5>
                                 @if (!string.IsNullOrWhiteSpace(game.Tagline))
@@ -93,10 +99,24 @@
                                     }
                                 </small>
 
-                                <small class="text-muted">@game.Reviews.Count review(s)</small>
+                                <div class="d-flex align-items-center" style="gap:10px">
+                                    <small class="text-muted">@game.Reviews.Count review(s)</small>
+
+                                    @if (_isAdmin)
+                                    {
+                                        <div class="bgm-gameCardActions">
+                                            <button type="button"
+                                                    class="btn btn-sm @(HasVoted(game.Id) ? "btn-success" : "btn-outline-secondary")"
+                                                    disabled="@(HasVoted(game.Id) || _votesRemaining <= 0)"
+                                                    @onclick="@(async () => await VoteWantToPlayAsync(game.Id))">
+                                                @(HasVoted(game.Id) ? "Voted" : "Want to play")
+                                            </button>
+                                        </div>
+                                    }
+                                </div>
                             </div>
                         </div>
-                    </button>
+                    </div>
                 </div>
             }
         </div>
@@ -134,6 +154,8 @@
 </section>
 
 @inject BoardGameMondays.Core.BoardGameService BoardGameService
+@inject BoardGameMondays.Core.WantToPlayService WantToPlayService
+@inject AuthenticationStateProvider AuthStateProvider
 
 @code {
     [Parameter]
@@ -149,9 +171,23 @@
     private string _searchText = string.Empty;
     private IReadOnlyList<BoardGameMondays.Core.BoardGame> _searchMatches = Array.Empty<BoardGameMondays.Core.BoardGame>();
     private bool _searchOpen;
+    private bool _isAdmin;
+    private string? _userId;
+    private int _votesRemaining;
+    private int _votesLimit;
+    private HashSet<Guid> _votedGameIds = new();
+    private string? _voteStatus;
 
     protected override async Task OnInitializedAsync()
-        => await LoadAsync();
+    {
+        var auth = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = auth.User;
+        _isAdmin = user.Identity?.IsAuthenticated == true && user.IsInRole("Admin");
+        _userId = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+        WantToPlayService.Changed += OnWantToPlayChanged;
+        await LoadAsync();
+    }
 
     private async Task SetModeAsync(GamesMode mode)
     {
@@ -194,6 +230,7 @@
             .ToArray();
 
         UpdateSearchMatches();
+        await RefreshWantToPlayAsync();
     }
 
     private async Task ChangePageAsync(int page)
@@ -227,6 +264,44 @@
             .Where(g => g.Name.Contains(_searchText, StringComparison.OrdinalIgnoreCase))
             .Take(8)
             .ToArray();
+    }
+
+    private async Task RefreshWantToPlayAsync()
+    {
+        if (!_isAdmin || string.IsNullOrWhiteSpace(_userId))
+        {
+            return;
+        }
+
+        var status = await WantToPlayService.GetUserStatusAsync(_userId, DateOnly.FromDateTime(DateTime.Today));
+        _votesRemaining = status.VotesRemaining;
+        _votesLimit = status.WeeklyLimit;
+        _votedGameIds = status.VotedGameIds.ToHashSet();
+        _voteStatus = null;
+    }
+
+    private bool HasVoted(Guid gameId)
+        => _votedGameIds.Contains(gameId);
+
+    private async Task VoteWantToPlayAsync(Guid gameId)
+    {
+        if (!_isAdmin || string.IsNullOrWhiteSpace(_userId))
+        {
+            return;
+        }
+
+        var result = await WantToPlayService.VoteAsync(_userId, gameId, DateOnly.FromDateTime(DateTime.Today));
+        _voteStatus = result.Message;
+        await RefreshWantToPlayAsync();
+    }
+
+    private void OnWantToPlayChanged()
+    {
+        _ = InvokeAsync(async () =>
+        {
+            await RefreshWantToPlayAsync();
+            StateHasChanged();
+        });
     }
 
     private async Task SelectSearchMatchAsync(BoardGameMondays.Core.BoardGame game)
@@ -293,6 +368,11 @@
         {
             yield return i;
         }
+    }
+
+    public void Dispose()
+    {
+        WantToPlayService.Changed -= OnWantToPlayChanged;
     }
 
     private static string FormatReviewedOn(DateTimeOffset date)

@@ -205,6 +205,7 @@ builder.Services.AddScoped<BoardGameMondays.Core.GameNightService>();
 builder.Services.AddScoped<BoardGameMondays.Core.BgmCoinService>();
 builder.Services.AddScoped<BoardGameMondays.Core.BettingService>();
 builder.Services.AddScoped<BoardGameMondays.Core.BlogService>();
+builder.Services.AddScoped<BoardGameMondays.Core.WantToPlayService>();
 
 // Persist Data Protection keys so auth cookies remain valid across instances/restarts on Azure App Service.
 // Preferred path resolution order:
@@ -944,6 +945,32 @@ CREATE UNIQUE INDEX IF NOT EXISTS IX_ReviewAgreements_User_Review ON ReviewAgree
 CREATE INDEX IF NOT EXISTS IX_ReviewAgreements_UserId ON ReviewAgreements(UserId);
 ";
             await createReviewAgreementIndexes.ExecuteNonQueryAsync();
+        }
+
+        // Want to play votes
+        await using (var createWantToPlayVotes = connection.CreateCommand())
+        {
+            createWantToPlayVotes.CommandText = @"
+CREATE TABLE IF NOT EXISTS WantToPlayVotes (
+    Id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    GameId TEXT NOT NULL,
+    UserId TEXT NOT NULL,
+    WeekKey INTEGER NOT NULL,
+    CreatedOn INTEGER NOT NULL,
+    FOREIGN KEY (GameId) REFERENCES Games(Id) ON DELETE CASCADE
+);
+";
+            await createWantToPlayVotes.ExecuteNonQueryAsync();
+        }
+
+        await using (var createWantToPlayIndexes = connection.CreateCommand())
+        {
+            createWantToPlayIndexes.CommandText = @"
+CREATE UNIQUE INDEX IF NOT EXISTS IX_WantToPlayVotes_User_Game_Week ON WantToPlayVotes(UserId, GameId, WeekKey);
+CREATE INDEX IF NOT EXISTS IX_WantToPlayVotes_User_Week ON WantToPlayVotes(UserId, WeekKey);
+CREATE INDEX IF NOT EXISTS IX_WantToPlayVotes_Game ON WantToPlayVotes(GameId);
+";
+            await createWantToPlayIndexes.ExecuteNonQueryAsync();
         }
 
         // Game nights

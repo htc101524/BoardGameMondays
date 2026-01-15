@@ -30,6 +30,7 @@ public sealed class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<VictoryRouteOptionEntity> VictoryRouteOptions => Set<VictoryRouteOptionEntity>();
     public DbSet<GameNightGameVictoryRouteValueEntity> GameNightGameVictoryRouteValues => Set<GameNightGameVictoryRouteValueEntity>();
     public DbSet<BlogPostEntity> BlogPosts => Set<BlogPostEntity>();
+    public DbSet<WantToPlayVoteEntity> WantToPlayVotes => Set<WantToPlayVoteEntity>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -123,6 +124,12 @@ public sealed class ApplicationDbContext : IdentityDbContext<ApplicationUser>
                 toDb => toDb.UtcDateTime.Ticks,
                 fromDb => new DateTimeOffset(new DateTime(fromDb, DateTimeKind.Utc)));
 
+        builder.Entity<WantToPlayVoteEntity>()
+            .Property(x => x.CreatedOn)
+            .HasConversion(
+                toDb => toDb.UtcDateTime.Ticks,
+                fromDb => new DateTimeOffset(new DateTime(fromDb, DateTimeKind.Utc)));
+
         builder.Entity<MemberEntity>()
             .HasIndex(x => x.Name)
             .IsUnique();
@@ -162,6 +169,16 @@ public sealed class ApplicationDbContext : IdentityDbContext<ApplicationUser>
         builder.Entity<ReviewAgreementEntity>()
             .HasIndex(x => new { x.UserId, x.ReviewId })
             .IsUnique();
+
+        builder.Entity<WantToPlayVoteEntity>()
+            .HasIndex(x => new { x.UserId, x.GameId, x.WeekKey })
+            .IsUnique();
+
+        builder.Entity<WantToPlayVoteEntity>()
+            .HasIndex(x => new { x.UserId, x.WeekKey });
+
+        builder.Entity<WantToPlayVoteEntity>()
+            .HasIndex(x => x.GameId);
 
         builder.Entity<GameNightEntity>()
             .HasIndex(x => x.DateKey)
