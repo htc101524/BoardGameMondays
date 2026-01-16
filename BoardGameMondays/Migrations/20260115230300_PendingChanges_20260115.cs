@@ -143,7 +143,7 @@ namespace BoardGameMondays.Migrations
                         column: x => x.VictoryRouteId,
                         principalTable: "VictoryRoutes",
                         principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
+                        onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.CreateTable(

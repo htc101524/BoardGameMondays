@@ -326,7 +326,7 @@ public sealed class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             .HasOne(x => x.VictoryRoute)
             .WithMany()
             .HasForeignKey(x => x.VictoryRouteId)
-            .OnDelete(DeleteBehavior.Cascade);
+            .OnDelete(DeleteBehavior.Restrict);
 
         builder.Entity<GameNightGameVictoryRouteValueEntity>()
             .HasIndex(x => new { x.GameNightGameId, x.VictoryRouteId })
