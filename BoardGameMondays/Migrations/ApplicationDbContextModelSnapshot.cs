@@ -1008,7 +1008,7 @@ namespace BoardGameMondays.Migrations
                     b.HasOne("BoardGameMondays.Data.Entities.VictoryRouteEntity", "VictoryRoute")
                         .WithMany()
                         .HasForeignKey("VictoryRouteId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.Navigation("GameNightGame");
