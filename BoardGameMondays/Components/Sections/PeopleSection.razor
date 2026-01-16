@@ -50,9 +50,9 @@
                         </div>
                         <div class="bgm-peopleCard__who">
                             <div class="bgm-peopleCard__name">@member.Name</div>
-                            @if (_isAdmin)
+                            @if (!string.IsNullOrWhiteSpace(member.Tagline))
                             {
-                                <div class="bgm-peopleCard__email">@member.Email</div>
+                                <div class="bgm-peopleCard__tagline">@member.Tagline</div>
                             }
                         </div>
                     </div>
@@ -91,7 +91,7 @@
             .AsNoTracking()
             .Where(m => m.IsBgmMember)
             .OrderBy(m => m.Name)
-            .Select(m => new MemberCard(m.Id, m.Name, m.Email, m.Summary, m.AvatarUrl))
+            .Select(m => new MemberCard(m.Id, m.Name, m.ProfileTagline, m.Summary, m.AvatarUrl))
             .ToListAsync();
     }
 
@@ -117,5 +117,5 @@
         }
     }
 
-    private sealed record MemberCard(Guid Id, string Name, string Email, string? Summary, string? AvatarUrl);
+    private sealed record MemberCard(Guid Id, string Name, string? Tagline, string? Summary, string? AvatarUrl);
 }

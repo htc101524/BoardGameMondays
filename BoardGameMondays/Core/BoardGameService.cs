@@ -388,7 +388,7 @@ public sealed class BoardGameService
         {
             Id = Guid.NewGuid(),
             Name = name,
-            Email = string.IsNullOrWhiteSpace(member.Email) ? $"{name.ToLowerInvariant()}@placeholder.com" : member.Email,
+            Email = string.IsNullOrWhiteSpace(member.Email) ? string.Empty : member.Email,
             Summary = member.Summary
         };
 

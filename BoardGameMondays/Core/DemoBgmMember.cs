@@ -10,7 +10,7 @@ public class DemoBgmMember : BgmMember
         _summary = summary;
     }
     public override string Name => _name;
-    public override string Email => $"{_name.ToLower()}@placeholder.com";
+    public override string Email => string.Empty;
 
     public override string? Summary => _summary;
 }

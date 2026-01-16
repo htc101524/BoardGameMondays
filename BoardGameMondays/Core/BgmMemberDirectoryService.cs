@@ -153,7 +153,7 @@ public sealed class BgmMemberDirectoryService
             Id = Guid.NewGuid(),
             IsBgmMember = true,
             Name = trimmed,
-            Email = $"{trimmed.ToLowerInvariant()}@placeholder.com"
+            Email = string.Empty
         };
 
         db.Members.Add(created);
@@ -176,7 +176,7 @@ public sealed class BgmMemberDirectoryService
             Id = Guid.NewGuid(),
             IsBgmMember = true,
             Name = trimmed,
-            Email = $"{trimmed.ToLowerInvariant()}@placeholder.com"
+            Email = string.Empty
         };
 
         db.Members.Add(created);

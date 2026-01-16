@@ -1933,7 +1933,7 @@ app.MapPost("/account/avatar", async (
         {
             Id = Guid.NewGuid(),
             Name = displayName,
-            Email = $"{displayName.ToLowerInvariant()}@placeholder.com"
+            Email = string.Empty
         };
         db.Members.Add(member);
         await db.SaveChangesAsync();

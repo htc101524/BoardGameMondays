@@ -131,7 +131,7 @@ public static class DataSeeder
         {
             Id = Guid.NewGuid(),
             Name = name,
-            Email = $"{name.ToLowerInvariant()}@placeholder.com",
+            Email = string.Empty,
             Summary = summary
         };
 
