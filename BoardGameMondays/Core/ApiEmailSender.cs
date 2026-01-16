@@ -32,9 +32,17 @@ public sealed class ApiEmailSender : IEmailSender
         client.BaseAddress = new Uri(_options.Api.BaseUrl);
         if (!string.IsNullOrWhiteSpace(_options.Api.Token))
         {
-            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
-                _options.Api.AuthScheme ?? "Bearer",
-                _options.Api.Token);
+            if (!string.IsNullOrWhiteSpace(_options.Api.TokenHeaderName))
+            {
+                client.DefaultRequestHeaders.Remove(_options.Api.TokenHeaderName);
+                client.DefaultRequestHeaders.Add(_options.Api.TokenHeaderName, _options.Api.Token);
+            }
+            else
+            {
+                client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+                    _options.Api.AuthScheme ?? "Bearer",
+                    _options.Api.Token);
+            }
         }
 
         // Mailtrap Send API expects a from object and an array of recipients.
@@ -68,7 +76,7 @@ public sealed class ApiEmailSender : IEmailSender
             {
                 var respText = await resp.Content.ReadAsStringAsync();
                 _logger.LogError("Email API returned non-success status {Status} when sending to {ToEmail}: {Body}", resp.StatusCode, toEmail, respText);
-                throw new InvalidOperationException($"Email API failed: {resp.StatusCode}");
+                throw new EmailApiException($"Email API failed: {resp.StatusCode}", resp.StatusCode, respText);
             }
         }
         catch (Exception ex)

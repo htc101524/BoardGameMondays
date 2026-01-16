@@ -35,10 +35,16 @@
     <div class="alert @(_messageCss) mt-3" role="alert">@_message</div>
 }
 
+@if (!string.IsNullOrWhiteSpace(_details))
+{
+    <pre class="mt-2 text-muted" style="white-space: pre-wrap;">@_details</pre>
+}
+
 @code {
     private bool _sending;
     private string? _message;
     private string _messageCss = "alert-success";
+    private string? _details;
 
     public string Recipient { get; set; } = string.Empty;
     public string Subject { get; set; } = "Board Game Mondays - test email";
@@ -59,11 +65,18 @@
     {
         _sending = true;
         _message = null;
+        _details = null;
         try
         {
             await EmailSender.SendEmailAsync(Recipient, Subject, Body);
             _message = "Test email sent (check Mailtrap or configured SMTP).";
             _messageCss = "alert-success";
+        }
+        catch (BoardGameMondays.Core.EmailApiException ex)
+        {
+            _message = "Failed to send test email.";
+            _details = $"Status: {ex.StatusCode}\nResponse: {ex.ResponseBody}";
+            _messageCss = "alert-danger";
         }
         catch (Exception ex)
         {

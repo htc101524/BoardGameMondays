@@ -23,5 +23,7 @@ public sealed class EmailOptions
         public string Token { get; set; } = string.Empty;
         // Optional: allow overriding the Authorization scheme (e.g., "Bearer").
         public string AuthScheme { get; set; } = "Bearer";
+        // Optional: set a custom header name for the API token (e.g., "Api-Token" for Mailtrap).
+        public string TokenHeaderName { get; set; } = string.Empty;
     }
 }
