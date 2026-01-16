@@ -21,11 +21,16 @@ public sealed class ApiEmailSender : IEmailSender
 
     public async Task SendEmailAsync(string toEmail, string subject, string htmlBody)
     {
+        await SendEmailWithResultAsync(toEmail, subject, htmlBody);
+    }
+
+    public async Task<string?> SendEmailWithResultAsync(string toEmail, string subject, string htmlBody)
+    {
         if (string.IsNullOrWhiteSpace(_options.Api.BaseUrl))
         {
             _logger.LogWarning("Email not sent because API base URL is not configured. To={ToEmail}, Subject={Subject}", toEmail, subject);
             _logger.LogInformation("Email body (truncated): {Body}", htmlBody.Length > 500 ? htmlBody[..500] + "…" : htmlBody);
-            return;
+            return null;
         }
 
         var client = _httpFactory.CreateClient("email-api");
@@ -72,12 +77,31 @@ public sealed class ApiEmailSender : IEmailSender
             // POST to the configured URL. If the provider requires a specific path (e.g., /send),
             // include it in Email:Api:BaseUrl in configuration.
             var resp = await client.PostAsync(string.Empty, content);
+            var respText = await resp.Content.ReadAsStringAsync();
             if (!resp.IsSuccessStatusCode)
             {
-                var respText = await resp.Content.ReadAsStringAsync();
                 _logger.LogError("Email API returned non-success status {Status} when sending to {ToEmail}: {Body}", resp.StatusCode, toEmail, respText);
                 throw new EmailApiException($"Email API failed: {resp.StatusCode}", resp.StatusCode, respText);
             }
+
+            if (!string.IsNullOrWhiteSpace(respText))
+            {
+                try
+                {
+                    using var doc = JsonDocument.Parse(respText);
+                    if (doc.RootElement.TryGetProperty("success", out var successElement)
+                        && successElement.ValueKind == JsonValueKind.False)
+                    {
+                        throw new EmailApiException("Email API returned success=false.", resp.StatusCode, respText);
+                    }
+                }
+                catch (JsonException)
+                {
+                    // Non-JSON response; still return it for diagnostics.
+                }
+            }
+
+            return respText;
         }
         catch (Exception ex)
         {

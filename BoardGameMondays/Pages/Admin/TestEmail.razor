@@ -68,8 +68,21 @@
         _details = null;
         try
         {
-            await EmailSender.SendEmailAsync(Recipient, Subject, Body);
-            _message = "Test email sent (check Mailtrap or configured SMTP).";
+            if (EmailSender is BoardGameMondays.Core.ApiEmailSender apiSender)
+            {
+                var response = await apiSender.SendEmailWithResultAsync(Recipient, Subject, Body);
+                _message = "Test email sent (API accepted request).";
+                if (!string.IsNullOrWhiteSpace(response))
+                {
+                    _details = response;
+                }
+            }
+            else
+            {
+                await EmailSender.SendEmailAsync(Recipient, Subject, Body);
+                _message = "Test email sent (SMTP).";
+                _details = "SMTP send requested successfully (no API response body).";
+            }
             _messageCss = "alert-success";
         }
         catch (BoardGameMondays.Core.EmailApiException ex)
