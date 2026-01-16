@@ -121,17 +121,11 @@ builder.Services.AddSingleton<IAssetStorage>(sp =>
 });
 
 builder.Services.Configure<EmailOptions>(builder.Configuration.GetSection("Email"));
-// Choose email sender implementation: API-based (e.g., Mailtrap send API) or SMTP.
-var useApi = builder.Configuration.GetValue<bool>("Email:UseApi");
-if (useApi)
-{
-    builder.Services.AddHttpClient("email-api");
-    builder.Services.AddSingleton<IEmailSender, ApiEmailSender>();
-}
-else
-{
-    builder.Services.AddSingleton<IEmailSender, SmtpEmailSender>();
-}
+// Email sender routing: pick API or SMTP at runtime based on Email options.
+builder.Services.AddHttpClient("email-api");
+builder.Services.AddSingleton<ApiEmailSender>();
+builder.Services.AddSingleton<SmtpEmailSender>();
+builder.Services.AddSingleton<IEmailSender, RoutingEmailSender>();
 
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
     {

@@ -3,12 +3,22 @@
 @attribute [Microsoft.AspNetCore.Authorization.Authorize(Roles = "Admin")]
 
 @using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.Extensions.Options
 @inject BoardGameMondays.Core.IEmailSender EmailSender
 @inject AuthenticationStateProvider AuthStateProvider
+@inject IOptions<BoardGameMondays.Core.EmailOptions> EmailOptions
 
 <h1>Send test email</h1>
 
 <p class="text-muted">Use this page to verify the development SMTP configuration (Mailtrap, etc.).</p>
+
+<div class="alert alert-info" role="alert">
+    <div class="fw-semibold">Email diagnostics</div>
+    <div>UseApi: @EmailOptions.Value.UseApi</div>
+    <div>API BaseUrl: @(string.IsNullOrWhiteSpace(EmailOptions.Value.Api.BaseUrl) ? "(not set)" : EmailOptions.Value.Api.BaseUrl)</div>
+    <div>API Token header: @(string.IsNullOrWhiteSpace(EmailOptions.Value.Api.TokenHeaderName) ? "(default Authorization)" : EmailOptions.Value.Api.TokenHeaderName)</div>
+    <div>SMTP Host: @(string.IsNullOrWhiteSpace(EmailOptions.Value.Smtp.Host) ? "(not set)" : EmailOptions.Value.Smtp.Host)</div>
+</div>
 
 <EditForm Model="this" OnValidSubmit="SendTestAsync">
     <div class="mb-3">
