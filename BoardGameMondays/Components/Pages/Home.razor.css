@@ -164,12 +164,18 @@
 }
 
 .home-hero__media img {
-    width: min(460px, 88vw);
+    width: 100%;
+    max-width: 460px;
     max-height: 210px;
-    margin: 8px 0 12px;
+    margin: 0 auto 18px;
     border: 1px solid rgba(191, 161, 74, 0.30);
     box-shadow: 0 18px 60px rgba(34, 24, 10, 0.22);
     background: rgba(255,255,255,0.60);
+    box-sizing: border-box;
+}
+
+.home-hero__card--review .home-hero__media {
+    padding: 0 16px 16px;
 }
 
 .home-hero__card--recap .bgm-recapFrame,
@@ -224,6 +230,10 @@
 
     .home-hero__media img {
         max-height: 200px;
-        margin: 8px 0 10px;
+        margin: 0 auto 12px;
+    }
+
+    .home-hero__card--review .home-hero__media {
+        padding: 0 14px 14px;
     }
 }

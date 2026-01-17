@@ -65,3 +65,31 @@
     background: transparent;
     padding: 10px 14px;
 }
+
+@media (max-width: 640px) {
+    .bgm-recapCard .card-body {
+        padding: 14px;
+    }
+
+    .bgm-mondayRecapTitle {
+        font-size: clamp(1.1rem, 5vw, 1.6rem);
+    }
+
+    .bgm-recapDetails {
+        gap: 0.75rem;
+    }
+
+    .bgm-coinLeaderboard {
+        font-size: 0.9rem;
+    }
+
+    .bgm-coinLeaderboard .list-group-item {
+        padding: 8px 10px;
+    }
+}
+
+@media (max-width: 520px) {
+    .bgm-recapSummary {
+        display: none;
+    }
+}

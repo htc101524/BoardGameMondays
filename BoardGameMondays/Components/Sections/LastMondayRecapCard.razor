@@ -62,14 +62,14 @@ else
 
             @if (!string.IsNullOrWhiteSpace(_night.Recap))
             {
-                <div class="mt-2">@_night.Recap</div>
+                <div class="mt-2 bgm-recapSummary">@_night.Recap</div>
             }
             else
             {
-                <div class="text-muted mt-2">No recap yet.</div>
+                <div class="text-muted mt-2 bgm-recapSummary">No recap yet.</div>
             }
 
-                <div class="row g-3 mt-1">
+                <div class="row g-3 mt-1 bgm-recapDetails">
                 <div class="col-12 col-md-6">
                     <div class="fw-semibold mb-1">🏆 Biggest winners</div>
                     @if (winners.Length == 0)

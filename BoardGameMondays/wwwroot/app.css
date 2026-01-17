@@ -622,6 +622,8 @@ textarea,
     .bgm-thoughtsHero {
         grid-template-columns: 1fr;
         align-items: start;
+        width: min(980px, 88vw);
+        padding: 16px;
     }
 
     .bgm-thoughtsHero__rating {

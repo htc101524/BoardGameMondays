@@ -21,6 +21,31 @@
     color: rgba(34, 49, 28, 0.92);
 }
 
+@media (max-width: 640px) {
+    .bgm-gamesHeader {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 12px;
+    }
+
+    .bgm-segmented {
+        width: 100%;
+    }
+
+    .bgm-gamesSearch {
+        width: 100%;
+    }
+
+    .bgm-gamesSearch__input {
+        padding: 12px 18px;
+        font-size: 1rem;
+    }
+
+    .bgm-gamesSearch__meta {
+        text-align: left;
+    }
+}
+
 .bgm-gamesSearch__meta {
     margin-top: 6px;
     font-size: 0.8rem;
