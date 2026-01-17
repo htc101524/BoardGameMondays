@@ -73,12 +73,16 @@ html.bgm-homeNavVisible .page--home .bgm-header {
     align-items: center;
     gap: 0.75rem;
     text-decoration: none;
+    /* Make the brand link fill the header height so its hit area matches visual */
+    height: 100%;
 }
 
 .bgm-brand__logo {
     width: 40px;
     height: 40px;
     display: block;
+    /* vertically center inside the full-height link */
+    margin: auto 0;
 }
 
 .bgm-brand__text {
@@ -90,15 +94,19 @@ html.bgm-homeNavVisible .page--home .bgm-header {
 }
 
 .bgm-menuButton {
-    width: 52px;
-    height: 44px;
+    /* Fill the header height so the button's hitbox matches visual placement */
+    min-width: 48px;
+    height: 100%;
     border: 0;
     background: transparent;
     border-radius: 0;
-    padding: 0;
+    padding: 0 8px; /* horizontal padding while using the full header height */
     color: rgba(255, 255, 255, 0.98);
-    display: grid;
-    place-items: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 80; /* keep button above other UI for reliable taps */
+    touch-action: manipulation;
 }
 
 .bgm-menuButton:hover {
