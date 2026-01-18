@@ -266,13 +266,23 @@ html.bgm-homeNavVisible .page--home .bgm-header {
 
 .bgm-betsModal__footer {
     display: flex;
-    justify-content: flex-end;
+    justify-content: space-between;
+    gap: 12px;
+    padding-top: 10px;
+    border-top: 1px solid rgba(75, 58, 26, 0.12);
+    margin-top: 6px;
 }
 
 .bgm-betsModal__link {
     text-decoration: none;
     font-weight: 600;
     color: rgba(34, 49, 28, 0.9);
+    font-size: 0.9rem;
+    transition: color 0.15s ease;
+}
+
+.bgm-betsModal__link:hover {
+    color: #22311c;
 }
 
 .bgm-popup {

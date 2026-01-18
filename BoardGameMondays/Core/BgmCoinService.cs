@@ -129,5 +129,75 @@ public sealed class BgmCoinService
             .ToArray();
     }
 
+    public async Task<IReadOnlyList<FullLeaderboardItem>> GetFullLeaderboardAsync(CancellationToken ct = default)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+
+        var users = await db.Users
+            .AsNoTracking()
+            .OrderByDescending(u => u.BgmCoins)
+            .ThenBy(u => u.UserName)
+            .Select(u => new { u.Id, u.UserName, u.BgmCoins })
+            .ToListAsync(ct);
+
+        if (users.Count == 0)
+        {
+            return Array.Empty<FullLeaderboardItem>();
+        }
+
+        var userIds = users.Select(u => u.Id).ToHashSet(StringComparer.Ordinal);
+
+        // Get display names
+        var displayNameClaims = await db.UserClaims
+            .AsNoTracking()
+            .Where(c => userIds.Contains(c.UserId) && c.ClaimType == BgmClaimTypes.DisplayName)
+            .Select(c => new { c.UserId, c.ClaimValue })
+            .ToListAsync(ct);
+
+        var displayNameByUserId = displayNameClaims
+            .Where(c => !string.IsNullOrWhiteSpace(c.ClaimValue))
+            .GroupBy(c => c.UserId)
+            .ToDictionary(g => g.Key, g => g.First().ClaimValue!.Trim(), StringComparer.Ordinal);
+
+        // Get memberId claims to determine if user is a BGM member
+        var memberIdClaims = await db.UserClaims
+            .AsNoTracking()
+            .Where(c => userIds.Contains(c.UserId) && c.ClaimType == BgmClaimTypes.MemberId)
+            .Select(c => new { c.UserId, c.ClaimValue })
+            .ToListAsync(ct);
+
+        var memberIdByUserId = memberIdClaims
+            .Where(c => !string.IsNullOrWhiteSpace(c.ClaimValue))
+            .GroupBy(c => c.UserId)
+            .ToDictionary(g => g.Key, g => g.First().ClaimValue!, StringComparer.Ordinal);
+
+        return users
+            .Select(u => new FullLeaderboardItem(
+                u.Id,
+                displayNameByUserId.TryGetValue(u.Id, out var dn) ? dn : (u.UserName ?? u.Id),
+                u.BgmCoins,
+                memberIdByUserId.ContainsKey(u.Id)))
+            .ToArray();
+    }
+
+    public async Task<IReadOnlyDictionary<string, int>> GetCoinsGainedSinceAsync(DateTimeOffset since, CancellationToken ct = default)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+
+        // Sum payouts from bets resolved since the given date
+        var payoutsByUser = await db.GameNightGameBets
+            .AsNoTracking()
+            .Where(b => b.IsResolved && b.ResolvedOn >= since)
+            .GroupBy(b => b.UserId)
+            .Select(g => new { UserId = g.Key, TotalPayout = g.Sum(b => b.Payout), TotalStake = g.Sum(b => b.Amount) })
+            .ToListAsync(ct);
+
+        return payoutsByUser.ToDictionary(
+            x => x.UserId,
+            x => x.TotalPayout - x.TotalStake,
+            StringComparer.Ordinal);
+    }
+
     public sealed record CoinLeaderboardItem(string UserId, string DisplayName, int Coins);
+    public sealed record FullLeaderboardItem(string UserId, string DisplayName, int Coins, bool IsBgmMember);
 }

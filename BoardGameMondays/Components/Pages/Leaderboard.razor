@@ -1,0 +1,173 @@
+@page "/leaderboard"
+@using Microsoft.AspNetCore.Components.Authorization
+@inject BoardGameMondays.Core.BgmCoinService CoinService
+
+<PageTitle>Leaderboard – Board Game Mondays</PageTitle>
+
+<section class="home-section" aria-label="BGM Coin Leaderboard">
+    <div class="home-section__inner bgm-leaderboardPage">
+        <h1>BGM Coin Leaderboard</h1>
+
+        <div class="bgm-leaderboardControls">
+            <div class="bgm-leaderboardToggle" role="tablist" aria-label="Time period">
+                <button type="button"
+                        class="bgm-leaderboardToggle__btn @(_period == Period.Total ? "is-active" : "")"
+                        role="tab"
+                        aria-selected="@(_period == Period.Total)"
+                        @onclick="() => SetPeriod(Period.Total)">
+                    All Time
+                </button>
+                <button type="button"
+                        class="bgm-leaderboardToggle__btn @(_period == Period.Month ? "is-active" : "")"
+                        role="tab"
+                        aria-selected="@(_period == Period.Month)"
+                        @onclick="() => SetPeriod(Period.Month)">
+                    This Month
+                </button>
+                <button type="button"
+                        class="bgm-leaderboardToggle__btn @(_period == Period.Quarter ? "is-active" : "")"
+                        role="tab"
+                        aria-selected="@(_period == Period.Quarter)"
+                        @onclick="() => SetPeriod(Period.Quarter)">
+                    This Quarter
+                </button>
+            </div>
+
+            <div class="bgm-leaderboardFilter">
+                <label class="form-check">
+                    <input type="checkbox" class="form-check-input" @bind="_showMembersOnly" />
+                    <span class="form-check-label">BGM members only</span>
+                </label>
+            </div>
+        </div>
+
+        @if (_loading)
+        {
+            <div class="text-muted">Loading leaderboard…</div>
+        }
+        else if (_items.Count == 0)
+        {
+            <div class="text-muted">No users found.</div>
+        }
+        else
+        {
+            var filtered = _showMembersOnly
+                ? _items.Where(i => i.IsBgmMember).ToList()
+                : _items;
+
+            var ranked = filtered
+                .Select((item, idx) => (Item: item, Rank: idx + 1, Score: GetScore(item)))
+                .OrderByDescending(x => x.Score)
+                .Select((x, newIdx) => (x.Item, Rank: newIdx + 1, x.Score))
+                .ToList();
+
+            <div class="bgm-leaderboardTable" role="table" aria-label="Leaderboard">
+                <div class="bgm-leaderboardTable__header" role="row">
+                    <div class="bgm-leaderboardTable__cell bgm-leaderboardTable__rank" role="columnheader">Rank</div>
+                    <div class="bgm-leaderboardTable__cell bgm-leaderboardTable__name" role="columnheader">Player</div>
+                    <div class="bgm-leaderboardTable__cell bgm-leaderboardTable__type" role="columnheader">Type</div>
+                    <div class="bgm-leaderboardTable__cell bgm-leaderboardTable__coins" role="columnheader">
+                        @(_period == Period.Total ? "Coins" : "Gained")
+                    </div>
+                </div>
+
+                @foreach (var (item, rank, score) in ranked)
+                {
+                    var rankClass = rank switch
+                    {
+                        1 => "bgm-rankPill bgm-rankPill--1st",
+                        2 => "bgm-rankPill bgm-rankPill--2nd",
+                        3 => "bgm-rankPill bgm-rankPill--3rd",
+                        _ => "bgm-rankPill"
+                    };
+
+                    var scoreClass = score >= 0 ? "bgm-leaderboardTable__positive" : "bgm-leaderboardTable__negative";
+
+                    <div class="bgm-leaderboardTable__row @(rank <= 3 ? "is-top3" : "")" role="row">
+                        <div class="bgm-leaderboardTable__cell bgm-leaderboardTable__rank" role="cell">
+                            <span class="@rankClass">@rank</span>
+                        </div>
+                        <div class="bgm-leaderboardTable__cell bgm-leaderboardTable__name" role="cell">
+                            @item.DisplayName
+                        </div>
+                        <div class="bgm-leaderboardTable__cell bgm-leaderboardTable__type" role="cell">
+                            @if (item.IsBgmMember)
+                            {
+                                <span class="bgm-memberBadge">Member</span>
+                            }
+                            else
+                            {
+                                <span class="bgm-guestBadge">Guest</span>
+                            }
+                        </div>
+                        <div class="bgm-leaderboardTable__cell bgm-leaderboardTable__coins @(_period != Period.Total ? scoreClass : "")" role="cell">
+                            @if (_period == Period.Total)
+                            {
+                                @item.Coins
+                            }
+                            else
+                            {
+                                @(score >= 0 ? $"+{score}" : score.ToString())
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+
+            <div class="bgm-leaderboardInfo">
+                <div class="text-muted small">
+                    Showing @ranked.Count @(ranked.Count == 1 ? "player" : "players")
+                    @if (_showMembersOnly)
+                    {
+                        <span> (members only)</span>
+                    }
+                </div>
+            </div>
+        }
+    </div>
+</section>
+
+@code {
+    private enum Period { Total, Month, Quarter }
+
+    private Period _period = Period.Total;
+    private bool _loading = true;
+    private bool _showMembersOnly;
+    private IReadOnlyList<BoardGameMondays.Core.BgmCoinService.FullLeaderboardItem> _items = Array.Empty<BoardGameMondays.Core.BgmCoinService.FullLeaderboardItem>();
+    private IReadOnlyDictionary<string, int> _monthGains = new Dictionary<string, int>();
+    private IReadOnlyDictionary<string, int> _quarterGains = new Dictionary<string, int>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _items = await CoinService.GetFullLeaderboardAsync();
+
+            var now = DateTimeOffset.UtcNow;
+            var startOfMonth = new DateTimeOffset(now.Year, now.Month, 1, 0, 0, 0, TimeSpan.Zero);
+            var startOfQuarter = new DateTimeOffset(now.Year, ((now.Month - 1) / 3) * 3 + 1, 1, 0, 0, 0, TimeSpan.Zero);
+
+            _monthGains = await CoinService.GetCoinsGainedSinceAsync(startOfMonth);
+            _quarterGains = await CoinService.GetCoinsGainedSinceAsync(startOfQuarter);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void SetPeriod(Period period)
+    {
+        _period = period;
+    }
+
+    private int GetScore(BoardGameMondays.Core.BgmCoinService.FullLeaderboardItem item)
+    {
+        return _period switch
+        {
+            Period.Month => _monthGains.TryGetValue(item.UserId, out var m) ? m : 0,
+            Period.Quarter => _quarterGains.TryGetValue(item.UserId, out var q) ? q : 0,
+            _ => item.Coins
+        };
+    }
+}
