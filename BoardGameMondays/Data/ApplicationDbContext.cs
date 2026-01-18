@@ -134,6 +134,16 @@ public sealed class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             .HasIndex(x => x.Name)
             .IsUnique();
 
+        builder.Entity<MemberEntity>()
+            .Property(x => x.EloRating)
+            .HasDefaultValue(1200);
+
+        builder.Entity<MemberEntity>()
+            .Property(x => x.EloRatingUpdatedOn)
+            .HasConversion(
+                toDb => toDb.HasValue ? toDb.Value.UtcDateTime.Ticks : (long?)null,
+                fromDb => fromDb.HasValue ? new DateTimeOffset(new DateTime(fromDb.Value, DateTimeKind.Utc)) : (DateTimeOffset?)null);
+
         builder.Entity<ReviewEntity>()
             .HasOne(x => x.Game)
             .WithMany(x => x.Reviews)

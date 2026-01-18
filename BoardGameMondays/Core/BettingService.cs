@@ -8,11 +8,19 @@ public sealed class BettingService
 {
     private readonly IDbContextFactory<ApplicationDbContext> _dbFactory;
     private readonly BgmCoinService _coins;
+    private readonly RankingService _ranking;
+    private readonly OddsService _odds;
 
-    public BettingService(IDbContextFactory<ApplicationDbContext> dbFactory, BgmCoinService coins)
+    public BettingService(
+        IDbContextFactory<ApplicationDbContext> dbFactory,
+        BgmCoinService coins,
+        RankingService ranking,
+        OddsService odds)
     {
         _dbFactory = dbFactory;
         _coins = coins;
+        _ranking = ranking;
+        _odds = odds;
     }
 
     public async Task<IReadOnlyDictionary<int, UserBet>> GetUserBetsForNightAsync(Guid gameNightId, string userId, CancellationToken ct = default)
@@ -115,6 +123,9 @@ public sealed class BettingService
             ResolvedOn = null,
             CreatedOn = DateTimeOffset.UtcNow
         });
+
+        // Recalculate odds based on cashflow within the same transaction
+        await _odds.RecalculateOddsForCashflowAsync(db, gameNightGameId, ct);
 
         await db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
@@ -225,7 +236,82 @@ public sealed class BettingService
         await db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
 
+        // Update ELO rankings based on the game outcome
+        await UpdateRankingsForGameAsync(gameNightGameId, game.WinnerMemberId, game.WinnerTeamName, ct);
+
         return ResolveResult.Ok;
+    }
+
+    /// <summary>
+    /// Updates ELO rankings for all players in a game based on the outcome.
+    /// </summary>
+    private async Task UpdateRankingsForGameAsync(
+        int gameNightGameId,
+        Guid? winnerMemberId,
+        string? winnerTeamName,
+        CancellationToken ct)
+    {
+        // If there's no winner, no ranking changes
+        if (winnerMemberId is null && string.IsNullOrWhiteSpace(winnerTeamName))
+        {
+            return;
+        }
+
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+
+        var players = await db.GameNightGamePlayers
+            .AsNoTracking()
+            .Where(p => p.GameNightGameId == gameNightGameId)
+            .Select(p => new { p.MemberId, p.TeamName })
+            .ToListAsync(ct);
+
+        if (players.Count < 2)
+        {
+            return; // Need at least 2 players for rankings
+        }
+
+        var isTeamGame = !string.IsNullOrWhiteSpace(winnerTeamName);
+
+        if (isTeamGame)
+        {
+            // Group players by team
+            var teams = players
+                .Where(p => !string.IsNullOrWhiteSpace(p.TeamName))
+                .GroupBy(p => p.TeamName!)
+                .ToList();
+
+            if (teams.Count < 2)
+            {
+                return;
+            }
+
+            var winningTeamMembers = teams
+                .FirstOrDefault(t => string.Equals(t.Key, winnerTeamName, StringComparison.OrdinalIgnoreCase))
+                ?.Select(p => p.MemberId)
+                .ToList();
+
+            if (winningTeamMembers is null || winningTeamMembers.Count == 0)
+            {
+                return;
+            }
+
+            var losingTeams = teams
+                .Where(t => !string.Equals(t.Key, winnerTeamName, StringComparison.OrdinalIgnoreCase))
+                .Select(t => (IReadOnlyList<Guid>)t.Select(p => p.MemberId).ToList())
+                .ToList();
+
+            await _ranking.UpdateRatingsForTeamGameAsync(winningTeamMembers, losingTeams, ct);
+        }
+        else if (winnerMemberId is Guid winnerId)
+        {
+            // Individual game
+            var loserIds = players
+                .Where(p => p.MemberId != winnerId)
+                .Select(p => p.MemberId)
+                .ToList();
+
+            await _ranking.UpdateRatingsForIndividualGameAsync(winnerId, loserIds, ct);
+        }
     }
 
     public async Task<IReadOnlyList<NightNetResult>> GetNightNetResultsAsync(Guid gameNightId, CancellationToken ct = default)

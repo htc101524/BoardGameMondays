@@ -226,6 +226,8 @@ builder.Services.AddScoped<BoardGameMondays.Core.BgmCoinService>();
 builder.Services.AddScoped<BoardGameMondays.Core.BettingService>();
 builder.Services.AddScoped<BoardGameMondays.Core.BlogService>();
 builder.Services.AddScoped<BoardGameMondays.Core.WantToPlayService>();
+builder.Services.AddScoped<BoardGameMondays.Core.RankingService>();
+builder.Services.AddScoped<BoardGameMondays.Core.OddsService>();
 
 // Persist Data Protection keys so auth cookies remain valid across instances/restarts on Azure App Service.
 // Preferred path resolution order:
@@ -305,6 +307,7 @@ try
         await EnsureSqlServerMemberProfileColumnsAsync(db, app.Logger);
         await EnsureSqlServerGameNightAttendeeSnackColumnAsync(db, app.Logger);
         await EnsureSqlServerVictoryRoutesAsync(db, app.Logger);
+        await EnsureSqlServerMemberEloColumnsAsync(db, app.Logger);
     }
 
     // Ensure identity tables exist before assigning roles.
@@ -589,6 +592,40 @@ END;
     }
 }
 
+static async Task EnsureSqlServerMemberEloColumnsAsync(ApplicationDbContext db, ILogger logger)
+{
+    if (!db.Database.IsSqlServer())
+    {
+        return;
+    }
+
+    const string sql = @"
+IF COL_LENGTH(N'dbo.Members', N'EloRating') IS NULL
+BEGIN
+    ALTER TABLE [dbo].[Members] ADD [EloRating] int NOT NULL DEFAULT 1200;
+END;
+
+IF COL_LENGTH(N'dbo.Members', N'EloRatingUpdatedOn') IS NULL
+BEGIN
+    ALTER TABLE [dbo].[Members] ADD [EloRatingUpdatedOn] bigint NULL;
+END;
+";
+
+    try
+    {
+        var affected = await db.Database.ExecuteSqlRawAsync(sql);
+        if (affected != 0)
+        {
+            logger.LogWarning("Ensured member ELO columns exist in SQL Server schema.");
+        }
+    }
+    catch (Exception ex)
+    {
+        logger.LogCritical(ex, "Failed to ensure member ELO columns exist in SQL Server schema.");
+        throw;
+    }
+}
+
 static async Task EnsureAdminRoleAssignmentsAsync(IServiceProvider services)
 {
     var config = services.GetRequiredService<IConfiguration>();
@@ -775,6 +812,35 @@ static async Task EnsureSqliteSchemaUpToDateAsync(ApplicationDbContext db)
         {
             await using var alter = connection.CreateCommand();
             alter.CommandText = "ALTER TABLE Members ADD COLUMN FunFact TEXT NULL;";
+            await alter.ExecuteNonQueryAsync();
+        }
+
+        // Members ELO rating columns
+        var hasEloRating = false;
+        var hasEloRatingUpdatedOn = false;
+        await using (var cmd = connection.CreateCommand())
+        {
+            cmd.CommandText = "PRAGMA table_info('Members');";
+            await using var reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                var name = reader.GetString(1);
+                if (string.Equals(name, "EloRating", StringComparison.OrdinalIgnoreCase)) hasEloRating = true;
+                if (string.Equals(name, "EloRatingUpdatedOn", StringComparison.OrdinalIgnoreCase)) hasEloRatingUpdatedOn = true;
+            }
+        }
+
+        if (!hasEloRating)
+        {
+            await using var alter = connection.CreateCommand();
+            alter.CommandText = "ALTER TABLE Members ADD COLUMN EloRating INTEGER NOT NULL DEFAULT 1200;";
+            await alter.ExecuteNonQueryAsync();
+        }
+
+        if (!hasEloRatingUpdatedOn)
+        {
+            await using var alter = connection.CreateCommand();
+            alter.CommandText = "ALTER TABLE Members ADD COLUMN EloRatingUpdatedOn INTEGER NULL;";
             await alter.ExecuteNonQueryAsync();
         }
 

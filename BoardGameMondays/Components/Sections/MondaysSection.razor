@@ -345,45 +345,10 @@
                                                             {
                                                                 var rep = teamPlayers[0];
                                                                 var odds = game.Odds.FirstOrDefault(o => teamPlayers.Any(tp => tp.MemberId == o.MemberId))?.OddsTimes100;
-                                                                var key = (game.Id, rep.MemberId);
 
                                                                 <div class="bgm-teamBubble__odds" aria-label="Odds">
                                                                     <div class="text-muted small fw-semibold">Odds</div>
-
-                                                                    @if (_isAdmin)
-                                                                    {
-                                                                        <div class="bgm-teamBubble__oddsRow">
-                                                                            <input type="number"
-                                                                                   class="form-control form-control-sm"
-                                                                                   min="1"
-                                                                                   step="1"
-                                                                                   value="@GetOddsNumerator(key, odds)"
-                                                                                   disabled="@_saving"
-                                                                                   @onchange="e => SetOddsNumerator(key, e.Value?.ToString())" />
-
-                                                                            <span class="text-muted">/</span>
-
-                                                                            <input type="number"
-                                                                                   class="form-control form-control-sm"
-                                                                                   min="1"
-                                                                                   step="1"
-                                                                                   value="@GetOddsDenominator(key, odds)"
-                                                                                   disabled="@_saving"
-                                                                                   @onchange="e => SetOddsDenominator(key, e.Value?.ToString())" />
-
-                                                                            <button type="button"
-                                                                                    class="btn btn-sm btn-outline-primary"
-                                                                                    disabled="@_saving"
-                                                                                    @onclick="() => SaveOddsAsync(game.Id, rep.MemberId)">
-                                                                                Save
-                                                                            </button>
-                                                                        </div>
-                                                                        <div><span class="bgm-oddsValue">@FormatFraction(odds)</span></div>
-                                                                    }
-                                                                    else
-                                                                    {
-                                                                        <div><span class="bgm-oddsValue">@FormatFraction(odds)</span></div>
-                                                                    }
+                                                                    <div><span class="bgm-oddsValue">@FormatFraction(odds)</span></div>
                                                                 </div>
                                                             }
                                                         </div>
@@ -510,54 +475,12 @@
                                                                         continue;
                                                                     }
 
-                                                                    var rep = teamPlayers[0];
                                                                     var odds = game.Odds.FirstOrDefault(o => teamPlayers.Any(tp => tp.MemberId == o.MemberId))?.OddsTimes100;
-                                                                    var key = (game.Id, rep.MemberId);
 
-                                                                    if (_isAdmin)
-                                                                    {
-                                                                        <div class="d-flex align-items-center gap-2 flex-wrap">
-                                                                            <div class="text-truncate bgm-oddsName">@team</div>
-
-                                                                            <div class="d-inline-flex align-items-center gap-1" aria-label="Fractional odds">
-                                                                                <input type="number"
-                                                                                       class="form-control form-control-sm"
-                                                                                       style="max-width: 84px"
-                                                                                       min="1"
-                                                                                       step="1"
-                                                                                       value="@GetOddsNumerator(key, odds)"
-                                                                                       disabled="@_saving"
-                                                                                       @onchange="e => SetOddsNumerator(key, e.Value?.ToString())" />
-
-                                                                                <span class="text-muted">/</span>
-
-                                                                                <input type="number"
-                                                                                       class="form-control form-control-sm"
-                                                                                       style="max-width: 84px"
-                                                                                       min="1"
-                                                                                       step="1"
-                                                                                       value="@GetOddsDenominator(key, odds)"
-                                                                                       disabled="@_saving"
-                                                                                       @onchange="e => SetOddsDenominator(key, e.Value?.ToString())" />
-                                                                            </div>
-
-                                                                            <button type="button"
-                                                                                    class="btn btn-sm btn-outline-primary"
-                                                                                    disabled="@_saving"
-                                                                                    @onclick="() => SaveOddsAsync(game.Id, rep.MemberId)">
-                                                                                Save
-                                                                            </button>
-
-                                                                            <span class="bgm-oddsValue">@FormatFraction(odds)</span>
-                                                                        </div>
-                                                                    }
-                                                                    else
-                                                                    {
-                                                                        <div class="d-flex justify-content-between align-items-center bgm-oddsSlipRow">
-                                                                            <div class="text-truncate">@team</div>
-                                                                            <div><span class="bgm-oddsValue">@FormatFraction(odds)</span></div>
-                                                                        </div>
-                                                                    }
+                                                                    <div class="d-flex justify-content-between align-items-center bgm-oddsSlipRow">
+                                                                        <div class="text-truncate">@team</div>
+                                                                        <div><span class="bgm-oddsValue">@FormatFraction(odds)</span></div>
+                                                                    </div>
                                                                 }
                                                             }
                                                             else
@@ -565,52 +488,11 @@
                                                                 foreach (var p in game.Players)
                                                                 {
                                                                     var odds = game.Odds.FirstOrDefault(o => o.MemberId == p.MemberId)?.OddsTimes100;
-                                                                    var key = (game.Id, p.MemberId);
 
-                                                                    if (_isAdmin)
-                                                                    {
-                                                                        <div class="d-flex align-items-center gap-2 flex-wrap">
-                                                                            <div class="text-truncate bgm-oddsName">@p.MemberName</div>
-
-                                                                            <div class="d-inline-flex align-items-center gap-1" aria-label="Fractional odds">
-                                                                                <input type="number"
-                                                                                       class="form-control form-control-sm"
-                                                                                       style="max-width: 84px"
-                                                                                       min="1"
-                                                                                       step="1"
-                                                                                       value="@GetOddsNumerator(key, odds)"
-                                                                                       disabled="@_saving"
-                                                                                       @onchange="e => SetOddsNumerator(key, e.Value?.ToString())" />
-
-                                                                                <span class="text-muted">/</span>
-
-                                                                                <input type="number"
-                                                                                       class="form-control form-control-sm"
-                                                                                       style="max-width: 84px"
-                                                                                       min="1"
-                                                                                       step="1"
-                                                                                       value="@GetOddsDenominator(key, odds)"
-                                                                                       disabled="@_saving"
-                                                                                       @onchange="e => SetOddsDenominator(key, e.Value?.ToString())" />
-                                                                            </div>
-
-                                                                            <button type="button"
-                                                                                    class="btn btn-sm btn-outline-primary"
-                                                                                    disabled="@_saving"
-                                                                                    @onclick="() => SaveOddsAsync(game.Id, p.MemberId)">
-                                                                                Save
-                                                                            </button>
-
-                                                                            <span class="bgm-oddsValue">@FormatFraction(odds)</span>
-                                                                        </div>
-                                                                    }
-                                                                    else
-                                                                    {
-                                                                        <div class="d-flex justify-content-between align-items-center bgm-oddsSlipRow">
-                                                                            <div class="text-truncate">@p.MemberName</div>
-                                                                            <div><span class="bgm-oddsValue">@FormatFraction(odds)</span></div>
-                                                                        </div>
-                                                                    }
+                                                                    <div class="d-flex justify-content-between align-items-center bgm-oddsSlipRow">
+                                                                        <div class="text-truncate">@p.MemberName</div>
+                                                                        <div><span class="bgm-oddsValue">@FormatFraction(odds)</span></div>
+                                                                    </div>
                                                                 }
                                                             }
                                                         }
@@ -977,8 +859,6 @@
     private readonly Dictionary<int, string?> _betStatusByGameId = new();
     private readonly Dictionary<int, string?> _settleStatusByGameId = new();
     private readonly HashSet<int> _confirmWinnerPending = new();
-    private readonly Dictionary<(int GameNightGameId, Guid MemberId), int> _oddsNumeratorByKey = new();
-    private readonly Dictionary<(int GameNightGameId, Guid MemberId), int> _oddsDenominatorByKey = new();
     private readonly HashSet<int> _teamModeGameIds = new();
     private readonly Dictionary<(int GameNightGameId, string TeamName), string?> _selectedTeamPlayerByKey = new();
     private IReadOnlyDictionary<int, BettingService.UserBet> _myBets = new Dictionary<int, BettingService.UserBet>();
@@ -2023,16 +1903,6 @@
         _clientTeams.Remove(gameNightGameId);
         _paletteImageUrlByGame.Remove(gameNightGameId);
 
-        foreach (var key in _oddsNumeratorByKey.Keys.Where(k => k.GameNightGameId == gameNightGameId).ToArray())
-        {
-            _oddsNumeratorByKey.Remove(key);
-        }
-
-        foreach (var key in _oddsDenominatorByKey.Keys.Where(k => k.GameNightGameId == gameNightGameId).ToArray())
-        {
-            _oddsDenominatorByKey.Remove(key);
-        }
-
         foreach (var key in _selectedTeamPlayerByKey.Keys.Where(k => k.GameNightGameId == gameNightGameId).ToArray())
         {
             _selectedTeamPlayerByKey.Remove(key);
@@ -2088,91 +1958,6 @@
     {
         var f = ToFraction(oddsTimes100);
         return f is null ? "—" : $"{f.Value.Numerator}/{f.Value.Denominator}";
-    }
-
-    private string GetOddsNumerator((int GameNightGameId, Guid MemberId) key, int? oddsTimes100)
-    {
-        if (_oddsNumeratorByKey.TryGetValue(key, out var value))
-        {
-            return value.ToString(CultureInfo.InvariantCulture);
-        }
-
-        var f = ToFraction(oddsTimes100);
-        if (f is not null)
-        {
-            _oddsNumeratorByKey[key] = f.Value.Numerator;
-            _oddsDenominatorByKey[key] = f.Value.Denominator;
-            return f.Value.Numerator.ToString(CultureInfo.InvariantCulture);
-        }
-
-        return string.Empty;
-    }
-
-    private string GetOddsDenominator((int GameNightGameId, Guid MemberId) key, int? oddsTimes100)
-    {
-        if (_oddsDenominatorByKey.TryGetValue(key, out var value))
-        {
-            return value.ToString(CultureInfo.InvariantCulture);
-        }
-
-        var f = ToFraction(oddsTimes100);
-        if (f is not null)
-        {
-            _oddsNumeratorByKey[key] = f.Value.Numerator;
-            _oddsDenominatorByKey[key] = f.Value.Denominator;
-            return f.Value.Denominator.ToString(CultureInfo.InvariantCulture);
-        }
-
-        return string.Empty;
-    }
-
-    private void SetOddsNumerator((int GameNightGameId, Guid MemberId) key, string? raw)
-    {
-        if (int.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var n) && n > 0)
-        {
-            _oddsNumeratorByKey[key] = n;
-        }
-    }
-
-    private void SetOddsDenominator((int GameNightGameId, Guid MemberId) key, string? raw)
-    {
-        if (int.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var d) && d > 0)
-        {
-            _oddsDenominatorByKey[key] = d;
-        }
-    }
-
-    private async Task SaveOddsAsync(int gameNightGameId, Guid memberId)
-    {
-        if (!_isAdmin || _selectedNight is null)
-        {
-            return;
-        }
-
-        var key = (gameNightGameId, memberId);
-
-        if (!_oddsNumeratorByKey.TryGetValue(key, out var numerator) || numerator <= 0)
-        {
-            return;
-        }
-
-        if (!_oddsDenominatorByKey.TryGetValue(key, out var denominator) || denominator <= 0)
-        {
-            return;
-        }
-
-        var times100 = 100 + (int)Math.Round(100d * numerator / denominator);
-
-        _saving = true;
-        _status = null;
-        try
-        {
-            _selectedNight = await GameNightService.SetOddsAsync(_selectedNight.Id, gameNightGameId, memberId, times100);
-        }
-        finally
-        {
-            _saving = false;
-        }
     }
 
     private static int? ComputeProfit(int amount, int oddsTimes100)

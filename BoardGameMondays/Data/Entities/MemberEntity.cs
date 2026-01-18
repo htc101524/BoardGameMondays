@@ -34,4 +34,14 @@ public sealed class MemberEntity
 
     [MaxLength(512)]
     public string? AvatarUrl { get; set; }
+
+    /// <summary>
+    /// ELO-style rating for betting odds calculation. Default is 1200.
+    /// </summary>
+    public int EloRating { get; set; } = 1200;
+
+    /// <summary>
+    /// When the ELO rating was last updated.
+    /// </summary>
+    public DateTimeOffset? EloRatingUpdatedOn { get; set; }
 }
