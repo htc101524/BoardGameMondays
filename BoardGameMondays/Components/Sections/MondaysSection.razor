@@ -1944,6 +1944,25 @@
             return;
         }
 
+        var name = _selectedNight.Games.FirstOrDefault(g => g.Id == gameNightGameId)?.GameName ?? "this game";
+
+        bool ok;
+        try
+        {
+            ok = await JS.InvokeAsync<bool>("confirm",
+                $"Confirm '{name}'? Confirming a game cannot be undone, is this definitely being played and are the people or teams correct?");
+        }
+        catch
+        {
+            // If confirm isn't available for some reason, fail safe (don't confirm).
+            return;
+        }
+
+        if (!ok)
+        {
+            return;
+        }
+
         _saving = true;
         _status = null;
         try
