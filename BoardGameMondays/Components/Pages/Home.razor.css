@@ -41,6 +41,7 @@
     position: relative;
     text-align: left;
     border-radius: 24px;
+    padding: 5px;
     height: var(--home-hero-card-height);
     min-height: var(--home-hero-card-height);
     max-height: var(--home-hero-card-height);
