@@ -133,4 +133,97 @@
     .bgm-recapSummary {
         display: none;
     }
+
+    /* Hide leaderboard on small screens to save space */
+    .bgm-coinLeaderboard,
+    .bgm-coinLeaderboard + *,
+    .bgm-recapDetails > .col-12:last-child {
+        display: none !important;
+    }
+}
+
+/* Enhanced mobile recap card styling */
+@media (max-width: 640px) {
+    .bgm-recapFrame {
+        border-radius: 14px;
+    }
+
+    .bgm-recapCard {
+        border-radius: 12px;
+    }
+
+    .bgm-rankPill {
+        min-width: 2.2rem;
+        padding: 0.12rem 0.4rem;
+        font-size: 0.8rem;
+    }
+
+    .bgm-coinLeaderboard .list-group-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .bgm-coinLeaderboard .list-group-item .text-truncate {
+        flex: 1;
+        min-width: 0;
+    }
+
+    /* Better winner/loser list styling on mobile */
+    .bgm-recapDetails .list-group-item {
+        padding: 6px 0;
+        font-size: 0.9rem;
+        border-bottom: none;
+    }
+
+    .bgm-recapDetails .text-success,
+    .bgm-recapDetails .text-danger {
+        font-weight: 600;
+        font-size: 0.95rem;
+    }
+
+    /* Compact winners/losers side by side */
+    .bgm-recapDetails {
+        display: grid !important;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px !important;
+    }
+
+    .bgm-recapDetails > .col-12.col-md-6 {
+        width: 100%;
+        max-width: 100%;
+        flex: none;
+    }
+
+    .bgm-recapDetails .fw-semibold.mb-1 {
+        font-size: 0.85rem;
+        margin-bottom: 4px !important;
+    }
+
+    .bgm-recapDetails .list-group {
+        font-size: 0.85rem;
+    }
+}
+
+@media (max-width: 380px) {
+    .bgm-mondayRecapTitle {
+        font-size: 1rem;
+        letter-spacing: 0.06em;
+    }
+
+    .bgm-recapCard .card-body {
+        padding: 12px;
+    }
+
+    .bgm-rankPill {
+        min-width: 2rem;
+        font-size: 0.75rem;
+    }
+
+    /* Stack winners/losers on very small screens */
+    .bgm-recapDetails {
+        grid-template-columns: 1fr !important;
+        gap: 8px !important;
+    }
 }

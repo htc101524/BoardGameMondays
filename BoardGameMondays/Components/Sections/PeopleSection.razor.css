@@ -75,3 +75,115 @@
     margin: 0;
     color: rgba(34, 49, 28, 0.92);
 }
+
+/* Enhanced mobile People section */
+@media (max-width: 640px) {
+    .bgm-peopleGrid {
+        gap: 14px;
+        margin-top: 16px;
+    }
+
+    .bgm-peopleCard {
+        flex: 1 1 100%;
+        max-width: none;
+        padding: 14px;
+        border-radius: 16px;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+        transition: transform 0.15s ease, box-shadow 0.15s ease;
+        touch-action: manipulation;
+    }
+
+    .bgm-peopleCard--link:active {
+        transform: scale(0.98);
+    }
+
+    .bgm-peopleCard__top {
+        gap: 10px;
+        margin-bottom: 10px;
+    }
+
+    .bgm-peopleCard__avatar {
+        width: 48px;
+        height: 48px;
+        border-radius: 14px;
+        font-size: 1.1rem;
+    }
+
+    .bgm-peopleCard__name {
+        font-size: 1.05rem;
+    }
+
+    .bgm-peopleCard__tagline {
+        font-size: 0.9rem;
+        line-height: 1.3;
+    }
+
+    .bgm-peopleCard__summary {
+        font-size: 0.9rem;
+        line-height: 1.5;
+        display: -webkit-box;
+        -webkit-line-clamp: 3;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+}
+
+/* Extra small screens - 2 column grid for compact view */
+@media (max-width: 480px) {
+    .bgm-peopleGrid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 10px;
+    }
+
+    .bgm-peopleCard {
+        padding: 12px;
+        flex-direction: column;
+    }
+
+    .bgm-peopleCard__top {
+        flex-direction: column;
+        text-align: center;
+        gap: 8px;
+    }
+
+    .bgm-peopleCard__who {
+        text-align: center;
+    }
+
+    .bgm-peopleCard__avatar {
+        width: 56px;
+        height: 56px;
+    }
+
+    .bgm-peopleCard__summary {
+        display: none;
+    }
+
+    .bgm-peopleCard__tagline {
+        font-size: 0.8rem;
+        -webkit-line-clamp: 2;
+        display: -webkit-box;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+}
+
+@media (max-width: 380px) {
+    .bgm-peopleGrid {
+        gap: 8px;
+    }
+
+    .bgm-peopleCard {
+        padding: 10px;
+    }
+
+    .bgm-peopleCard__avatar {
+        width: 48px;
+        height: 48px;
+    }
+
+    .bgm-peopleCard__name {
+        font-size: 0.95rem;
+    }
+}

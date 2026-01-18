@@ -73,3 +73,68 @@
     padding-top: 12px;
     border-top: 1px solid var(--bs-border-color);
 }
+
+/* Mobile improvements for newspaper card */
+@media (max-width: 640px) {
+    .bgm-newspaper {
+        padding: 16px 14px 12px;
+        border-radius: var(--bs-border-radius);
+    }
+
+    .bgm-newspaper::after {
+        width: 18px;
+        height: 18px;
+    }
+
+    .bgm-newspaper__mast {
+        font-size: 0.7rem;
+        letter-spacing: 0.1em;
+    }
+
+    .bgm-newspaper__title {
+        font-size: 1.15rem;
+        line-height: 1.2;
+    }
+
+    .bgm-newspaper__body {
+        font-size: 0.95rem;
+        line-height: 1.6;
+        margin-top: 12px;
+    }
+
+    .bgm-newspaper__dropcap {
+        font-size: 2.2rem;
+        margin-right: 8px;
+    }
+
+    .bgm-newspaper__footer {
+        margin-top: 12px;
+        padding-top: 10px;
+    }
+
+    .bgm-newspaper__footer .btn {
+        padding: 10px 16px;
+        font-size: 0.9rem;
+        min-height: 44px;
+        touch-action: manipulation;
+    }
+}
+
+/* Extra small screens */
+@media (max-width: 380px) {
+    .bgm-newspaper {
+        padding: 14px 12px 10px;
+    }
+
+    .bgm-newspaper__title {
+        font-size: 1.05rem;
+    }
+
+    .bgm-newspaper__body {
+        font-size: 0.9rem;
+    }
+
+    .bgm-newspaper__dropcap {
+        font-size: 1.8rem;
+    }
+}

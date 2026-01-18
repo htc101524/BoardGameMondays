@@ -313,3 +313,105 @@
     border-radius: 6px;
     background: rgba(0,0,0,0); /* keep transparent by default */
 }
+
+/* Enhanced mobile Mondays section */
+@media (max-width: 640px) {
+    .bgm-mondaysScroller {
+        gap: 10px;
+        padding: 12px 8px 16px;
+        scroll-padding: 0 16px;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+    }
+
+    .bgm-mondaysScroller::-webkit-scrollbar {
+        display: none;
+    }
+
+    .bgm-mondayCube {
+        width: 82px;
+        height: 82px;
+        padding: 6px;
+        border-radius: 14px;
+        transition: transform 0.15s ease, box-shadow 0.15s ease;
+        touch-action: manipulation;
+    }
+
+    .bgm-mondayCube:active {
+        transform: scale(0.95);
+    }
+
+    .bgm-mondayCube__dow {
+        font-size: 0.65rem;
+    }
+
+    .bgm-mondayCube__day {
+        font-size: 1.4rem;
+    }
+
+    .bgm-mondayCube__month {
+        font-size: 0.75rem;
+    }
+
+    .bgm-mondayCube__kind {
+        font-size: 0.65rem;
+    }
+
+    .bgm-mondayDetailsCard {
+        border-radius: 16px;
+        border-left-width: 5px;
+    }
+
+    .bgm-mondayDetailsCard .card-body {
+        padding: 14px;
+    }
+
+    .bgm-teamsGrid {
+        grid-template-columns: 1fr;
+        gap: 10px;
+    }
+
+    .bgm-teamBubble {
+        min-height: 180px;
+        padding: 10px;
+        border-radius: 14px;
+    }
+
+    .bgm-teamBubble__header .fw-semibold {
+        font-size: 1rem;
+    }
+
+    .bgm-wantToPlayCard {
+        border-radius: 14px;
+        padding: 12px;
+    }
+
+    .bgm-oddsSlip {
+        padding: 8px 10px;
+        border-radius: 10px;
+    }
+
+    .bgm-mondayGameCard {
+        border-radius: 14px;
+    }
+}
+
+/* Extra small screens */
+@media (max-width: 380px) {
+    .bgm-mondayCube {
+        width: 72px;
+        height: 72px;
+    }
+
+    .bgm-mondayCube__day {
+        font-size: 1.2rem;
+    }
+
+    .bgm-teamsGrid {
+        gap: 8px;
+    }
+
+    .bgm-teamBubble {
+        min-height: 160px;
+    }
+}

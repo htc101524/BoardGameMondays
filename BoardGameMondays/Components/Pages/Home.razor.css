@@ -285,22 +285,105 @@
 
 @media (max-width: 640px) {
     .home-hero {
-        --home-hero-card-height: 480px;
-        --home-hero-card-pad: 18px;
-        padding-top: calc(var(--bgm-header-height, 72px) - 12px);
-        padding-bottom: 16px;
+        --home-hero-card-height: 420px;
+        --home-hero-card-pad: 16px;
+        padding-top: calc(var(--bgm-header-height, 72px) - 16px);
+        padding-bottom: 14px;
+    }
+
+    .home-hero__brand {
+        font-size: clamp(1.6rem, 7vw, 2.4rem);
+        margin-bottom: 20px;
+        letter-spacing: 0.08em;
+        transform: translateY(-12px);
+    }
+
+    .home-hero__grid {
+        gap: 14px;
     }
 
     .home-hero__card {
-        border-radius: 20px;
+        border-radius: 18px;
+        box-shadow: 0 16px 48px rgba(34, 24, 10, 0.12);
+        touch-action: manipulation;
+    }
+
+    .home-hero__cardButton:active {
+        transform: scale(0.98);
+    }
+
+    .home-hero__kicker {
+        font-size: 0.7rem;
+        padding: 5px 10px;
+        letter-spacing: 0.14em;
+    }
+
+    .home-hero__kicker::before,
+    .home-hero__kicker::after {
+        width: 16px;
+    }
+
+    .home-hero__title {
+        font-size: 1.4rem;
+        margin-bottom: 6px;
+    }
+
+    .home-hero__subtitle {
+        font-size: 0.95rem;
+        margin-bottom: 12px;
+        line-height: 1.4;
     }
 
     .home-hero__media img {
-        max-height: 200px;
-        margin: 0 auto 12px;
+        max-height: 160px;
+        margin: 0 auto 10px;
+        border-radius: 10px;
     }
 
     .home-hero__card--review .home-hero__media {
-        padding: 0 14px 14px;
+        padding: 0 12px 12px;
+    }
+
+    .home-hero__card::before {
+        height: 6px;
+    }
+}
+
+/* Extra small phone screens */
+@media (max-width: 380px) {
+    .home-hero {
+        --home-hero-card-height: 380px;
+        --home-hero-card-pad: 14px;
+        padding-bottom: 12px;
+    }
+
+    .home-hero__brand {
+        font-size: 1.4rem;
+        margin-bottom: 16px;
+    }
+
+    .home-hero__grid {
+        gap: 12px;
+    }
+
+    .home-hero__card {
+        border-radius: 16px;
+    }
+
+    .home-hero__kicker {
+        font-size: 0.65rem;
+        padding: 4px 8px;
+    }
+
+    .home-hero__title {
+        font-size: 1.2rem;
+    }
+
+    .home-hero__subtitle {
+        font-size: 0.9rem;
+    }
+
+    .home-hero__media img {
+        max-height: 130px;
     }
 }
