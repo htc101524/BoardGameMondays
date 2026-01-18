@@ -1,0 +1,179 @@
+@page "/rsvp"
+
+@using BoardGameMondays.Core
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.WebUtilities
+@using System.Globalization
+@using System.Security.Claims
+@inject GameNightService GameNightService
+@inject AuthenticationStateProvider AuthStateProvider
+@inject NavigationManager Navigation
+
+<PageTitle>RSVP - Board Game Mondays</PageTitle>
+
+<section class="container py-4" aria-label="RSVP">
+    <div class="card shadow-sm">
+        <div class="card-body">
+            <h1 class="h3 mb-2">Are you going to the upcoming Board Game Monday?</h1>
+            <div class="text-muted">@FormatLongDate(_date)</div>
+
+            @if (_loading)
+            {
+                <div class="text-muted mt-3">Loading…</div>
+            }
+            else if (_night is null)
+            {
+                <div class="text-muted mt-3">No game night is scheduled for this date yet. Check back soon.</div>
+            }
+            else if (!_isAuthenticated)
+            {
+                <div class="mt-3">
+                    <div class="text-muted">Log in or sign up to RSVP for this Monday.</div>
+                    <div class="d-flex gap-2 mt-2 flex-wrap">
+                        <a class="btn btn-primary" href="@GetLoginLink()">Login</a>
+                        <a class="btn btn-outline-primary" href="@GetRegisterLink()">Sign up</a>
+                    </div>
+                </div>
+            }
+            else if (_memberId is null)
+            {
+                <div class="text-muted mt-3">Your account isn't linked to a BGM member yet.</div>
+            }
+            else
+            {
+                <div class="mt-3">
+                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                        <span class="fw-semibold">Attending?</span>
+                        <button type="button"
+                                class="btn @(_amAttending ? "btn-success" : "btn-outline-success")"
+                                disabled="@_saving"
+                                @onclick="() => SetAttendingAsync(true)">
+                            ✓ Going
+                        </button>
+                        <button type="button"
+                                class="btn @(!_amAttending ? "btn-danger" : "btn-outline-danger")"
+                                disabled="@_saving"
+                                @onclick="() => SetAttendingAsync(false)">
+                            ✕ Not going
+                        </button>
+
+                        @if (!string.IsNullOrWhiteSpace(_status))
+                        {
+                            <span class="text-muted">@_status</span>
+                        }
+                    </div>
+                </div>
+            }
+
+            <div class="mt-4">
+                <a class="btn btn-link px-0" href="/#mondays">Back to Mondays</a>
+            </div>
+        </div>
+    </div>
+</section>
+
+@code {
+    private DateOnly _date;
+    private GameNightService.GameNight? _night;
+    private bool _loading = true;
+    private bool _saving;
+    private bool _isAuthenticated;
+    private Guid? _memberId;
+    private bool _amAttending;
+    private string? _status;
+    private string _returnUrl = "/rsvp";
+
+    protected override async Task OnInitializedAsync()
+    {
+        _date = GetDateFromQueryOrNext();
+        _returnUrl = GetReturnUrl();
+
+        var auth = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = auth.User;
+        _isAuthenticated = user.Identity?.IsAuthenticated == true;
+        _memberId = TryGetMemberId(user);
+
+        _night = await GameNightService.GetByDateAsync(_date);
+        if (_night is not null && _memberId is { } me)
+        {
+            _amAttending = _night.Attendees.Any(a => a.MemberId == me);
+        }
+
+        _loading = false;
+    }
+
+    private string GetReturnUrl()
+    {
+        var uri = Navigation.ToAbsoluteUri(Navigation.Uri);
+        var pathAndQuery = uri.PathAndQuery;
+        return string.IsNullOrWhiteSpace(pathAndQuery) ? "/rsvp" : pathAndQuery;
+    }
+
+    private DateOnly GetDateFromQueryOrNext()
+    {
+        var uri = Navigation.ToAbsoluteUri(Navigation.Uri);
+        var query = QueryHelpers.ParseQuery(uri.Query);
+        if (query.TryGetValue("date", out var raw)
+            && DateOnly.TryParseExact(raw, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
+        {
+            return date;
+        }
+
+        return GetNextMonday(DateOnly.FromDateTime(DateTime.Today));
+    }
+
+    private async Task SetAttendingAsync(bool attending)
+    {
+        if (_night is null || _memberId is null)
+        {
+            return;
+        }
+
+        _saving = true;
+        _status = null;
+        try
+        {
+            var updated = await GameNightService.SetRsvpAsync(_night.Id, _memberId.Value, attending);
+            _night = updated ?? _night;
+            _amAttending = _night.Attendees.Any(a => a.MemberId == _memberId.Value);
+            _status = attending ? "You're in." : "You're out.";
+        }
+        catch
+        {
+            _status = "Couldn't save your RSVP.";
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private static Guid? TryGetMemberId(ClaimsPrincipal user)
+    {
+        var value = user.FindFirst("bgm:memberId")?.Value;
+        return Guid.TryParse(value, out var id) ? id : null;
+    }
+
+    private static DateOnly GetNextMonday(DateOnly today)
+    {
+        var mondayOnOrBefore = GetMondayOnOrBefore(today);
+        return today.DayOfWeek == DayOfWeek.Monday
+            ? mondayOnOrBefore
+            : mondayOnOrBefore.AddDays(7);
+    }
+
+    private static DateOnly GetMondayOnOrBefore(DateOnly date)
+    {
+        var delta = (7 + ((int)date.DayOfWeek - (int)DayOfWeek.Monday)) % 7;
+        return date.AddDays(-delta);
+    }
+
+    private static string FormatLongDate(DateOnly date)
+        => date.ToDateTime(TimeOnly.MinValue).ToString("dddd d MMMM yyyy");
+
+    private string GetLoginLink()
+        => $"/login?returnUrl={Uri.EscapeDataString(_returnUrl)}";
+
+    private string GetRegisterLink()
+        => $"/register?returnUrl={Uri.EscapeDataString(_returnUrl)}";
+}

@@ -26,6 +26,35 @@ window.bgm.setViewAsNonAdmin = (enabled) => {
     }
 };
 
+window.bgm.copyText = async (text) => {
+    if (!text) return false;
+
+    try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            await navigator.clipboard.writeText(text);
+            return true;
+        }
+    } catch {
+        // Fall through to legacy copy.
+    }
+
+    try {
+        const textarea = document.createElement("textarea");
+        textarea.value = text;
+        textarea.setAttribute("readonly", "");
+        textarea.style.position = "fixed";
+        textarea.style.top = "-1000px";
+        textarea.style.left = "-1000px";
+        document.body.appendChild(textarea);
+        textarea.select();
+        const result = document.execCommand("copy");
+        document.body.removeChild(textarea);
+        return !!result;
+    } catch {
+        return false;
+    }
+};
+
 window.bgm.scrollToTopNextFrame = (behavior) => {
     const resolvedBehavior = behavior || "smooth";
 

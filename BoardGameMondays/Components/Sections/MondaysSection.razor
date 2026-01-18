@@ -10,6 +10,7 @@
 @inject WantToPlayService WantToPlayService
 @inject IJSRuntime JS
 @inject IHttpContextAccessor HttpContextAccessor
+@inject NavigationManager Navigation
 
 @implements IDisposable
 
@@ -51,6 +52,22 @@
                         </button>
                     }
                 </div>
+
+                @if (_selected >= _nextMonday)
+                {
+                    <div class="mt-2 d-flex align-items-center gap-2 flex-wrap" aria-label="Share RSVP link">
+                        <a class="btn btn-sm btn-outline-secondary" href="@GetRsvpLink(_selected)">Open RSVP page</a>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="CopyRsvpLinkAsync">Copy RSVP link</button>
+
+                        @if (!string.IsNullOrWhiteSpace(_shareStatus))
+                        {
+                            <span class="text-muted small">@_shareStatus</span>
+                        }
+                    </div>
+                    <div class="small text-muted mt-1">
+                        Share this link: <a href="@GetRsvpLink(_selected)">@GetRsvpLink(_selected)</a>
+                    </div>
+                }
 
                 @if (_loading)
                 {
@@ -851,6 +868,7 @@
     private string? _status;
     private bool _amAttending;
     private HashSet<Guid> _declinedMemberIds = new();
+    private string? _shareStatus;
     private string? _selectedGameId;
     private string? _selectedMemberId;
     private readonly Dictionary<int, string?> _selectedPlayerByGameId = new();
@@ -1850,6 +1868,19 @@
         {
             _saving = false;
         }
+    }
+
+    private string GetRsvpLink(DateOnly date)
+    {
+        var relative = $"rsvp?date={date:yyyy-MM-dd}";
+        return new Uri(new Uri(Navigation.BaseUri), relative).ToString();
+    }
+
+    private async Task CopyRsvpLinkAsync()
+    {
+        var link = GetRsvpLink(_selected);
+        var copied = await JS.InvokeAsync<bool>("bgm.copyText", link);
+        _shareStatus = copied ? "Link copied." : "Couldn't copy the link.";
     }
 
     private async Task RemoveGameAsync(int gameNightGameId)

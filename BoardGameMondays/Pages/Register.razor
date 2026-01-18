@@ -9,6 +9,10 @@
 
 <form method="post" action="/account/register" data-enhance="false">
     <AntiforgeryToken />
+    @if (!string.IsNullOrWhiteSpace(_returnUrl))
+    {
+        <input type="hidden" name="ReturnUrl" value="@_returnUrl" />
+    }
     <div class="mb-2">
         <label class="form-label" for="register-username">Username</label>
         <input id="register-username" name="UserName" class="form-control" autocomplete="username" />
@@ -62,7 +66,7 @@
     </div>
 
     <button type="submit" class="btn btn-primary">Create account</button>
-    <a class="btn btn-link" href="/login">Back to login</a>
+    <a class="btn btn-link" href="@GetLoginLink()">Back to login</a>
 
     @if (!string.IsNullOrWhiteSpace(_error))
     {
@@ -74,12 +78,14 @@
     private string? _error;
     private bool _showPassword;
     private bool _showConfirmPassword;
+    private string? _returnUrl;
 
     protected override void OnParametersSet()
     {
         var uri = Navigation.ToAbsoluteUri(Navigation.Uri);
         var query = QueryHelpers.ParseQuery(uri.Query);
         _error = query.TryGetValue("error", out var error) ? error.ToString() : null;
+        _returnUrl = query.TryGetValue("returnUrl", out var returnUrl) ? returnUrl.ToString() : null;
     }
 
     private void ShowPassword() => _showPassword = true;
@@ -121,4 +127,9 @@
             _showConfirmPassword = false;
         }
     }
+
+    private string GetLoginLink()
+        => string.IsNullOrWhiteSpace(_returnUrl)
+            ? "/login"
+            : $"/login?returnUrl={Uri.EscapeDataString(_returnUrl)}";
 }

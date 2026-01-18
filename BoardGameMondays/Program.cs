@@ -1576,54 +1576,55 @@ app.MapPost("/account/register", async (
     IEmailSender emailSender,
     IConfiguration configuration) =>
 {
+    var safeReturnUrl = ReturnUrlHelpers.GetSafeReturnUrl(request.ReturnUrl);
     var userName = request.UserName?.Trim();
     var email = request.Email?.Trim();
     var displayName = request.DisplayName?.Trim();
     if (string.IsNullOrWhiteSpace(userName) || string.IsNullOrWhiteSpace(request.Password))
     {
-        return Results.Redirect($"/register?error={Uri.EscapeDataString("Username and password are required.")}");
+        return Results.Redirect(ReturnUrlHelpers.AppendReturnUrl($"/register?error={Uri.EscapeDataString("Username and password are required.")}", safeReturnUrl));
     }
 
     if (string.IsNullOrWhiteSpace(email))
     {
-        return Results.Redirect($"/register?error={Uri.EscapeDataString("Email is required for password recovery.")}");
+        return Results.Redirect(ReturnUrlHelpers.AppendReturnUrl($"/register?error={Uri.EscapeDataString("Email is required for password recovery.")}", safeReturnUrl));
     }
 
     var emailValidator = new EmailAddressAttribute();
     if (!emailValidator.IsValid(email))
     {
-        return Results.Redirect($"/register?error={Uri.EscapeDataString("Please enter a valid email address.")}");
+        return Results.Redirect(ReturnUrlHelpers.AppendReturnUrl($"/register?error={Uri.EscapeDataString("Please enter a valid email address.")}", safeReturnUrl));
     }
 
     if (userName.Length < 3)
     {
-        return Results.Redirect($"/register?error={Uri.EscapeDataString("Username must be at least 3 characters.")}");
+        return Results.Redirect(ReturnUrlHelpers.AppendReturnUrl($"/register?error={Uri.EscapeDataString("Username must be at least 3 characters.")}", safeReturnUrl));
     }
 
     if (userName.Length > 64)
     {
-        return Results.Redirect($"/register?error={Uri.EscapeDataString("Username is too long.")}");
+        return Results.Redirect(ReturnUrlHelpers.AppendReturnUrl($"/register?error={Uri.EscapeDataString("Username is too long.")}", safeReturnUrl));
     }
 
     if (string.IsNullOrWhiteSpace(displayName))
     {
-        return Results.Redirect($"/register?error={Uri.EscapeDataString("Name is required.")}");
+        return Results.Redirect(ReturnUrlHelpers.AppendReturnUrl($"/register?error={Uri.EscapeDataString("Name is required.")}", safeReturnUrl));
     }
 
     if (displayName.Length > 80)
     {
-        return Results.Redirect($"/register?error={Uri.EscapeDataString("Name is too long.")}");
+        return Results.Redirect(ReturnUrlHelpers.AppendReturnUrl($"/register?error={Uri.EscapeDataString("Name is too long.")}", safeReturnUrl));
     }
 
     if (!string.Equals(request.Password, request.ConfirmPassword, StringComparison.Ordinal))
     {
-        return Results.Redirect($"/register?error={Uri.EscapeDataString("Passwords do not match.")}");
+        return Results.Redirect(ReturnUrlHelpers.AppendReturnUrl($"/register?error={Uri.EscapeDataString("Passwords do not match.")}", safeReturnUrl));
     }
 
     var existingEmailUser = await userManager.FindByEmailAsync(email);
     if (existingEmailUser is not null)
     {
-        return Results.Redirect($"/register?error={Uri.EscapeDataString("That email address is already in use.")}");
+        return Results.Redirect(ReturnUrlHelpers.AppendReturnUrl($"/register?error={Uri.EscapeDataString("That email address is already in use.")}", safeReturnUrl));
     }
 
     var user = new ApplicationUser { UserName = userName, Email = email };
@@ -1631,7 +1632,7 @@ app.MapPost("/account/register", async (
     if (!createResult.Succeeded)
     {
         var message = string.Join(" ", createResult.Errors.Select(e => e.Description));
-        return Results.Redirect($"/register?error={Uri.EscapeDataString(message)}");
+        return Results.Redirect(ReturnUrlHelpers.AppendReturnUrl($"/register?error={Uri.EscapeDataString(message)}", safeReturnUrl));
     }
 
     // Store the friendly display name separately from the login username.
@@ -1657,12 +1658,12 @@ app.MapPost("/account/register", async (
     var requireConfirmed = configuration.GetValue<bool>("Email:RequireConfirmedEmail");
     if (requireConfirmed)
     {
-        return Results.Redirect("/login?confirm=1");
+        return Results.Redirect(ReturnUrlHelpers.AppendReturnUrl("/login?confirm=1", safeReturnUrl));
     }
 
     await signInManager.SignInAsync(user, isPersistent: true);
     members.GetOrCreate(displayName);
-    return Results.Redirect("/");
+    return Results.Redirect(safeReturnUrl ?? "/");
 }).RequireRateLimiting("account");
 
 app.MapPost("/account/login", async (
@@ -1674,20 +1675,21 @@ app.MapPost("/account/login", async (
     HttpContext http,
     IEmailSender emailSender) =>
 {
+    var safeReturnUrl = ReturnUrlHelpers.GetSafeReturnUrl(request.ReturnUrl);
     var userName = request.UserName?.Trim();
     if (string.IsNullOrWhiteSpace(userName) || string.IsNullOrWhiteSpace(request.Password))
     {
-        return Results.Redirect($"/login?error={Uri.EscapeDataString("Username and password are required.")}");
+        return Results.Redirect(ReturnUrlHelpers.AppendReturnUrl($"/login?error={Uri.EscapeDataString("Username and password are required.")}", safeReturnUrl));
     }
 
     if (userName.Length < 3)
     {
-        return Results.Redirect($"/login?error={Uri.EscapeDataString("Username must be at least 3 characters.")}");
+        return Results.Redirect(ReturnUrlHelpers.AppendReturnUrl($"/login?error={Uri.EscapeDataString("Username must be at least 3 characters.")}", safeReturnUrl));
     }
 
     if (userName.Length > 64)
     {
-        return Results.Redirect($"/login?error={Uri.EscapeDataString("Username is too long.")}");
+        return Results.Redirect(ReturnUrlHelpers.AppendReturnUrl($"/login?error={Uri.EscapeDataString("Username is too long.")}", safeReturnUrl));
     }
 
     var lockoutOnFailure = !env.IsDevelopment();
@@ -1704,11 +1706,11 @@ app.MapPost("/account/login", async (
                     await SendEmailConfirmationAsync(userManager, emailSender, notAllowedUser, http);
                 }
 
-                return Results.Redirect($"/login?error={Uri.EscapeDataString("Please confirm your email to sign in.")}&confirm=1");
+                return Results.Redirect(ReturnUrlHelpers.AppendReturnUrl($"/login?error={Uri.EscapeDataString("Please confirm your email to sign in.")}&confirm=1", safeReturnUrl));
             }
         }
 
-        return Results.Redirect($"/login?error={Uri.EscapeDataString("Invalid username or password.")}");
+        return Results.Redirect(ReturnUrlHelpers.AppendReturnUrl($"/login?error={Uri.EscapeDataString("Invalid username or password.")}", safeReturnUrl));
     }
 
     var displayName = userName;
@@ -1720,7 +1722,7 @@ app.MapPost("/account/login", async (
     }
 
     members.GetOrCreate(displayName);
-    return Results.Redirect("/");
+    return Results.Redirect(safeReturnUrl ?? "/");
 }).RequireRateLimiting("account");
 
 app.MapPost("/account/forgot", async (
@@ -2068,12 +2070,13 @@ static bool IsMultipartBodyLengthLimitExceeded(Exception ex)
     return false;
 }
 
-internal sealed record RegisterRequest(string UserName, string DisplayName, string Email, string Password, string ConfirmPassword);
+internal sealed record RegisterRequest(string UserName, string DisplayName, string Email, string Password, string ConfirmPassword, string? ReturnUrl);
 internal sealed class LoginRequest
 {
     public string UserName { get; set; } = string.Empty;
     public string Password { get; set; } = string.Empty;
     public bool RememberMe { get; set; } = false;
+    public string? ReturnUrl { get; set; }
 }
 
 internal sealed record ForgotPasswordRequest(string Email);
@@ -2084,4 +2087,41 @@ internal static class BgmClaimTypes
 {
     public const string DisplayName = "bgm:displayName";
     public const string MemberId = "bgm:memberId";
+}
+
+internal static class ReturnUrlHelpers
+{
+    public static string? GetSafeReturnUrl(string? returnUrl)
+    {
+        if (string.IsNullOrWhiteSpace(returnUrl))
+        {
+            return null;
+        }
+
+        var trimmed = returnUrl.Trim();
+        if (!trimmed.StartsWith("/", StringComparison.Ordinal)
+            || trimmed.StartsWith("//", StringComparison.Ordinal)
+            || trimmed.StartsWith("/\\", StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        if (trimmed.Contains("\r", StringComparison.Ordinal) || trimmed.Contains("\n", StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        return trimmed;
+    }
+
+    public static string AppendReturnUrl(string url, string? returnUrl)
+    {
+        if (string.IsNullOrWhiteSpace(returnUrl))
+        {
+            return url;
+        }
+
+        var separator = url.Contains('?') ? "&" : "?";
+        return $"{url}{separator}returnUrl={Uri.EscapeDataString(returnUrl)}";
+    }
 }
