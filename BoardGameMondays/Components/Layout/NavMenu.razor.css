@@ -68,6 +68,23 @@ html.bgm-homeNavVisible .page--home .bgm-header {
     white-space: nowrap;
 }
 
+.bgm-coinsButton {
+    border: 0;
+    background: transparent;
+    padding: 6px 10px;
+    border-radius: 999px;
+    cursor: pointer;
+}
+
+.bgm-coinsButton:hover {
+    background: rgba(255, 255, 255, 0.12);
+}
+
+.bgm-coinsButton:focus-visible {
+    outline: 2px solid rgba(191, 161, 74, 0.55);
+    outline-offset: 3px;
+}
+
 .bgm-brand {
     display: inline-flex;
     align-items: center;
@@ -144,6 +161,118 @@ html.bgm-homeNavVisible .page--home .bgm-header {
 .bgm-backdrop.is-open {
     opacity: 1;
     pointer-events: auto;
+}
+
+.bgm-betsBackdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 65;
+    background: rgba(0,0,0,0.45);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 160ms ease;
+}
+
+.bgm-betsBackdrop.is-open {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.bgm-betsModal {
+    position: fixed;
+    top: calc(var(--bgm-header-height) + 8px);
+    right: 2.5vw;
+    z-index: 80;
+    width: min(360px, 94vw);
+    transform: translateY(-8px);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 160ms ease, transform 160ms ease;
+    background: rgba(255, 255, 255, 0.96);
+    border: 1px solid rgba(75, 58, 26, 0.18);
+    border-radius: 16px;
+    padding: 14px;
+    box-shadow: 0 18px 48px rgba(34, 24, 10, 0.18);
+}
+
+.bgm-betsModal.is-open {
+    transform: translateY(0);
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.bgm-betsModal__header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 10px;
+}
+
+.bgm-betsModal__title {
+    font-weight: 700;
+}
+
+.bgm-betsModal__subtitle {
+    color: rgba(34, 49, 28, 0.6);
+    font-size: 0.85rem;
+}
+
+.bgm-betsModal__close {
+    border: 0;
+    background: transparent;
+    font-size: 1.25rem;
+    line-height: 1;
+    cursor: pointer;
+    color: rgba(34, 49, 28, 0.6);
+}
+
+.bgm-betsModal__summary {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 10px;
+    border-radius: 12px;
+    background: rgba(191, 161, 74, 0.12);
+    margin-bottom: 10px;
+    font-size: 0.9rem;
+}
+
+.bgm-betsModal__section {
+    margin-bottom: 10px;
+}
+
+.bgm-betsModal__sectionTitle {
+    font-weight: 600;
+    margin-bottom: 6px;
+}
+
+.bgm-betsModal__list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 6px;
+    font-size: 0.85rem;
+}
+
+.bgm-betsModal__list li {
+    display: grid;
+    gap: 2px;
+    padding: 8px 10px;
+    border-radius: 12px;
+    border: 1px solid rgba(75, 58, 26, 0.12);
+    background: rgba(255, 255, 255, 0.7);
+}
+
+.bgm-betsModal__footer {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.bgm-betsModal__link {
+    text-decoration: none;
+    font-weight: 600;
+    color: rgba(34, 49, 28, 0.9);
 }
 
 .bgm-popup {

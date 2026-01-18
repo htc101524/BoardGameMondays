@@ -1,0 +1,131 @@
+.bgm-betsPage {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+.bgm-betsSummary {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 16px;
+    border-radius: 16px;
+    border: 1px solid rgba(75, 58, 26, 0.14);
+    background: rgba(255, 255, 255, 0.65);
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+.bgm-betsBalance {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+}
+
+.bgm-betsBalance__label {
+    font-weight: 700;
+    color: rgba(34, 49, 28, 0.75);
+}
+
+.bgm-betsBalance__value {
+    font-weight: 800;
+    font-size: 1.2rem;
+}
+
+.bgm-betsSummary__note {
+    color: rgba(34, 49, 28, 0.6);
+    font-size: 0.9rem;
+    flex: 1 1 260px;
+    min-width: 0;
+    text-align: right;
+}
+
+.bgm-betsSection h2 {
+    margin-bottom: 10px;
+}
+
+.bgm-betsList {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 12px;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+.bgm-betCard {
+    border-radius: 16px;
+    border: 1px solid rgba(75, 58, 26, 0.14);
+    background: rgba(255, 255, 255, 0.7);
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.bgm-betCard__header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.bgm-betCard__game {
+    font-weight: 700;
+}
+
+.bgm-betCard__meta {
+    color: rgba(34, 49, 28, 0.6);
+    font-size: 0.85rem;
+}
+
+.bgm-betCard__status {
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    border: 1px solid rgba(75, 58, 26, 0.2);
+    background: rgba(191, 161, 74, 0.14);
+    color: rgba(34, 49, 28, 0.8);
+}
+
+.bgm-betCard__status.is-win {
+    background: rgba(25, 135, 84, 0.16);
+    color: #1f6e43;
+    border-color: rgba(25, 135, 84, 0.35);
+}
+
+.bgm-betCard__status.is-loss {
+    background: rgba(220, 53, 69, 0.12);
+    color: #b02a37;
+    border-color: rgba(220, 53, 69, 0.3);
+}
+
+.bgm-betCard__body {
+    display: grid;
+    gap: 4px;
+    font-size: 0.95rem;
+}
+
+.bgm-betCard__net {
+    font-weight: 700;
+}
+
+@media (max-width: 640px) {
+    .bgm-betsSummary {
+        align-items: flex-start;
+    }
+
+    .bgm-betsSummary__note {
+        text-align: left;
+    }
+
+    .bgm-betsList {
+        grid-template-columns: 1fr;
+    }
+}

@@ -1,0 +1,183 @@
+@page "/bets"
+@using Microsoft.AspNetCore.Components.Authorization
+@inject AuthenticationStateProvider AuthStateProvider
+@inject BoardGameMondays.Core.BettingService BettingService
+@inject BoardGameMondays.Core.BgmCoinService Coins
+
+<AuthorizeView>
+    <Authorized>
+        <section class="home-section" aria-label="My bets">
+            <div class="home-section__inner bgm-betsPage">
+                <h1>My bets</h1>
+
+                <div class="bgm-betsSummary">
+                    <div class="bgm-betsBalance">
+                        <span class="bgm-betsBalance__label">Coins</span>
+                        <span class="bgm-betsBalance__value">@(_coins?.ToString() ?? "…")</span>
+                    </div>
+                    <div class="bgm-betsSummary__note">Odds are locked at the moment you place a bet.</div>
+                </div>
+
+                @if (_loading)
+                {
+                    <div class="text-muted">Loading bets…</div>
+                }
+                else
+                {
+                    <div class="bgm-betsSection">
+                        <h2>Open bets</h2>
+                        @if (_openBets.Count == 0)
+                        {
+                            <div class="text-muted">No open bets.</div>
+                        }
+                        else
+                        {
+                            <div class="bgm-betsList">
+                                @foreach (var bet in _openBets)
+                                {
+                                    <div class="bgm-betCard">
+                                        <div class="bgm-betCard__header">
+                                            <div>
+                                                <div class="bgm-betCard__game">@bet.GameName</div>
+                                                <div class="bgm-betCard__meta">@FormatDate(bet.GameDate)</div>
+                                            </div>
+                                            <span class="bgm-betCard__status">Open</span>
+                                        </div>
+                                        <div class="bgm-betCard__body">
+                                            <div><strong>Pick:</strong> @bet.PredictedWinnerName</div>
+                                            <div><strong>Stake:</strong> @bet.Amount</div>
+                                            <div><strong>Odds:</strong> @FormatFraction(bet.OddsTimes100)</div>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+
+                    <div class="bgm-betsSection">
+                        <h2>Settled bets</h2>
+                        @if (_settledBets.Count == 0)
+                        {
+                            <div class="text-muted">No settled bets yet.</div>
+                        }
+                        else
+                        {
+                            <div class="bgm-betsList">
+                                @foreach (var bet in _settledBets)
+                                {
+                                    var net = bet.Payout - bet.Amount;
+                                    var resultLabel = net > 0 ? "Won" : "Lost";
+                                    var winnerDisplay = !string.IsNullOrWhiteSpace(bet.ActualWinnerTeamName)
+                                        ? $"Team {bet.ActualWinnerTeamName}"
+                                        : bet.ActualWinnerMemberName;
+                                    <div class="bgm-betCard">
+                                        <div class="bgm-betCard__header">
+                                            <div>
+                                                <div class="bgm-betCard__game">@bet.GameName</div>
+                                                <div class="bgm-betCard__meta">@FormatDate(bet.GameDate)</div>
+                                            </div>
+                                            <span class="bgm-betCard__status @GetResultClass(net)">@resultLabel</span>
+                                        </div>
+                                        <div class="bgm-betCard__body">
+                                            <div><strong>Pick:</strong> @bet.PredictedWinnerName</div>
+                                            @if (!string.IsNullOrWhiteSpace(winnerDisplay))
+                                            {
+                                                <div><strong>Winner:</strong> @winnerDisplay</div>
+                                            }
+                                            <div><strong>Stake:</strong> @bet.Amount</div>
+                                            <div><strong>Odds:</strong> @FormatFraction(bet.OddsTimes100)</div>
+                                            <div><strong>Return:</strong> @bet.Payout <span class="bgm-betCard__net">(@FormatNet(net))</span></div>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        </section>
+    </Authorized>
+    <NotAuthorized>
+        <section class="home-section" aria-label="My bets">
+            <div class="home-section__inner">
+                <h1>My bets</h1>
+                <div class="text-muted">Log in to see your bets.</div>
+            </div>
+        </section>
+    </NotAuthorized>
+</AuthorizeView>
+
+@code {
+    private bool _loading = true;
+    private string? _userId;
+    private int? _coins;
+    private IReadOnlyList<BoardGameMondays.Core.BettingService.UserBetHistory> _openBets = Array.Empty<BoardGameMondays.Core.BettingService.UserBetHistory>();
+    private IReadOnlyList<BoardGameMondays.Core.BettingService.UserBetHistory> _settledBets = Array.Empty<BoardGameMondays.Core.BettingService.UserBetHistory>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var auth = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = auth.User;
+        if (user.Identity?.IsAuthenticated != true)
+        {
+            _loading = false;
+            return;
+        }
+
+        _userId = user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrWhiteSpace(_userId))
+        {
+            _loading = false;
+            return;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _coins = await Coins.GetCoinsAsync(_userId!);
+        var bets = await BettingService.GetUserBetHistoryAsync(_userId!);
+        _openBets = bets.Where(b => !b.IsResolved).ToArray();
+        _settledBets = bets.Where(b => b.IsResolved).ToArray();
+        _loading = false;
+    }
+
+    private static string FormatDate(DateOnly date)
+        => date.ToDateTime(TimeOnly.MinValue).ToString("ddd d MMM yyyy");
+
+    private static string FormatFraction(int oddsTimes100)
+    {
+        if (oddsTimes100 <= 100)
+        {
+            return "1/1";
+        }
+
+        var numerator = oddsTimes100 - 100;
+        var denominator = 100;
+        var gcd = Gcd(numerator, denominator);
+        numerator /= gcd;
+        denominator /= gcd;
+        return $"{numerator}/{denominator}";
+    }
+
+    private static int Gcd(int a, int b)
+    {
+        a = Math.Abs(a);
+        b = Math.Abs(b);
+        while (b != 0)
+        {
+            var t = a % b;
+            a = b;
+            b = t;
+        }
+        return a == 0 ? 1 : a;
+    }
+
+    private static string GetResultClass(int net)
+        => net > 0 ? "is-win" : "is-loss";
+
+    private static string FormatNet(int net)
+        => net >= 0 ? $"+{net}" : net.ToString();
+}

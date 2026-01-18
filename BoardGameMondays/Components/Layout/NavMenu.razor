@@ -3,6 +3,7 @@
 @inject IJSRuntime JS
 @inject AuthenticationStateProvider AuthStateProvider
 @inject BoardGameMondays.Core.BgmCoinService Coins
+@inject BoardGameMondays.Core.BettingService BettingService
 @inject IHttpContextAccessor HttpContextAccessor
 
 @implements IDisposable
@@ -21,10 +22,10 @@
         <div class="bgm-header__right">
             @if (_userId is not null)
             {
-                <div class="bgm-coins" aria-label="BGM Coins">
+                <button class="bgm-coins bgm-coinsButton" type="button" aria-label="BGM Coins" @onclick="ToggleBetsAsync">
                     <span class="bgm-coins__label">£:</span>
                     <span class="bgm-coins__value">@(_coins?.ToString() ?? "…")</span>
-                </div>
+                </button>
             }
 
                 @if (_userIsRealAdmin && _viewAsNonAdmin)
@@ -48,6 +49,77 @@
 </header>
 
 <div class="bgm-backdrop @(_menuOpen ? "is-open" : "")" @onclick="CloseMenu"></div>
+
+<div class="bgm-betsBackdrop @(_betsOpen ? "is-open" : "")" @onclick="CloseBets"></div>
+
+<aside class="bgm-betsModal @(_betsOpen ? "is-open" : "")" role="dialog" aria-modal="true" aria-label="Bet history">
+    <div class="bgm-betsModal__header">
+        <div>
+            <div class="bgm-betsModal__title">My bets</div>
+            <div class="bgm-betsModal__subtitle">Odds are locked when you place a bet.</div>
+        </div>
+        <button type="button" class="bgm-betsModal__close" aria-label="Close" @onclick="CloseBets">×</button>
+    </div>
+
+    @if (_betsLoading)
+    {
+        <div class="text-muted">Loading bets…</div>
+    }
+    else if (_betHistory.Count == 0)
+    {
+        <div class="text-muted">No bets yet.</div>
+    }
+    else
+    {
+        var open = _betHistory.Where(b => !b.IsResolved).ToArray();
+        var settled = _betHistory.Where(b => b.IsResolved).ToArray();
+
+        <div class="bgm-betsModal__summary">
+            <span>Open: <strong>@open.Length</strong></span>
+            <span>Settled: <strong>@settled.Length</strong></span>
+        </div>
+
+        @if (open.Length > 0)
+        {
+            <div class="bgm-betsModal__section">
+                <div class="bgm-betsModal__sectionTitle">Open bets</div>
+                <ul class="bgm-betsModal__list">
+                    @foreach (var bet in open.Take(3))
+                    {
+                        <li>
+                            <strong>@bet.GameName</strong>
+                            <span>@FormatDate(bet.GameDate)</span>
+                            <span>@bet.PredictedWinnerName</span>
+                            <span>@FormatFraction(bet.OddsTimes100)</span>
+                        </li>
+                    }
+                </ul>
+            </div>
+        }
+
+        @if (settled.Length > 0)
+        {
+            <div class="bgm-betsModal__section">
+                <div class="bgm-betsModal__sectionTitle">Settled bets</div>
+                <ul class="bgm-betsModal__list">
+                    @foreach (var bet in settled.Take(3))
+                    {
+                        var net = bet.Payout - bet.Amount;
+                        <li>
+                            <strong>@bet.GameName</strong>
+                            <span>@FormatDate(bet.GameDate)</span>
+                            <span>@FormatNet(net)</span>
+                        </li>
+                    }
+                </ul>
+            </div>
+        }
+    }
+
+    <div class="bgm-betsModal__footer">
+        <a class="bgm-betsModal__link" href="/bets" @onclick="CloseBets">View all bets</a>
+    </div>
+</aside>
 
 <aside id="bgm-popup" class="bgm-popup @(_menuOpen ? "is-open" : "")" role="dialog" aria-modal="true">
     <nav class="bgm-popup__nav" aria-label="Menu">
@@ -97,6 +169,9 @@
     private bool _userIsAdmin;
     private bool _userIsRealAdmin;
     private bool _viewAsNonAdmin;
+    private bool _betsOpen;
+    private bool _betsLoading;
+    private IReadOnlyList<BoardGameMondays.Core.BettingService.UserBetHistory> _betHistory = Array.Empty<BoardGameMondays.Core.BettingService.UserBetHistory>();
     
     private bool _isInteractive;
 
@@ -135,6 +210,36 @@
     {
         _ = InvokeAsync(RefreshCoinsAsync);
     }
+
+    private async Task ToggleBetsAsync()
+    {
+        if (_userId is null)
+        {
+            return;
+        }
+
+        if (_betsOpen)
+        {
+            CloseBets();
+            return;
+        }
+
+        _betsOpen = true;
+        if (_betHistory.Count == 0)
+        {
+            _betsLoading = true;
+            try
+            {
+                _betHistory = await BettingService.GetUserBetHistoryAsync(_userId);
+            }
+            finally
+            {
+                _betsLoading = false;
+            }
+        }
+    }
+
+    private void CloseBets() => _betsOpen = false;
 
     private async Task RefreshCoinsAsync()
     {
@@ -247,5 +352,39 @@
         CloseMenu();
         Navigation.NavigateTo("/register");
     }
+
+    private static string FormatDate(DateOnly date)
+        => date.ToDateTime(TimeOnly.MinValue).ToString("d MMM yyyy");
+
+    private static string FormatFraction(int oddsTimes100)
+    {
+        if (oddsTimes100 <= 100)
+        {
+            return "1/1";
+        }
+
+        var numerator = oddsTimes100 - 100;
+        var denominator = 100;
+        var gcd = Gcd(numerator, denominator);
+        numerator /= gcd;
+        denominator /= gcd;
+        return $"{numerator}/{denominator}";
+    }
+
+    private static int Gcd(int a, int b)
+    {
+        a = Math.Abs(a);
+        b = Math.Abs(b);
+        while (b != 0)
+        {
+            var t = a % b;
+            a = b;
+            b = t;
+        }
+        return a == 0 ? 1 : a;
+    }
+
+    private static string FormatNet(int net)
+        => net >= 0 ? $"+{net}" : net.ToString();
 }
 

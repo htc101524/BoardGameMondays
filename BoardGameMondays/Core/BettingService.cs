@@ -280,6 +280,48 @@ public sealed class BettingService
             .ToArray();
     }
 
+    public async Task<IReadOnlyList<UserBetHistory>> GetUserBetHistoryAsync(string userId, CancellationToken ct = default)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+
+        var bets = await db.GameNightGameBets
+            .AsNoTracking()
+            .Where(b => b.UserId == userId)
+            .OrderByDescending(b => b.CreatedOn)
+            .Select(b => new
+            {
+                b.GameNightGameId,
+                b.Amount,
+                b.OddsTimes100,
+                b.IsResolved,
+                b.Payout,
+                b.CreatedOn,
+                b.ResolvedOn,
+                WinnerName = b.PredictedWinnerMember.Name,
+                GameName = b.GameNightGame.Game.Name,
+                GameDateKey = b.GameNightGame.GameNight.DateKey,
+                ActualWinnerMemberName = b.GameNightGame.WinnerMember != null ? b.GameNightGame.WinnerMember.Name : null,
+                b.GameNightGame.WinnerTeamName
+            })
+            .ToListAsync(ct);
+
+        return bets
+            .Select(b => new UserBetHistory(
+                b.GameNightGameId,
+                GameNightService.FromDateKey(b.GameDateKey),
+                b.GameName,
+                b.WinnerName,
+                b.Amount,
+                b.OddsTimes100,
+                b.IsResolved,
+                b.Payout,
+                b.CreatedOn,
+                b.ResolvedOn,
+                b.ActualWinnerMemberName,
+                b.WinnerTeamName))
+            .ToArray();
+    }
+
     private static int ComputeProfit(int amount, int oddsTimes100)
     {
         // oddsTimes100 represents decimal odds (x100). Fractional profit odds are (decimal - 1).
@@ -333,6 +375,20 @@ public sealed class BettingService
     }
 
     public sealed record UserBet(int Amount, Guid WinnerMemberId, string WinnerMemberName, int OddsTimes100);
+
+    public sealed record UserBetHistory(
+        int GameNightGameId,
+        DateOnly GameDate,
+        string GameName,
+        string PredictedWinnerName,
+        int Amount,
+        int OddsTimes100,
+        bool IsResolved,
+        int Payout,
+        DateTimeOffset CreatedOn,
+        DateTimeOffset? ResolvedOn,
+        string? ActualWinnerMemberName,
+        string? ActualWinnerTeamName);
 
     public sealed record NightNetResult(string UserId, string DisplayName, int Net);
 }
