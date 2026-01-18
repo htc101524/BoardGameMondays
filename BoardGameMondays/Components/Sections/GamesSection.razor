@@ -162,7 +162,7 @@
     [Parameter]
     public EventCallback<BoardGameMondays.Core.BoardGame> OnGameSelected { get; set; }
 
-    private const int PageSize = 12;
+    private const int PageSize = 6;
     private GamesMode _mode = GamesMode.Decided;
     private IReadOnlyList<BoardGameMondays.Core.BoardGame> _allGames = Array.Empty<BoardGameMondays.Core.BoardGame>();
     private IReadOnlyList<BoardGameMondays.Core.BoardGame> _games = Array.Empty<BoardGameMondays.Core.BoardGame>();
