@@ -2046,7 +2046,7 @@ app.Use(async (context, next) =>
                 && System.DateOnly.TryParseExact(dateRaw, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var parsedDate))
             {
                 var friendly = parsedDate.ToString("dddd d MMMM yyyy", System.Globalization.CultureInfo.InvariantCulture);
-                description = $"RSVP for Monday {friendly}.";
+                description = $"RSVP for {friendly}.";
             }
             else
             {
