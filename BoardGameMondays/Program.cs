@@ -2024,6 +2024,67 @@ app.MapPost("/account/avatar", async (
 .RequireAuthorization(new Microsoft.AspNetCore.Authorization.AuthorizeAttribute { Roles = "Admin" })
 .RequireRateLimiting("account");
 
+// For social crawlers (WhatsApp/Facebook/Slack/etc) request to `/rsvp` return a small
+// HTML document with Open Graph meta tags so link previews show a proper image/title.
+app.Use(async (context, next) =>
+{
+    if (context.Request.Path.Equals("/rsvp", StringComparison.OrdinalIgnoreCase))
+    {
+        var ua = context.Request.Headers["User-Agent"].ToString();
+        if (ReturnUrlHelpers.IsSocialCrawler(ua))
+        {
+            // Build meta info based on query (date) if provided.
+            var query = context.Request.Query;
+            var dateRaw = query.TryGetValue("date", out var d) ? d.ToString() : string.Empty;
+            var title = "Are you going to the upcoming Board Game Monday?";
+            var baseUrl = $"{context.Request.Scheme}://{context.Request.Host}";
+            var pageUrl = baseUrl + context.Request.Path + context.Request.QueryString;
+
+            // Parse and format date if available
+            string description;
+            if (!string.IsNullOrWhiteSpace(dateRaw)
+                && System.DateOnly.TryParseExact(dateRaw, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var parsedDate))
+            {
+                var friendly = parsedDate.ToString("dddd d MMMM yyyy", System.Globalization.CultureInfo.InvariantCulture);
+                description = $"RSVP for Monday {friendly}.";
+            }
+            else
+            {
+                description = "RSVP for the next Board Game Monday.";
+            }
+
+            // Use the Board Game Mondays logo as the share image. Add this file under wwwroot/images/logo-share.png
+            var imageUrl = baseUrl + "/images/logo-share.png";
+            var imageType = "image/png";
+            var imageWidth = 1200;
+            var imageHeight = 630;
+
+            var html = $"<!doctype html><html><head>" +
+                       $"<meta charset=\"utf-8\" />" +
+                       $"<meta property=\"og:title\" content=\"{System.Text.Encodings.Web.HtmlEncoder.Default.Encode(title)}\" />" +
+                       $"<meta property=\"og:description\" content=\"{System.Text.Encodings.Web.HtmlEncoder.Default.Encode(description)}\" />" +
+                       $"<meta property=\"og:image\" content=\"{imageUrl}\" />" +
+                       $"<meta property=\"og:image:secure_url\" content=\"{imageUrl}\" />" +
+                       $"<meta property=\"og:image:type\" content=\"{imageType}\" />" +
+                       $"<meta property=\"og:image:width\" content=\"{imageWidth}\" />" +
+                       $"<meta property=\"og:image:height\" content=\"{imageHeight}\" />" +
+                       $"<meta property=\"og:image:alt\" content=\"Board Game Mondays RSVP\" />" +
+                       $"<meta property=\"og:url\" content=\"{pageUrl}\" />" +
+                       $"<meta name=\"twitter:card\" content=\"summary_large_image\" />" +
+                       $"<title>{System.Text.Encodings.Web.HtmlEncoder.Default.Encode(title)}</title>" +
+                       $"</head><body>" +
+                       $"<p><a href=\"{pageUrl}\">Open RSVP</a></p>" +
+                       $"</body></html>";
+
+            context.Response.ContentType = "text/html; charset=utf-8";
+            await context.Response.WriteAsync(html);
+            return;
+        }
+    }
+
+    await next();
+});
+
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 
@@ -2123,5 +2184,23 @@ internal static class ReturnUrlHelpers
 
         var separator = url.Contains('?') ? "&" : "?";
         return $"{url}{separator}returnUrl={Uri.EscapeDataString(returnUrl)}";
+    }
+
+    public static bool IsSocialCrawler(string? userAgent)
+    {
+        if (string.IsNullOrWhiteSpace(userAgent)) return false;
+        var ua = userAgent.ToLowerInvariant();
+
+        // Common social crawler identifiers
+        return ua.Contains("facebookexternalhit")
+            || ua.Contains("whatsapp")
+            || ua.Contains("twitterbot")
+            || ua.Contains("slackbot")
+            || ua.Contains("linkedinbot")
+            || ua.Contains("discord")
+            || ua.Contains("telegrambot")
+            || ua.Contains("applebot")
+            || ua.Contains("pinterest")
+            || ua.Contains("twitterpreview");
     }
 }
