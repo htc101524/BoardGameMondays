@@ -52,6 +52,47 @@
     font-weight: 700;
     font-size: 0.9rem;
     letter-spacing: 0.01em;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* Gold glow for 1st place */
+.bgm-rankPill--1st {
+    background: linear-gradient(135deg, rgba(255, 215, 0, 0.35), rgba(191, 161, 74, 0.25));
+    border-color: rgba(255, 193, 7, 0.5);
+    box-shadow: 0 0 12px rgba(255, 193, 7, 0.4),
+                0 0 24px rgba(255, 193, 7, 0.2);
+    animation: glowPulse 2s ease-in-out infinite;
+}
+
+/* Silver glow for 2nd place */
+.bgm-rankPill--2nd {
+    background: linear-gradient(135deg, rgba(192, 192, 192, 0.4), rgba(169, 169, 169, 0.25));
+    border-color: rgba(192, 192, 192, 0.5);
+    box-shadow: 0 0 10px rgba(192, 192, 192, 0.35),
+                0 0 20px rgba(192, 192, 192, 0.15);
+    animation: glowPulse 2s ease-in-out infinite;
+    animation-delay: 0.3s;
+}
+
+/* Bronze glow for 3rd place */
+.bgm-rankPill--3rd {
+    background: linear-gradient(135deg, rgba(205, 127, 50, 0.35), rgba(184, 115, 51, 0.25));
+    border-color: rgba(205, 127, 50, 0.5);
+    box-shadow: 0 0 10px rgba(205, 127, 50, 0.35),
+                0 0 20px rgba(205, 127, 50, 0.15);
+    animation: glowPulse 2s ease-in-out infinite;
+    animation-delay: 0.6s;
+}
+
+@keyframes glowPulse {
+    0%, 100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 0.9;
+        transform: scale(1.03);
+    }
 }
 
 .bgm-coinLeaderboard {
