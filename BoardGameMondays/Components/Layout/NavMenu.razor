@@ -10,6 +10,21 @@
 
 <header class="bgm-header" role="banner">
     <div class="bgm-header__inner">
+        <div class="bgm-menuArea">
+            <button class=@(_menuOpen ? "bgm-menuButton is-open" : "bgm-menuButton")
+                    type="button"
+                    aria-label="Open menu"
+                    aria-controls="bgm-popup"
+                    aria-expanded="@_menuOpen"
+                    @onclick="ToggleMenu">
+                <svg viewBox="0 0 48 48" class="bgm-menuIcon" aria-hidden="true" focusable="false">
+                    <path d="M10 14 H38" />
+                    <path d="M10 24 H38" />
+                    <path d="M10 34 H38" />
+                </svg>
+            </button>
+        </div>
+
         <a class="bgm-brand"
            href="/#latest"
            aria-label="Board Game Mondays"
@@ -18,6 +33,17 @@
             <img class="bgm-brand__logo" src="images/bgm-logo.svg" alt="" />
             <span class="bgm-brand__text">BGM</span>
         </a>
+
+        <nav class="bgm-header__nav" role="navigation" aria-label="Main">
+            <a class="bgm-header__navLink" href="/#games">Games</a>
+            <a class="bgm-header__navLink" href="/#mondays">Mondays</a>
+            <a class="bgm-header__navLink" href="/#blog">Blog</a>
+            <a class="bgm-header__navLink" href="/#people">People</a>
+        </nav>
+
+        <div class="bgm-header__center">
+            <span class="bgm-header__title">Board Game Mondays</span>
+        </div>
 
         <div class="bgm-header__right">
             @if (_userId is not null)
@@ -32,18 +58,7 @@
                 {
                     <div class="bgm-viewIndicator" style="margin-left:12px;color:#a33;font-weight:700;align-self:center">Viewing as non-admin</div>
                 }
-            <button class="bgm-menuButton"
-                    type="button"
-                    aria-label="Open menu"
-                    aria-controls="bgm-popup"
-                    aria-expanded="@_menuOpen"
-                    @onclick="ToggleMenu">
-                <svg viewBox="0 0 48 48" class="bgm-menuIcon" aria-hidden="true" focusable="false">
-                    <path d="M10 14 H38" />
-                    <path d="M10 24 H38" />
-                    <path d="M10 34 H38" />
-                </svg>
-            </button>
+                @* Menu button is moved to left-side tappable square on mobile *@
         </div>
     </div>
 </header>
