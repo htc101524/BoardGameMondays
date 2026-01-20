@@ -103,34 +103,40 @@ public sealed class BettingService
             return PlaceBetResult.MissingOdds;
         }
 
-        await using var tx = await db.Database.BeginTransactionAsync(ct);
+        var strategy = db.Database.CreateExecutionStrategy();
 
-        var spent = await _coins.TrySpendAsync(db, userId, amount, ct);
-        if (!spent)
+        return await strategy.ExecuteAsync(async () =>
         {
-            return PlaceBetResult.NotEnoughCoins;
-        }
+            await using var tx = await db.Database.BeginTransactionAsync(ct);
 
-        db.GameNightGameBets.Add(new GameNightGameBetEntity
-        {
-            GameNightGameId = gameNightGameId,
-            UserId = userId,
-            PredictedWinnerMemberId = predictedWinnerMemberId,
-            Amount = amount,
-            OddsTimes100 = oddsTimes100.Value,
-            IsResolved = false,
-            Payout = 0,
-            ResolvedOn = null,
-            CreatedOn = DateTimeOffset.UtcNow
+            var spent = await _coins.TrySpendAsync(db, userId, amount, ct);
+            if (!spent)
+            {
+                await tx.RollbackAsync(ct);
+                return PlaceBetResult.NotEnoughCoins;
+            }
+
+            db.GameNightGameBets.Add(new GameNightGameBetEntity
+            {
+                GameNightGameId = gameNightGameId,
+                UserId = userId,
+                PredictedWinnerMemberId = predictedWinnerMemberId,
+                Amount = amount,
+                OddsTimes100 = oddsTimes100.Value,
+                IsResolved = false,
+                Payout = 0,
+                ResolvedOn = null,
+                CreatedOn = DateTimeOffset.UtcNow
+            });
+
+            // Recalculate odds based on cashflow within the same transaction
+            await _odds.RecalculateOddsForCashflowAsync(db, gameNightGameId, ct);
+
+            await db.SaveChangesAsync(ct);
+            await tx.CommitAsync(ct);
+
+            return PlaceBetResult.Ok;
         });
-
-        // Recalculate odds based on cashflow within the same transaction
-        await _odds.RecalculateOddsForCashflowAsync(db, gameNightGameId, ct);
-
-        await db.SaveChangesAsync(ct);
-        await tx.CommitAsync(ct);
-
-        return PlaceBetResult.Ok;
     }
 
     public async Task<ResolveResult> ResolveGameAsync(Guid gameNightId, int gameNightGameId, CancellationToken ct = default)
