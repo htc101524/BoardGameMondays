@@ -1,12 +1,15 @@
 :root {
-    --bgm-header-height: 72px;
+    --bgm-header-height: 64px;
+    --bgm-header-height-desktop: 110px;
+    --bgm-menu-area-width: 64px;
+    --bgm-menu-bg: #064e6d;
 }
 
 .bgm-header {
     position: fixed;
     inset: 0 0 auto 0;
     height: var(--bgm-header-height);
-    z-index: 50;
+    z-index: 1200;
     background: rgba(245,243,231,0.98);
     border-bottom: 1px solid rgba(75,58,26,0.06);
     box-shadow: 0 6px 18px rgba(34,24,10,0.06);
@@ -31,24 +34,28 @@
 .bgm-header__inner {
     height: 100%;
     display: flex;
-    align-items: center;
+    align-items: stretch;
     justify-content: space-between;
-    padding: 0 2.5vw;
-    gap: 1rem;
+    padding: 0;
+    padding-right: 2.5vw;
+    gap: 0;
 }
 
-.bgm-header__nav {
-    display: none;
-    gap: 1rem;
-    align-items: center;
-}
-
+/* Menu area - tappable square on left for mobile */
 .bgm-menuArea {
-    display: none; /* shown on mobile */
-    width: var(--bgm-header-height);
-    height: 100%;
+    display: flex;
+    width: var(--bgm-menu-area-width);
+    min-width: var(--bgm-menu-area-width);
+    height: var(--bgm-header-height);
     align-items: center;
     justify-content: center;
+    background: var(--bgm-menu-bg);
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+.bgm-menuArea:hover {
+    background: #075a7e;
 }
 
 .bgm-menuArea .bgm-menuButton {
@@ -57,39 +64,146 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    border: 0;
-    background: transparent;
     padding: 0;
-    cursor: pointer;
+    pointer-events: none; /* Let the parent handle clicks */
 }
 
-.bgm-menuArea { background: none; }
-
-.bgm-header__navLink {
-    text-decoration: none;
-    color: rgba(34,49,28,0.92);
-    font-weight:600;
-    padding: 8px 10px;
-    border-radius: 8px;
-}
-
-.bgm-header__navLink:hover { background: rgba(191,161,74,0.06); }
-
-.bgm-header__center {
+/* Brand link for desktop */
+.bgm-header__brand {
     display: none;
+    align-items: center;
+    text-decoration: none;
+    height: 100%;
+    padding: 0 1.5rem;
+    transition: background 0.15s ease;
+}
+
+.bgm-header__brand:hover {
+    background: rgba(191, 161, 74, 0.08);
+}
+
+.bgm-header__brandText {
+    color: #22311c;
+    font-weight: 900;
+    letter-spacing: 0.08em;
+    font-size: 1.7rem;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+/* Mobile centered title */
+.bgm-header__center {
+    display: flex;
     flex: 1 1 auto;
-    text-align: center;
+    justify-content: center;
+    align-items: center;
 }
 
 .bgm-header__title {
-    font-weight:700;
-    color: rgba(34,49,28,0.95);
+    font-size: 1.1rem;
+    font-weight: 900;
+    letter-spacing: 0.06em;
+    color: #22311c;
+    text-align: center;
+    text-transform: uppercase;
+    text-decoration: none;
+    white-space: nowrap;
 }
 
 .bgm-header__right {
     display: flex;
+    align-items: stretch;
+    gap: 0;
+}
+
+/* Desktop action links container */
+.bgm-header__desktopActions {
+    display: none;
+    align-items: stretch;
+    gap: 0;
+}
+
+.bgm-header__actionLink {
+    text-decoration: none;
+    color: rgba(34, 49, 28, 0.85);
+    font-weight: 600;
+    font-size: 0.9rem;
+    padding: 0 14px;
+    border-radius: 0;
+    transition: background 0.15s ease, color 0.15s ease;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font-family: inherit;
+    height: 100%;
+    display: flex;
     align-items: center;
-    gap: 0.9rem;
+}
+
+.bgm-header__actionLink:hover {
+    background: rgba(191, 161, 74, 0.12);
+    color: #22311c;
+}
+
+.bgm-header__actionLink--admin {
+    background: rgba(191, 161, 74, 0.15);
+    color: #5c4a1f;
+}
+
+.bgm-header__actionLink--admin:hover {
+    background: rgba(191, 161, 74, 0.25);
+}
+
+.bgm-header__actionLink--logout {
+    color: rgba(140, 60, 60, 0.85);
+}
+
+.bgm-header__actionLink--logout:hover {
+    background: rgba(200, 80, 80, 0.1);
+    color: #8c3c3c;
+}
+
+.bgm-header__actionLink--signup {
+    background: #22311c;
+    color: #fff;
+}
+
+.bgm-header__actionLink--signup:hover {
+    background: #2d4024;
+}
+
+.bgm-header__logoutForm {
+    display: inline;
+    margin: 0;
+    padding: 0;
+}
+
+/* Toggle for admin view mode */
+.bgm-header__toggleWrap {
+    display: flex;
+    align-items: center;
+    padding: 0 14px;
+}
+
+.bgm-header__toggleLabel {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.85rem;
+    color: rgba(34, 49, 28, 0.75);
+    cursor: pointer;
+}
+
+.bgm-header__toggleLabel input {
+    cursor: pointer;
+}
+
+.bgm-viewIndicator {
+    margin-left: 8px;
+    color: #a33;
+    font-weight: 700;
+    font-size: 0.85rem;
+    white-space: nowrap;
 }
 
 .bgm-coins {
@@ -103,18 +217,22 @@
 .bgm-coinsButton {
     border: 0;
     background: transparent;
-    padding: 6px 10px;
-    border-radius: 999px;
+    padding: 0 16px;
+    border-radius: 0;
     cursor: pointer;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    transition: background 0.15s ease;
 }
 
 .bgm-coinsButton:hover {
-    background: rgba(255, 255, 255, 0.12);
+    background: rgba(191, 161, 74, 0.15);
 }
 
 .bgm-coinsButton:focus-visible {
     outline: 2px solid rgba(191, 161, 74, 0.55);
-    outline-offset: 3px;
+    outline-offset: -2px;
 }
 
 .bgm-brand {
@@ -182,7 +300,7 @@
 
 .bgm-backdrop {
     position: fixed;
-    top: var(--bgm-header-height);
+    top: 0;
     left: 0;
     right: 0;
     bottom: 0;
@@ -201,7 +319,7 @@
 .bgm-betsBackdrop {
     position: fixed;
     inset: 0;
-    z-index: 65;
+    z-index: 1150;
     background: rgba(0,0,0,0.45);
     opacity: 0;
     pointer-events: none;
@@ -217,7 +335,7 @@
     position: fixed;
     top: calc(var(--bgm-header-height) + 8px);
     right: 2.5vw;
-    z-index: 80;
+    z-index: 1250;
     width: min(360px, 94vw);
     transform: translateY(-8px);
     opacity: 0;
@@ -322,19 +440,22 @@
 
 .bgm-popup {
     position: fixed;
-    top: var(--bgm-header-height);
+    top: 15vh;
     left: 0;
     right: 0;
     bottom: 0;
     z-index: 80;
     width: 100%;
-    height: calc(100% - var(--bgm-header-height));
+    height: calc(100% - 15vh);
     background: rgba(245,243,231,0.98);
     transform: translateX(-100%);
     transition: transform 240ms cubic-bezier(.2,.9,.1,1);
     pointer-events: none;
     display: flex;
+    flex-direction: column;
     align-items: stretch;
+    padding: 0;
+    overflow-y: auto;
 }
 
 .bgm-popup.is-open {
@@ -345,22 +466,26 @@
 .bgm-popup__nav {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 0;
+    width: 100%;
 }
 
 .bgm-popup__link {
     display: block;
-    padding: 12px 12px;
-    border-radius: 10px;
+    padding: 18px 24px;
+    border-radius: 0;
     text-decoration: none;
     color: rgba(34, 49, 28, 0.92);
-    border: 1px solid rgba(75, 58, 26, 0.14);
-    background: rgba(255, 255, 255, 0.65);
+    border: none;
+    border-bottom: 1px solid rgba(75, 58, 26, 0.1);
+    background: transparent;
+    font-size: 1.1rem;
+    font-weight: 600;
 }
 
 .bgm-popup__link:hover,
 .bgm-popup__link.active {
-    background: rgba(191, 161, 74, 0.14);
+    background: rgba(191, 161, 74, 0.1);
     color: #22311c;
 }
 
@@ -369,7 +494,10 @@
     text-align: left;
     cursor: pointer;
     font: inherit;
-    border: 1px solid rgba(75, 58, 26, 0.14);
+    font-size: 1.1rem;
+    font-weight: 600;
+    border: none;
+    border-bottom: 1px solid rgba(75, 58, 26, 0.1);
 }
 
 .bgm-popup__toggleRow {
@@ -392,10 +520,6 @@
 }
 
 @media (max-width: 480px) {
-    .bgm-brand__text {
-        display: none;
-    }
-
     .bgm-header__inner {
         gap: 0.5rem;
     }
@@ -410,33 +534,45 @@
 }
 
 /* Desktop layout: show inline nav and hide full-screen popup */
-@media (min-width: 640px) {
-    .bgm-header__nav { display:flex; }
-    .bgm-header__center { display:none; }
-    .bgm-menuArea { display:none; }
-    .bgm-menuButton { display:none; }
-    .bgm-popup { display:none; }
+@media (min-width: 800px) {
+    :root {
+        --bgm-header-height: var(--bgm-header-height-desktop);
+    }
+    
+    .bgm-header {
+        height: var(--bgm-header-height-desktop);
+    }
+    
+    .bgm-header__inner {
+        padding-left: 0;
+        align-items: stretch;
+    }
+    
+    .bgm-header__center { display: none; }
+    .bgm-menuArea { display: none; }
+    .bgm-menuButton { display: none; }
+    .bgm-popup { display: none; }
+    .bgm-header__brand { display: flex; }
+    .bgm-header__desktopActions { display: flex; align-items: stretch; }
+    .bgm-header__right { align-items: stretch; }
 }
 
 /* Mobile layout: center title, hide desktop nav, show burger and full-screen popup */
-@media (max-width: 639px) {
-    .bgm-header__nav { display:none; }
-    .bgm-header__center { display:block; }
-    .bgm-header__title { font-size: 1rem; }
-    .bgm-brand { display:flex; align-items:center; }
-    .bgm-brand__text { display:none; }
-    .bgm-header__inner { justify-content: space-between; }
-    .bgm-header__right { display:flex; align-items:center; gap:8px; }
+@media (max-width: 799px) {
+    .bgm-header__center { display: flex; }
+    .bgm-header__brand { display: none; }
+    .bgm-header__desktopActions { display: none; }
+    .bgm-header__inner { justify-content: space-between; padding-left: 0; }
+    .bgm-header__right { display: flex; align-items: stretch; gap: 0; padding-right: 1rem; }
 
     /* Burger -> cross animation */
-    .bgm-menuIcon path { transition: transform 200ms ease, opacity 140ms ease; transform-origin: 24px 24px; }
+    .bgm-menuIcon path { transition: transform 200ms ease, opacity 140ms ease; transform-origin: center; }
     .bgm-menuButton.is-open .bgm-menuIcon path:nth-child(1) { transform: translateY(10px) rotate(45deg); }
-    .bgm-menuButton.is-open .bgm-menuIcon path:nth-child(2) { opacity: 0; transform: scaleX(0.2); }
+    .bgm-menuButton.is-open .bgm-menuIcon path:nth-child(2) { opacity: 0; transform: scaleX(0); }
     .bgm-menuButton.is-open .bgm-menuIcon path:nth-child(3) { transform: translateY(-10px) rotate(-45deg); }
 
     /* show tappable square on left */
-    .bgm-menuArea { display:flex; }
-    .bgm-menuArea { background: #064e6d; }
+    .bgm-menuArea { display: flex; background: var(--bgm-menu-bg); }
     .bgm-menuArea .bgm-menuButton { border-radius: 0; }
     .bgm-menuIcon path { stroke: #fff; fill: none; }
 }

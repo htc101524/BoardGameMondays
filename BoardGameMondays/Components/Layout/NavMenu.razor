@@ -10,39 +10,24 @@
 
 <header class="bgm-header" role="banner">
     <div class="bgm-header__inner">
-        <div class="bgm-menuArea">
-            <button class=@(_menuOpen ? "bgm-menuButton is-open" : "bgm-menuButton")
-                    type="button"
-                    aria-label="Open menu"
-                    aria-controls="bgm-popup"
-                    aria-expanded="@_menuOpen"
-                    @onclick="ToggleMenu">
+        <div class="bgm-menuArea" @onclick="ToggleMenu" role="button" tabindex="0" aria-label="Open menu" aria-controls="bgm-popup" aria-expanded="@_menuOpen">
+            <div class=@(_menuOpen ? "bgm-menuButton is-open" : "bgm-menuButton")>
                 <svg viewBox="0 0 48 48" class="bgm-menuIcon" aria-hidden="true" focusable="false">
                     <path d="M10 14 H38" />
                     <path d="M10 24 H38" />
                     <path d="M10 34 H38" />
                 </svg>
-            </button>
+            </div>
         </div>
 
-        <a class="bgm-brand"
-           href="/#latest"
-           aria-label="Board Game Mondays"
-           @onclick:preventDefault="true"
-           @onclick="OnBrandClick">
-            <img class="bgm-brand__logo" src="images/bgm-logo.svg" alt="" />
-            <span class="bgm-brand__text">BGM</span>
+        @* Desktop: show brand and main nav links *@
+        <a class="bgm-header__brand" href="/" @onclick="OnBrandClick" @onclick:preventDefault>
+            <span class="bgm-header__brandText">BOARD GAME MONDAYS</span>
         </a>
 
-        <nav class="bgm-header__nav" role="navigation" aria-label="Main">
-            <a class="bgm-header__navLink" href="/#games">Games</a>
-            <a class="bgm-header__navLink" href="/#mondays">Mondays</a>
-            <a class="bgm-header__navLink" href="/#blog">Blog</a>
-            <a class="bgm-header__navLink" href="/#people">People</a>
-        </nav>
-
+        @* Mobile: centered short title *@
         <div class="bgm-header__center">
-            <span class="bgm-header__title">Board Game Mondays</span>
+            <a class="bgm-header__title" href="/" @onclick="OnBrandClick" @onclick:preventDefault>BG MONDAYS</a>
         </div>
 
         <div class="bgm-header__right">
@@ -54,11 +39,44 @@
                 </button>
             }
 
-                @if (_userIsRealAdmin && _viewAsNonAdmin)
+            @* Desktop-only nav items *@
+            <div class="bgm-header__desktopActions">
+                <a class="bgm-header__actionLink" href="/#games">Games</a>
+                <a class="bgm-header__actionLink" href="/#mondays">Mondays</a>
+                <a class="bgm-header__actionLink" href="/#blog">Blog</a>
+                <a class="bgm-header__actionLink" href="/#people">People</a>
+                
+                @if (_userId is not null)
                 {
-                    <div class="bgm-viewIndicator" style="margin-left:12px;color:#a33;font-weight:700;align-self:center">Viewing as non-admin</div>
+                    <a class="bgm-header__actionLink" href="/account/email">Account</a>
+                    @if (_userIsRealAdmin)
+                    {
+                        <div class="bgm-header__toggleWrap">
+                            <label class="bgm-header__toggleLabel">
+                                <input type="checkbox" checked="@_viewAsNonAdmin" @onchange="OnViewAsNonAdminChanged" />
+                                <span>Non-admin</span>
+                            </label>
+                        </div>
+                    }
+                    @if (_userIsAdmin && !_viewAsNonAdmin)
+                    {
+                        <a class="bgm-header__actionLink bgm-header__actionLink--admin" href="/admin">Admin</a>
+                    }
+                    <form method="post" action="/account/logout" data-enhance="false" class="bgm-header__logoutForm">
+                        <button type="submit" class="bgm-header__actionLink bgm-header__actionLink--logout">Logout</button>
+                    </form>
                 }
-                @* Menu button is moved to left-side tappable square on mobile *@
+                else
+                {
+                    <a class="bgm-header__actionLink" href="/login">Login</a>
+                    <a class="bgm-header__actionLink bgm-header__actionLink--signup" href="/register">Sign up</a>
+                }
+            </div>
+
+            @if (_userIsRealAdmin && _viewAsNonAdmin)
+            {
+                <div class="bgm-viewIndicator">Viewing as non-admin</div>
+            }
         </div>
     </div>
 </header>
