@@ -59,13 +59,9 @@
                         </div>
                     </div>
 
-                    @if (!string.IsNullOrWhiteSpace(member.Summary))
+                    @if (!string.IsNullOrWhiteSpace(member.FunFact))
                     {
-                        <p class="bgm-peopleCard__summary">@member.Summary</p>
-                    }
-                    else
-                    {
-                        <p class="bgm-peopleCard__summary">Board Game Mondays member.</p>
+                        <p class="bgm-peopleCard__summary"><strong>Fun fact:</strong> @member.FunFact</p>
                     }
                 </a>
             }
@@ -93,7 +89,7 @@
             .AsNoTracking()
             .Where(m => m.IsBgmMember)
             .OrderBy(m => m.Name)
-            .Select(m => new MemberCard(m.Id, m.Name, m.ProfileTagline, m.Summary, m.AvatarUrl))
+            .Select(m => new MemberCard(m.Id, m.Name, m.ProfileTagline, m.FunFact, m.AvatarUrl))
             .ToListAsync();
     }
 
@@ -119,5 +115,5 @@
         }
     }
 
-    private sealed record MemberCard(Guid Id, string Name, string? Tagline, string? Summary, string? AvatarUrl);
+    private sealed record MemberCard(Guid Id, string Name, string? Tagline, string? FunFact, string? AvatarUrl);
 }

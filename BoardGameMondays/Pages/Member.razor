@@ -316,12 +316,11 @@ else
         var user = auth.User;
 
         var currentMemberId = user.FindFirst("bgm:memberId")?.Value;
-        var isAdmin = user.IsInRole("Admin");
         var isOwner = !string.IsNullOrWhiteSpace(currentMemberId) && 
                       Guid.TryParse(currentMemberId, out var me) && 
                       me == MemberId;
         
-        _canEdit = isAdmin || isOwner;
+        _canEdit = isOwner;
 
         await using var db = await DbFactory.CreateDbContextAsync();
 
@@ -430,12 +429,11 @@ else
         var auth = await AuthStateProvider.GetAuthenticationStateAsync();
         var user = auth.User;
         var currentMemberId = user.FindFirst("bgm:memberId")?.Value;
-        var isAdmin = user.IsInRole("Admin");
         var isOwner = !string.IsNullOrWhiteSpace(currentMemberId) && 
                       Guid.TryParse(currentMemberId, out var me) && 
                       me == MemberId;
         
-        if (!isAdmin && !isOwner)
+        if (!isOwner)
         {
             _saveMessage = "You don't have permission to edit this profile.";
             _saveMessageCss = "alert-danger";
