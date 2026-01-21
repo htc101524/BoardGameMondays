@@ -1591,7 +1591,7 @@ app.MapPost("/account/logout", async (SignInManager<ApplicationUser> signInManag
 {
     await signInManager.SignOutAsync();
     http.Response.Redirect("/");
-}).RequireRateLimiting("account");
+}).DisableAntiforgery().RequireRateLimiting("account");
 
 app.MapPost("/account/register", async (
     [FromForm] RegisterRequest request,
@@ -1692,7 +1692,7 @@ app.MapPost("/account/register", async (
     await signInManager.SignInAsync(user, isPersistent: true);
     members.GetOrCreate(displayName);
     return Results.Redirect(safeReturnUrl ?? "/");
-}).RequireRateLimiting("account");
+}).DisableAntiforgery().RequireRateLimiting("account");
 
 app.MapPost("/account/login", async (
     [FromForm] LoginRequest request,
@@ -1751,7 +1751,7 @@ app.MapPost("/account/login", async (
 
     members.GetOrCreate(displayName);
     return Results.Redirect(safeReturnUrl ?? "/");
-}).RequireRateLimiting("account");
+}).DisableAntiforgery().RequireRateLimiting("account");
 
 app.MapPost("/account/forgot", async (
     [FromForm] ForgotPasswordRequest request,
@@ -1786,7 +1786,7 @@ app.MapPost("/account/forgot", async (
     }
 
     return Results.Redirect("/forgot-password?sent=1");
-}).RequireRateLimiting("account");
+}).DisableAntiforgery().RequireRateLimiting("account");
 
 app.MapPost("/account/reset", async (
     [FromForm] ResetPasswordRequest request,
@@ -1834,7 +1834,7 @@ app.MapPost("/account/reset", async (
     }
 
     return Results.Redirect("/login?reset=1");
-}).RequireRateLimiting("account");
+}).DisableAntiforgery().RequireRateLimiting("account");
 
 app.MapGet("/account/confirm-email", async (
     string userId,
