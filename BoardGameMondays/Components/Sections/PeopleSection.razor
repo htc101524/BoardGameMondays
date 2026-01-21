@@ -9,6 +9,7 @@
 @inject IDbContextFactory<ApplicationDbContext> DbFactory
 @inject AuthenticationStateProvider AuthStateProvider
 @inject IHttpContextAccessor HttpContextAccessor
+@inject IConfiguration Configuration
 
 <section id="people" class="home-section" aria-label="People">
     @* PageTitle is normally provided by the hosting shell; omit here to avoid component resolution issues. *@
@@ -85,12 +86,78 @@
         _isAdmin = auth.User.Identity?.IsAuthenticated == true && auth.User.IsInRole("Admin") && !viewAsNonAdmin;
 
         await using var db = await DbFactory.CreateDbContextAsync();
+        
+        // Get admin user IDs to ensure only actual admins show up in People
+        var adminUserIds = await GetAdminUserIdsAsync(db);
+        
+        // Get admin member IDs from user claims
+        var adminMemberIdClaims = await db.UserClaims
+            .AsNoTracking()
+            .Where(c => adminUserIds.Contains(c.UserId) && c.ClaimType == "bgm:memberId")
+            .Select(c => c.ClaimValue)
+            .Where(v => !string.IsNullOrWhiteSpace(v))
+            .ToListAsync();
+        
+        var adminMemberIds = adminMemberIdClaims
+            .Select(v => Guid.TryParse(v, out var id) ? id : (Guid?)null)
+            .Where(id => id.HasValue)
+            .Select(id => id!.Value)
+            .ToHashSet();
+        
         _members = await db.Members
             .AsNoTracking()
-            .Where(m => m.IsBgmMember)
+            .Where(m => m.IsBgmMember && adminMemberIds.Contains(m.Id))
             .OrderBy(m => m.Name)
             .Select(m => new MemberCard(m.Id, m.Name, m.ProfileTagline, m.FunFact, m.AvatarUrl))
             .ToListAsync();
+    }
+    
+    private async Task<HashSet<string>> GetAdminUserIdsAsync(ApplicationDbContext db)
+    {
+        // Admins are defined via configuration (see AdminRoleClaimsTransformation)
+        var configuredUserNames = Configuration.GetSection("Security:Admins:UserNames").Get<string[]>() ?? [];
+        var normalizedConfigured = configuredUserNames
+            .Select(x => x?.Trim())
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Select(x => x!.ToUpperInvariant())
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+
+        HashSet<string> adminUserIds;
+        if (normalizedConfigured.Count > 0)
+        {
+            var ids = await db.Users
+                .AsNoTracking()
+                .Where(u => u.NormalizedUserName != null && normalizedConfigured.Contains(u.NormalizedUserName))
+                .Select(u => u.Id)
+                .ToListAsync();
+            adminUserIds = ids.ToHashSet(StringComparer.Ordinal);
+        }
+        else
+        {
+            var adminRoleId = await db.Roles
+                .AsNoTracking()
+                .Where(r => r.Name == "Admin")
+                .Select(r => r.Id)
+                .FirstOrDefaultAsync();
+
+            if (string.IsNullOrWhiteSpace(adminRoleId))
+            {
+                adminUserIds = new HashSet<string>(StringComparer.Ordinal);
+            }
+            else
+            {
+                var ids = await db.UserRoles
+                    .AsNoTracking()
+                    .Where(ur => ur.RoleId == adminRoleId)
+                    .Select(ur => ur.UserId)
+                    .Distinct()
+                    .ToListAsync();
+                adminUserIds = ids.ToHashSet(StringComparer.Ordinal);
+            }
+        }
+
+        return adminUserIds;
     }
 
     protected override void OnParametersSet()

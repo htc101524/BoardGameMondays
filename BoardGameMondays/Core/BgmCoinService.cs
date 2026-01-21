@@ -1,15 +1,18 @@
 using BoardGameMondays.Data;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 
 namespace BoardGameMondays.Core;
 
 public sealed class BgmCoinService
 {
     private readonly IDbContextFactory<ApplicationDbContext> _dbFactory;
+    private readonly IConfiguration _configuration;
 
-    public BgmCoinService(IDbContextFactory<ApplicationDbContext> dbFactory)
+    public BgmCoinService(IDbContextFactory<ApplicationDbContext> dbFactory, IConfiguration configuration)
     {
         _dbFactory = dbFactory;
+        _configuration = configuration;
     }
 
     public event Action? Changed;
@@ -159,25 +162,65 @@ public sealed class BgmCoinService
             .GroupBy(c => c.UserId)
             .ToDictionary(g => g.Key, g => g.First().ClaimValue!.Trim(), StringComparer.Ordinal);
 
-        // Get memberId claims to determine if user is a BGM member
-        var memberIdClaims = await db.UserClaims
-            .AsNoTracking()
-            .Where(c => userIds.Contains(c.UserId) && c.ClaimType == BgmClaimTypes.MemberId)
-            .Select(c => new { c.UserId, c.ClaimValue })
-            .ToListAsync(ct);
-
-        var memberIdByUserId = memberIdClaims
-            .Where(c => !string.IsNullOrWhiteSpace(c.ClaimValue))
-            .GroupBy(c => c.UserId)
-            .ToDictionary(g => g.Key, g => g.First().ClaimValue!, StringComparer.Ordinal);
+        // Determine which users are BGM members (admins)
+        var adminUserIds = await GetAdminUserIdsAsync(db, ct);
 
         return users
             .Select(u => new FullLeaderboardItem(
                 u.Id,
                 displayNameByUserId.TryGetValue(u.Id, out var dn) ? dn : (u.UserName ?? u.Id),
                 u.BgmCoins,
-                memberIdByUserId.ContainsKey(u.Id)))
+                adminUserIds.Contains(u.Id)))
             .ToArray();
+    }
+
+    private async Task<HashSet<string>> GetAdminUserIdsAsync(ApplicationDbContext db, CancellationToken ct)
+    {
+        // Admins are defined via configuration (see AdminRoleClaimsTransformation). In development,
+        // the role may also be persisted via Identity; we fall back to DB roles if no config is set.
+        var configuredUserNames = _configuration.GetSection("Security:Admins:UserNames").Get<string[]>() ?? [];
+        var normalizedConfigured = configuredUserNames
+            .Select(x => x?.Trim())
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Select(x => x!.ToUpperInvariant())
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+
+        HashSet<string> adminUserIds;
+        if (normalizedConfigured.Count > 0)
+        {
+            var ids = await db.Users
+                .AsNoTracking()
+                .Where(u => u.NormalizedUserName != null && normalizedConfigured.Contains(u.NormalizedUserName))
+                .Select(u => u.Id)
+                .ToListAsync(ct);
+            adminUserIds = ids.ToHashSet(StringComparer.Ordinal);
+        }
+        else
+        {
+            var adminRoleId = await db.Roles
+                .AsNoTracking()
+                .Where(r => r.Name == "Admin")
+                .Select(r => r.Id)
+                .FirstOrDefaultAsync(ct);
+
+            if (string.IsNullOrWhiteSpace(adminRoleId))
+            {
+                adminUserIds = new HashSet<string>(StringComparer.Ordinal);
+            }
+            else
+            {
+                var ids = await db.UserRoles
+                    .AsNoTracking()
+                    .Where(ur => ur.RoleId == adminRoleId)
+                    .Select(ur => ur.UserId)
+                    .Distinct()
+                    .ToListAsync(ct);
+                adminUserIds = ids.ToHashSet(StringComparer.Ordinal);
+            }
+        }
+
+        return adminUserIds;
     }
 
     public async Task<IReadOnlyDictionary<string, int>> GetCoinsGainedSinceAsync(DateTimeOffset since, CancellationToken ct = default)

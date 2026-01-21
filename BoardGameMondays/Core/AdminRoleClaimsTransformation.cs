@@ -59,6 +59,12 @@ namespace BoardGameMondays.Core
                 if (isAdmin || isConfiguredAdmin)
                 {
                     EnsureRealAdminClaim(principal);
+
+                    // If the user wants to view as non-admin, remove the Admin role
+                    if (ShouldViewAsNonAdmin())
+                    {
+                        RemoveAdminRoleClaims(principal);
+                    }
                 }
 
                 return Task.FromResult(principal);
@@ -77,6 +83,12 @@ namespace BoardGameMondays.Core
 
             // Tag real admins so the UI can show the toggle even when impersonating.
             EnsureRealAdminClaim(principal);
+
+            // If the user wants to view as non-admin, remove the Admin role
+            if (ShouldViewAsNonAdmin())
+            {
+                RemoveAdminRoleClaims(principal);
+            }
 
             return Task.FromResult(principal);
         }

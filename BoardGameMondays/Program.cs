@@ -2028,6 +2028,7 @@ app.MapPost("/account/avatar", async (
         member = new MemberEntity
         {
             Id = Guid.NewGuid(),
+            IsBgmMember = true, // Admins are BGM members
             Name = displayName,
             Email = string.Empty
         };
