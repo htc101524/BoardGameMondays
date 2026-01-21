@@ -9,10 +9,7 @@
 
 <form method="post" action="/account/register" data-enhance="false">
     <AntiforgeryToken />
-    @if (!string.IsNullOrWhiteSpace(_returnUrl))
-    {
-        <input type="hidden" name="ReturnUrl" value="@_returnUrl" />
-    }
+    <input type="hidden" name="ReturnUrl" value="@(_returnUrl ?? "")" />
     <div class="mb-2">
         <label class="form-label" for="register-username">Username</label>
         <input id="register-username" name="UserName" class="form-control" autocomplete="username" />
