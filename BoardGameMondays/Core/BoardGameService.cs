@@ -49,14 +49,17 @@ public sealed class BoardGameService
     {
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
 
-        var state = await db.FeaturedState.FirstOrDefaultAsync(x => x.Id == 1, ct);
+        var state = await db.FeaturedState.FirstOrDefaultAsync(ct);
         if (state is null)
         {
-            state = new FeaturedStateEntity { Id = 1 };
+            state = new FeaturedStateEntity { FeaturedGameId = gameId };
             db.FeaturedState.Add(state);
         }
+        else
+        {
+            state.FeaturedGameId = gameId;
+        }
 
-        state.FeaturedGameId = gameId;
         await db.SaveChangesAsync(ct);
         Changed?.Invoke();
     }
@@ -64,7 +67,7 @@ public sealed class BoardGameService
     public async Task<Guid?> GetFeaturedGameIdAsync(CancellationToken ct = default)
     {
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
-        return (await db.FeaturedState.AsNoTracking().FirstOrDefaultAsync(x => x.Id == 1, ct))?.FeaturedGameId;
+        return (await db.FeaturedState.AsNoTracking().FirstOrDefaultAsync(ct))?.FeaturedGameId;
     }
 
     public async Task<IReadOnlyList<BoardGame>> GetAllAsync(CancellationToken ct = default)
