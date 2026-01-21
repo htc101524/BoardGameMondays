@@ -391,32 +391,16 @@ public sealed class GameNightService
             return null;
         }
 
-        var already = await db.GameNightGames
-            .AnyAsync(g => g.GameNightId == gameNightId && g.GameId == gameId, ct);
-
-        if (!already)
+        // Allow multiple instances of the same game on the same night
+        db.GameNightGames.Add(new GameNightGameEntity
         {
-            db.GameNightGames.Add(new GameNightGameEntity
-            {
-                GameNightId = gameNightId,
-                GameId = gameId,
-                IsPlayed = isPlayed,
-                CreatedOn = DateTimeOffset.UtcNow
-            });
+            GameNightId = gameNightId,
+            GameId = gameId,
+            IsPlayed = isPlayed,
+            CreatedOn = DateTimeOffset.UtcNow
+        });
 
-            await db.SaveChangesAsync(ct);
-        }
-        else if (isPlayed)
-        {
-            var existing = await db.GameNightGames
-                .FirstOrDefaultAsync(g => g.GameNightId == gameNightId && g.GameId == gameId, ct);
-
-            if (existing is not null && !existing.IsPlayed)
-            {
-                existing.IsPlayed = true;
-                await db.SaveChangesAsync(ct);
-            }
-        }
+        await db.SaveChangesAsync(ct);
 
         return await GetByIdAsync(gameNightId, ct);
     }

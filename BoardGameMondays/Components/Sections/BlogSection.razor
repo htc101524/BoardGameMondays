@@ -5,6 +5,7 @@
 @inject BlogService BlogService
 @inject AuthenticationStateProvider AuthStateProvider
 @inject IHttpContextAccessor HttpContextAccessor
+@inject IJSRuntime JS
 
 @implements IDisposable
 
@@ -14,7 +15,7 @@
 }
 else
 {
-    <section id="blog" class="home-section" aria-label="Blog">
+    <section @ref="_blogSectionRef" id="blog" class="home-section" aria-label="Blog">
         <div class="home-section__inner">
             <div class="d-flex justify-content-between align-items-end flex-wrap gap-2">
                 <div>
@@ -128,6 +129,7 @@ else
 
     private string _newTitle = string.Empty;
     private string _newBody = string.Empty;
+    private ElementReference _blogSectionRef;
 
     protected override async Task OnInitializedAsync()
     {
@@ -162,19 +164,33 @@ else
         }
     }
 
-    private void Next()
+    private async Task Next()
     {
         if (_pageIndex < _posts.Count - 1)
         {
             _pageIndex++;
+            await ScrollToTopAsync();
         }
     }
 
-    private void Prev()
+    private async Task Prev()
     {
         if (_pageIndex > 0)
         {
             _pageIndex--;
+            await ScrollToTopAsync();
+        }
+    }
+
+    private async Task ScrollToTopAsync()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("eval", "arguments[0].scrollIntoView({ behavior: 'smooth', block: 'start' })", _blogSectionRef);
+        }
+        catch
+        {
+            // Ignore JS interop errors (e.g., during prerendering)
         }
     }
 
