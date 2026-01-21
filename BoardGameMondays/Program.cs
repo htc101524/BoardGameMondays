@@ -35,10 +35,38 @@ if (!string.IsNullOrWhiteSpace(keyVaultUrl))
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
-if (builder.Environment.IsDevelopment())
+// Configure Blazor circuit options to handle users leaving the browser tab.
+// This prevents the "unresponsive page" issue when users return after inactivity.
+builder.Services.Configure<CircuitOptions>(options =>
 {
-    builder.Services.Configure<CircuitOptions>(options => options.DetailedErrors = true);
-}
+    if (builder.Environment.IsDevelopment())
+    {
+        options.DetailedErrors = true;
+    }
+
+    // Allow disconnected circuits to stay alive longer (default is 3 minutes).
+    // This gives users more time to return before losing their session.
+    options.DisconnectedCircuitRetentionPeriod = TimeSpan.FromMinutes(10);
+
+    // Maximum circuits to retain per user (helps with server memory management).
+    options.DisconnectedCircuitMaxRetained = 100;
+
+    // JSInterop call timeout - increase to prevent timeouts on slow connections.
+    options.JSInteropDefaultCallTimeout = TimeSpan.FromMinutes(1);
+});
+
+// Configure SignalR hub options for better reconnection handling.
+builder.Services.AddSignalR(hubOptions =>
+{
+    // Allow longer keep-alive interval so connections survive brief network blips.
+    hubOptions.KeepAliveInterval = TimeSpan.FromSeconds(15);
+
+    // Client timeout - how long the server waits without hearing from client.
+    hubOptions.ClientTimeoutInterval = TimeSpan.FromSeconds(60);
+
+    // Enable detailed errors in development for easier debugging.
+    hubOptions.EnableDetailedErrors = builder.Environment.IsDevelopment();
+});
 
 // Database + Identity.
 // Dev default is SQLite; production should use Azure SQL (SQL Server provider).
