@@ -257,12 +257,6 @@ public sealed class BettingService
         string? winnerTeamName,
         CancellationToken ct)
     {
-        // If there's no winner, no ranking changes
-        if (winnerMemberId is null && string.IsNullOrWhiteSpace(winnerTeamName))
-        {
-            return;
-        }
-
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
 
         var players = await db.GameNightGamePlayers
@@ -274,6 +268,14 @@ public sealed class BettingService
         if (players.Count < 2)
         {
             return; // Need at least 2 players for rankings
+        }
+
+        // If there's no winner (co-op game lost), all players lose a bit of ELO (for fun)
+        if (winnerMemberId is null && string.IsNullOrWhiteSpace(winnerTeamName))
+        {
+            var allPlayerIds = players.Select(p => p.MemberId).ToList();
+            await _ranking.UpdateRatingsForNoWinnerGameAsync(allPlayerIds, ct);
+            return;
         }
 
         var isTeamGame = !string.IsNullOrWhiteSpace(winnerTeamName);

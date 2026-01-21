@@ -525,6 +525,7 @@ public sealed class GameNightService
         {
             game.WinnerMemberId = null;
             game.WinnerTeamName = null;
+            game.IsPlayed = true; // Mark as played even with no winner (e.g., co-op games)
             await db.SaveChangesAsync(ct);
             return await GetByIdAsync(gameNightId, ct);
         }
@@ -540,6 +541,7 @@ public sealed class GameNightService
 
         game.WinnerMemberId = winnerMemberId;
         game.WinnerTeamName = null;
+        game.IsPlayed = true; // Mark game as played when winner is set
         await db.SaveChangesAsync(ct);
         return await GetByIdAsync(gameNightId, ct);
     }
@@ -599,6 +601,7 @@ public sealed class GameNightService
         {
             game.WinnerTeamName = null;
             game.WinnerMemberId = null;
+            game.IsPlayed = true; // Mark as played even with no winner (e.g., co-op games)
             await db.SaveChangesAsync(ct);
             return await GetByIdAsync(gameNightId, ct);
         }
@@ -614,6 +617,7 @@ public sealed class GameNightService
 
         game.WinnerTeamName = teamName;
         game.WinnerMemberId = null;
+        game.IsPlayed = true; // Mark game as played when team winner is set
 
         await db.SaveChangesAsync(ct);
         return await GetByIdAsync(gameNightId, ct);

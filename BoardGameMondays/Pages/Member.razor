@@ -316,7 +316,12 @@ else
         var user = auth.User;
 
         var currentMemberId = user.FindFirst("bgm:memberId")?.Value;
-        _canEdit = user.IsInRole("Admin") || (Guid.TryParse(currentMemberId, out var me) && me == MemberId);
+        var isAdmin = user.IsInRole("Admin");
+        var isOwner = !string.IsNullOrWhiteSpace(currentMemberId) && 
+                      Guid.TryParse(currentMemberId, out var me) && 
+                      me == MemberId;
+        
+        _canEdit = isAdmin || isOwner;
 
         await using var db = await DbFactory.CreateDbContextAsync();
 
@@ -334,25 +339,37 @@ else
         }
 
         // Stats
-        var attendances = await db.GameNightAttendees.CountAsync(a => a.MemberId == MemberId);
-        var snacksBrought = await db.GameNightAttendees.CountAsync(a => a.MemberId == MemberId && a.SnackBrought != null && a.SnackBrought != "");
+        var attendances = await db.GameNightAttendees
+            .AsNoTracking()
+            .CountAsync(a => a.MemberId == MemberId);
+            
+        var snacksBrought = await db.GameNightAttendees
+            .AsNoTracking()
+            .CountAsync(a => a.MemberId == MemberId && a.SnackBrought != null && a.SnackBrought != "");
 
         var gamesPlayed = await db.GameNightGamePlayers
+            .AsNoTracking()
             .Where(p => p.MemberId == MemberId)
-            .Join(db.GameNightGames.Where(g => g.IsPlayed), p => p.GameNightGameId, g => g.Id, (p, g) => g.Id)
+            .Select(p => p.GameNightGameId)
             .Distinct()
+            .Join(db.GameNightGames.AsNoTracking().Where(g => g.IsPlayed), 
+                  playerId => playerId, 
+                  g => g.Id, 
+                  (playerId, g) => g.Id)
             .CountAsync();
 
-        var soloWinIds = await db.GameNightGames
+        var soloWins = await db.GameNightGames
+            .AsNoTracking()
             .Where(g => g.IsPlayed && g.WinnerMemberId == MemberId)
-            .Select(g => g.Id)
-            .ToListAsync();
-
-        var soloWins = soloWinIds.Count;
+            .CountAsync();
 
         var teamWinIds = await db.GameNightGames
+            .AsNoTracking()
             .Where(g => g.IsPlayed && g.WinnerTeamName != null)
-            .Join(db.GameNightGamePlayers.Where(p => p.MemberId == MemberId), g => g.Id, p => p.GameNightGameId, (g, p) => new { g.Id, g.WinnerTeamName, p.TeamName })
+            .Join(db.GameNightGamePlayers.AsNoTracking().Where(p => p.MemberId == MemberId), 
+                  g => g.Id, 
+                  p => p.GameNightGameId, 
+                  (g, p) => new { g.Id, g.WinnerTeamName, p.TeamName })
             .Where(x => x.TeamName != null && x.TeamName == x.WinnerTeamName)
             .Select(x => x.Id)
             .Distinct()
@@ -369,15 +386,16 @@ else
 
         // Top games (query shape kept EF-translatable: group by scalar key, then join)
         var topGamesRaw = await db.GameNightGamePlayers
+            .AsNoTracking()
             .Where(p => p.MemberId == MemberId)
             .Join(
-                db.GameNightGames.Where(g => g.IsPlayed),
+                db.GameNightGames.AsNoTracking().Where(g => g.IsPlayed),
                 p => p.GameNightGameId,
                 g => g.Id,
                 (p, g) => g.GameId)
             .GroupBy(gameId => gameId)
             .Select(g => new { GameId = g.Key, Plays = g.Count() })
-            .Join(db.Games, x => x.GameId, game => game.Id, (x, game) => new { x.GameId, GameName = game.Name, x.Plays })
+            .Join(db.Games.AsNoTracking(), x => x.GameId, game => game.Id, (x, game) => new { x.GameId, GameName = game.Name, x.Plays })
             .OrderByDescending(x => x.Plays)
             .ThenBy(x => x.GameName)
             .Take(5)
@@ -408,7 +426,23 @@ else
 
     private async Task SaveProfileAsync()
     {
-        if (!_canEdit || _member is null)
+        // Double-check permission before saving
+        var auth = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = auth.User;
+        var currentMemberId = user.FindFirst("bgm:memberId")?.Value;
+        var isAdmin = user.IsInRole("Admin");
+        var isOwner = !string.IsNullOrWhiteSpace(currentMemberId) && 
+                      Guid.TryParse(currentMemberId, out var me) && 
+                      me == MemberId;
+        
+        if (!isAdmin && !isOwner)
+        {
+            _saveMessage = "You don't have permission to edit this profile.";
+            _saveMessageCss = "alert-danger";
+            return;
+        }
+
+        if (_member is null)
         {
             return;
         }

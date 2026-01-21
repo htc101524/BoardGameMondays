@@ -212,6 +212,40 @@ public sealed class RankingService
     }
 
     /// <summary>
+    /// Updates ratings after a game with no winner (e.g., co-op game where everyone lost).
+    /// All players lose a small amount of ELO as a humorous penalty.
+    /// </summary>
+    public async Task UpdateRatingsForNoWinnerGameAsync(IReadOnlyList<Guid> playerIds, CancellationToken ct = default)
+    {
+        if (playerIds.Count == 0)
+        {
+            return;
+        }
+
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        
+        var members = await db.Members
+            .Where(m => playerIds.Contains(m.Id))
+            .ToListAsync(ct);
+
+        if (members.Count == 0)
+        {
+            return;
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        const int penaltyPerPlayer = 10; // Fixed small penalty for everyone
+
+        foreach (var member in members)
+        {
+            member.EloRating = Math.Max(MinRating, member.EloRating - penaltyPerPlayer);
+            member.EloRatingUpdatedOn = now;
+        }
+
+        await db.SaveChangesAsync(ct);
+    }
+
+    /// <summary>
     /// Calculates the rating change for a winner/loser pair using the ELO formula.
     /// </summary>
     /// <param name="winnerRating">Current rating of the winner.</param>
