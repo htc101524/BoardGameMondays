@@ -45,7 +45,10 @@
 
     @if (_confirmSent)
     {
-        <div class="text-success mt-3">Check your email for a confirmation link.</div>
+        <div class="text-success mt-3">
+            Check your email for a confirmation link.
+            <a href="/resend-confirmation">Didn't receive it? Resend</a>
+        </div>
     }
 
     @if (_resetSuccess)

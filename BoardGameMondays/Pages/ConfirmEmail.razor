@@ -13,6 +13,9 @@
 else if (!string.IsNullOrWhiteSpace(_error))
 {
     <div class="alert alert-danger" role="alert">@_error</div>
+    <p>
+        <a href="/resend-confirmation">Request a new confirmation link</a>
+    </p>
     <a class="btn btn-link" href="/login">Back to login</a>
 }
 else

@@ -1833,6 +1833,13 @@ app.MapPost("/account/reset", async (
         return Results.Redirect($"/reset-password?error={Uri.EscapeDataString(message)}&email={Uri.EscapeDataString(email)}&token={Uri.EscapeDataString(token)}");
     }
 
+    // Auto-confirm email when user resets password - clicking the reset link proves they own the email.
+    if (!await userManager.IsEmailConfirmedAsync(user))
+    {
+        var confirmToken = await userManager.GenerateEmailConfirmationTokenAsync(user);
+        await userManager.ConfirmEmailAsync(user, confirmToken);
+    }
+
     return Results.Redirect("/login?reset=1");
 }).DisableAntiforgery().RequireRateLimiting("account");
 
@@ -1871,6 +1878,34 @@ app.MapGet("/account/confirm-email", async (
 
     return Results.Redirect("/confirm-email?success=1");
 });
+
+app.MapPost("/account/resend-confirmation", async (
+    [FromForm] ResendConfirmationRequest request,
+    UserManager<ApplicationUser> userManager,
+    IEmailSender emailSender,
+    HttpContext http) =>
+{
+    var email = request.Email?.Trim();
+    if (string.IsNullOrWhiteSpace(email))
+    {
+        return Results.Redirect($"/resend-confirmation?error={Uri.EscapeDataString("Email is required.")}");
+    }
+
+    var emailValidator = new EmailAddressAttribute();
+    if (!emailValidator.IsValid(email))
+    {
+        return Results.Redirect($"/resend-confirmation?error={Uri.EscapeDataString("Please enter a valid email address.")}");
+    }
+
+    var user = await userManager.FindByEmailAsync(email);
+    if (user is not null && !await userManager.IsEmailConfirmedAsync(user))
+    {
+        await SendEmailConfirmationAsync(userManager, emailSender, user, http);
+    }
+
+    // Always show success to prevent email enumeration.
+    return Results.Redirect("/resend-confirmation?sent=1");
+}).DisableAntiforgery().RequireRateLimiting("account");
 
 app.MapPost("/account/email", async (
     [FromForm] UpdateEmailRequest request,
@@ -2170,6 +2205,7 @@ internal sealed class LoginRequest
 }
 
 internal sealed record ForgotPasswordRequest(string Email);
+internal sealed record ResendConfirmationRequest(string Email);
 internal sealed record ResetPasswordRequest(string Email, string Token, string Password, string ConfirmPassword);
 internal sealed record UpdateEmailRequest(string Email);
 
