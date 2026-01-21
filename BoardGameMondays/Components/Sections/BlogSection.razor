@@ -186,7 +186,7 @@ else
     {
         try
         {
-            await JS.InvokeVoidAsync("eval", "arguments[0].scrollIntoView({ behavior: 'smooth', block: 'start' })", _blogSectionRef);
+            await JS.InvokeVoidAsync("eval", $"document.getElementById('blog').scrollIntoView({{ behavior: 'smooth', block: 'start' }})");
         }
         catch
         {
