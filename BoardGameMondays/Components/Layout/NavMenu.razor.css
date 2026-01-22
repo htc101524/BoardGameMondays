@@ -560,6 +560,7 @@
     .bgm-menuArea { display: none; }
     .bgm-menuButton { display: none; }
     .bgm-popup { display: none; }
+    .bgm-backdrop { display: none; }
     .bgm-header__brand { display: flex; }
     .bgm-header__desktopActions { display: flex; align-items: stretch; }
     .bgm-header__right { align-items: stretch; }
