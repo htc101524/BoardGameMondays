@@ -86,6 +86,13 @@
     animation: fadeUp 0.6s ease-out backwards;
 }
 
+@media (max-width: 767px) {
+    .home-hero__card--recap.home-hero__card--large {
+        max-height: none;
+        height: auto;
+    }
+}
+
 .home-hero__card:nth-child(1) {
     animation-delay: 0.1s;
 }
@@ -351,6 +358,8 @@
 
     .home-hero__card--large {
         min-height: 350px;
+        max-height: none;
+        height: auto;
     }
 
     .home-hero__card {
@@ -423,6 +432,8 @@
 
     .home-hero__card--large {
         min-height: 300px;
+        max-height: none;
+        height: auto;
     }
 
     .home-hero__card {

@@ -257,6 +257,7 @@ builder.Services.AddScoped<BoardGameMondays.Core.WantToPlayService>();
 builder.Services.AddScoped<BoardGameMondays.Core.RankingService>();
 builder.Services.AddScoped<BoardGameMondays.Core.OddsService>();
 builder.Services.AddScoped<BoardGameMondays.Core.UserPreferencesService>();
+builder.Services.AddScoped<BoardGameMondays.Core.RecapStatsService>();
 
 // Persist Data Protection keys so auth cookies remain valid across instances/restarts on Azure App Service.
 // Preferred path resolution order:

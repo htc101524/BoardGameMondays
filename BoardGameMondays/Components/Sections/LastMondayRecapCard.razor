@@ -1,7 +1,7 @@
 @using BoardGameMondays.Core
 @inject GameNightService GameNightService
 @inject BettingService BettingService
-@inject BgmCoinService CoinService
+@inject RecapStatsService StatsService
 
 @if (_night is null)
 {
@@ -18,131 +18,111 @@ else
 {
     <div class="bgm-recapFrame" aria-label="Last Monday recap">
         <div class="card bgm-recapCard">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
-                    <div>
-                        <div class="bgm-mondayRecapTitle">LAST MONDAY RECAP</div>
-                        <div class="text-muted small">@FormatLongDate(_night.Date)</div>
-                    </div>
-                </div>
-
-            @{
-                var playedGames = _night.Games
-                    .Where(g => g.IsPlayed)
-                    .ToArray();
-                var gamesToShow = playedGames.Length > 0 ? playedGames : _night.Games.ToArray();
-
-                var winners = _net
-                    .Where(x => x.Net > 0)
-                    .OrderByDescending(x => x.Net)
-                    .Take(3)
-                    .ToArray();
-
-                var losers = _net
-                    .Where(x => x.Net < 0)
-                    .OrderBy(x => x.Net)
-                    .Take(3)
-                    .ToArray();
-            }
-
-            @if (gamesToShow.Length > 0)
-            {
-                <div class="mt-2">
-                    <div class="text-muted small">Played</div>
-                    <div class="fw-semibold">
-                        <ul class="mb-0">
-                        @foreach (var g in gamesToShow)
-                        {
-                            <li>@g.GameName</li>
-                        }
-                        </ul>
-                    </div>
-                </div>
-            }
-
-            @if (!string.IsNullOrWhiteSpace(_night.Recap))
-            {
-                <div class="mt-2 bgm-recapSummary">@_night.Recap</div>
-            }
-            else
-            {
-                <div class="text-muted mt-2 bgm-recapSummary">No recap yet.</div>
-            }
-
-                <div class="row g-3 mt-1 bgm-recapDetails">
-                <div class="col-12 col-md-6">
-                    <div class="fw-semibold mb-1">🏆 Biggest winners</div>
-                    @if (winners.Length == 0)
+            <div class="card-body bgm-recapGrid">
+                <div class="bgm-recapMainText">
+                    <div class="bgm-mondayRecapTitle">LAST MONDAY RECAP</div>
+                    <div class="text-muted small">@FormatLongDate(_night.Date)</div>
+                    @if (!string.IsNullOrWhiteSpace(_night.Recap))
                     {
-                        <div class="text-muted">No winning bets.</div>
+                        <div class="bgm-recapSummary">@_night.Recap</div>
                     }
-                    else
+                    @if (_interestingStat is not null)
                     {
-                        <div class="list-group list-group-flush">
-                            @foreach (var item in winners)
-                            {
-                                <div class="list-group-item d-flex justify-content-between align-items-center px-0">
-                                    <div class="text-truncate">@item.DisplayName</div>
-                                    <div class="text-success text-nowrap">+@item.Net</div>
-                                </div>
-                            }
-                        </div>
+                        <div class="bgm-interestingStat">@_interestingStat.Message</div>
                     }
                 </div>
-
-                <div class="col-12 col-md-6">
-                    <div class="fw-semibold mb-1">😢 Biggest losers</div>
-                    @if (losers.Length == 0)
+                <div class="bgm-recapSidebar">
+                    @* Attendees avatars *@
+                    @if (_night.Attendees.Count > 0)
                     {
-                        <div class="text-muted">No losing bets.</div>
-                    }
-                    else
-                    {
-                        <div class="list-group list-group-flush">
-                            @foreach (var item in losers)
-                            {
-                                <div class="list-group-item d-flex justify-content-between align-items-center px-0">
-                                    <div class="text-truncate">@item.DisplayName</div>
-                                    <div class="text-danger text-nowrap">@item.Net</div>
-                                </div>
-                            }
-                        </div>
-                    }
-                </div>
-
-                <div class="col-12">
-                    <div class="fw-semibold mb-1">BGM coin leaderboard</div>
-                    @if (_leaders.Count == 0)
-                    {
-                        <div class="text-muted">No coin data yet.</div>
-                    }
-                    else
-                    {
-                        <div class="bgm-coinLeaderboard">
-                            <div class="list-group list-group-flush">
-                            @for (var i = 0; i < _leaders.Count; i++)
-                            {
-                                var item = _leaders[i];
-                                var rankClass = (i + 1) switch
+                        <div class="bgm-attendeeSection">
+                            <div class="text-muted small mb-1">Who was there</div>
+                            <div class="bgm-attendeeAvatars">
+                                @foreach (var attendee in _night.Attendees.Take(8))
                                 {
-                                    1 => "bgm-rankPill bgm-rankPill--1st",
-                                    2 => "bgm-rankPill bgm-rankPill--2nd",
-                                    3 => "bgm-rankPill bgm-rankPill--3rd",
-                                    _ => "bgm-rankPill"
-                                };
-                                <div class="list-group-item d-flex justify-content-between align-items-center">
-                                    <div class="d-flex align-items-center gap-2 text-truncate">
-                                        <span class="@rankClass" aria-hidden="true">@ToOrdinal(i + 1)</span>
-                                        <span class="text-truncate">@item.DisplayName</span>
+                                    <div class="bgm-attendeeAvatar" title="@attendee.MemberName">
+                                        @GetInitials(attendee.MemberName)
                                     </div>
-                                    <div class="text-muted text-nowrap">@item.Coins</div>
-                                </div>
-                            }
+                                }
+                                @if (_night.Attendees.Count > 8)
+                                {
+                                    <div class="bgm-attendeeAvatar bgm-attendeeAvatar--more" title="@(_night.Attendees.Count - 8) more">
+                                        +@(_night.Attendees.Count - 8)
+                                    </div>
+                                }
                             </div>
                         </div>
                     }
+                    @* Games played with winners *@
+                    @{
+                        var playedGames = _night.Games.Where(g => g.IsPlayed).ToArray();
+                        var gamesToShow = playedGames.Length > 0 ? playedGames : _night.Games.ToArray();
+                    }
+                    @if (gamesToShow.Length > 0)
+                    {
+                        <div class="bgm-gameWinnersList">
+                            <div class="text-muted small">Games & Winners</div>
+                            @foreach (var g in gamesToShow)
+                            {
+                                <div class="bgm-gameWinnerItem">
+                                    <span class="fw-semibold">@g.GameName</span>
+                                    @if (g.Winner is not null)
+                                    {
+                                        <span class="bgm-winnerBadge">🏆 @g.Winner.Name</span>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    }
                 </div>
-                </div>
+                @* Betting winners/losers - only show if there were bets *@
+                @{
+                    var winners = _net.Where(x => x.Net > 0).OrderByDescending(x => x.Net).Take(3).ToArray();
+                    var losers = _net.Where(x => x.Net < 0).OrderBy(x => x.Net).Take(3).ToArray();
+                }
+                @if (winners.Length > 0 || losers.Length > 0)
+                {
+                    <div class="bgm-recapDetails">
+                        <div class="col-12 col-md-6">
+                            <div class="fw-semibold mb-1">🏆 Biggest winners</div>
+                            @if (winners.Length == 0)
+                            {
+                                <div class="text-muted">No winning bets.</div>
+                            }
+                            else
+                            {
+                                <div class="list-group list-group-flush">
+                                    @foreach (var item in winners)
+                                    {
+                                        <div class="list-group-item d-flex justify-content-between align-items-center px-0">
+                                            <div class="text-truncate">@item.DisplayName</div>
+                                            <div class="text-success text-nowrap">+@item.Net</div>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                        <div class="col-12 col-md-6">
+                            <div class="fw-semibold mb-1">😢 Biggest losers</div>
+                            @if (losers.Length == 0)
+                            {
+                                <div class="text-muted">No losing bets.</div>
+                            }
+                            else
+                            {
+                                <div class="list-group list-group-flush">
+                                    @foreach (var item in losers)
+                                    {
+                                        <div class="list-group-item d-flex justify-content-between align-items-center px-0">
+                                            <div class="text-truncate">@item.DisplayName</div>
+                                            <div class="text-danger text-nowrap">@item.Net</div>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
             </div>
         </div>
     </div>
@@ -151,7 +131,7 @@ else
 @code {
     private GameNightService.GameNight? _night;
     private IReadOnlyList<BettingService.NightNetResult> _net = Array.Empty<BettingService.NightNetResult>();
-    private IReadOnlyList<BgmCoinService.CoinLeaderboardItem> _leaders = Array.Empty<BgmCoinService.CoinLeaderboardItem>();
+    private RecapStatsService.InterestingStat? _interestingStat;
 
     protected override async Task OnInitializedAsync()
     {
@@ -168,10 +148,9 @@ else
             if (_night is not null)
             {
                 _net = await BettingService.GetNightNetResultsAsync(_night.Id);
+                _interestingStat = await StatsService.GetInterestingStatAsync(_night.Date);
             }
         }
-
-        _leaders = await CoinService.GetLeaderboardAsync(take: 3);
     }
 
     private static DateOnly GetMondayOnOrBefore(DateOnly date)
@@ -183,19 +162,19 @@ else
     private static string FormatLongDate(DateOnly date)
         => date.ToString("dddd d MMMM yyyy");
 
-    private static string ToOrdinal(int value)
+    private static string GetInitials(string name)
     {
-        if (value % 100 is 11 or 12 or 13)
+        if (string.IsNullOrWhiteSpace(name))
         {
-            return value + "th";
+            return "?";
         }
 
-        return (value % 10) switch
+        var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length >= 2)
         {
-            1 => value + "st",
-            2 => value + "nd",
-            3 => value + "rd",
-            _ => value + "th"
-        };
+            return $"{parts[0][0]}{parts[^1][0]}".ToUpperInvariant();
+        }
+
+        return name.Length >= 2 ? name[..2].ToUpperInvariant() : name.ToUpperInvariant();
     }
 }
