@@ -5,6 +5,7 @@
 
 @using BoardGameMondays.Core
 @using BoardGameMondays.Components.Sections
+@using BoardGameMondays.Components.Sections.Highlights
 @using Microsoft.AspNetCore.Components.Authorization
 @using System.Security.Claims
 @inject BoardGameService BoardGameService
@@ -13,64 +14,33 @@
 @inject IJSRuntime JS
 @inject NavigationManager Navigation
 @inject IWebHostEnvironment Env
+@inject BgmCoinService CoinService
+@inject BlogService BlogService
 
 <PageTitle>Board Game Mondays</PageTitle>
 
 
-<section id="latest" class="home-hero" aria-label="Latest reviewed game">
-    <div class="home-hero__grid" aria-label="Highlights">
-        @if (_latestReviewed is null)
-        {
-            <div class="home-hero__card home-hero__card--review" aria-label="Latest reviewed game">
-                <div class="home-hero__cardInner">
-                    <div class="home-hero__cardHeader">
-                        <div class="home-hero__kicker">Latest review</div>
-                    </div>
-                    <div class="home-hero__cardBody">
-                        <h1 class="home-hero__title">No reviews yet</h1>
-                        <p class="home-hero__subtitle">Add your first review to feature it here.</p>
-                    </div>
-                </div>
-            </div>
-        }
-        else
-        {
+<section id="latest" class="home-hero" aria-label="Homepage highlights">
+    <div class="home-hero__grid home-hero__grid--split" aria-label="Highlights">
+        @* Left side: Large Last Monday Recap *@
+        <div class="home-hero__main">
             <button type="button"
-                    class="home-hero__card home-hero__cardButton home-hero__card--review"
-                    aria-label="Jump to what we thought about @_latestReviewed.Name"
-                    @onclick="GoToLatestThoughtsAsync">
+                    class="home-hero__card home-hero__cardButton home-hero__card--recap home-hero__card--large"
+                    aria-label="Jump to Mondays"
+                    @onclick="GoToMondaysAsync">
                 <div class="home-hero__cardInner">
-                    <div class="home-hero__cardHeader">
-                        <div class="home-hero__kicker">Latest review</div>
-                    </div>
-
-                    <div class="home-hero__cardBody">
-                        <h1 class="home-hero__title">@_latestReviewed.Name</h1>
-
-                        @if (!string.IsNullOrWhiteSpace(_latestReviewed.Tagline))
-                        {
-                            <p class="home-hero__subtitle">@_latestReviewed.Tagline</p>
-                        }
-
-                        @if (!string.IsNullOrWhiteSpace(_latestReviewed.ImageUrl))
-                        {
-                            <div class="home-hero__media">
-                                <img src="@_latestReviewed.ImageUrl" alt="@($"{_latestReviewed.Name} cover")" />
-                            </div>
-                        }
-                    </div>
+                    <LastMondayRecapCard />
                 </div>
             </button>
-        }
+        </div>
 
-        <button type="button"
-                class="home-hero__card home-hero__cardButton home-hero__card--recap"
-                aria-label="Jump to Mondays"
-                @onclick="GoToMondaysAsync">
-            <div class="home-hero__cardInner">
-                <LastMondayRecapCard />
-            </div>
-        </button>
+        @* Right side: Stacked highlight cards *@
+        <div class="home-hero__sidebar">
+            @foreach (var highlight in _highlights)
+            {
+                <HighlightCard Highlight="highlight" OnClick="HandleHighlightClickAsync" />
+            }
+        </div>
     </div>
 </section>
 
@@ -463,6 +433,9 @@
     private bool _canAgreeWithSelectedReview = true;
     private string? _userId;
 
+    // Extensible highlight system - easy to add/remove highlights
+    private List<IHomeHighlight> _highlights = new();
+
     protected override async Task OnInitializedAsync()
     {
         Navigation.LocationChanged += OnLocationChanged;
@@ -470,7 +443,65 @@
         var auth = await AuthStateProvider.GetAuthenticationStateAsync();
         _userId = auth.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
         await RefreshFeaturedAsync(resetThoughts: true);
+        await RefreshHighlightsAsync();
         await RefreshAgreementStateAsync();
+    }
+
+    /// <summary>
+    /// Refreshes all homepage highlight cards. New highlights can be added here.
+    /// </summary>
+    private async Task RefreshHighlightsAsync()
+    {
+        var highlights = new List<IHomeHighlight>();
+
+        // 1. Latest Review
+        highlights.Add(new LatestReviewHighlight(_latestReviewed));
+
+        // 2. Richest BGM Member
+        var leaders = await CoinService.GetLeaderboardAsync(take: 1);
+        var richest = leaders.FirstOrDefault();
+        highlights.Add(new RichestMemberHighlight(
+            richest?.DisplayName,
+            richest?.Coins ?? 0,
+            richest?.UserId));
+
+        // 3. Latest Blog Post
+        var posts = await BlogService.GetLatestAsync(take: 1);
+        highlights.Add(new LatestBlogPostHighlight(posts.FirstOrDefault()));
+
+        _highlights = highlights;
+    }
+
+    private async Task HandleHighlightClickAsync(IHomeHighlight highlight)
+    {
+        switch (highlight)
+        {
+            case LatestReviewHighlight reviewHighlight when reviewHighlight.Game is not null:
+                await GoToLatestThoughtsAsync();
+                break;
+
+            case RichestMemberHighlight:
+                Navigation.NavigateTo("/leaderboard");
+                break;
+
+            case LatestBlogPostHighlight:
+                await JS.InvokeVoidAsync("bgm.scrollToIdNextFrame", "blog", "smooth");
+                break;
+
+            default:
+                if (!string.IsNullOrEmpty(highlight.NavigationUrl))
+                {
+                    if (highlight.NavigationUrl.StartsWith("#"))
+                    {
+                        await JS.InvokeVoidAsync("bgm.scrollToIdNextFrame", highlight.NavigationUrl.TrimStart('#'), "smooth");
+                    }
+                    else
+                    {
+                        Navigation.NavigateTo(highlight.NavigationUrl);
+                    }
+                }
+                break;
+        }
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -555,6 +586,7 @@
         _ = InvokeAsync(async () =>
         {
             await RefreshFeaturedAsync(resetThoughts: true);
+            await RefreshHighlightsAsync();
             await RefreshAgreementStateAsync();
             StateHasChanged();
         });
@@ -565,6 +597,7 @@
         _ = InvokeAsync(async () =>
         {
             await RefreshFeaturedAsync(resetThoughts: false);
+            await RefreshHighlightsAsync();
             await RefreshAgreementStateAsync();
             StateHasChanged();
         });

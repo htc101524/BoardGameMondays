@@ -27,6 +27,7 @@
     --home-hero-card-pad: 22px;
     padding-top: calc(var(--bgm-header-height, 72px) + 18px);
     padding-bottom: 18px;
+    margin-top: calc(-1 * var(--bgm-header-height, 72px));
     background:
     radial-gradient(900px 520px at 50% 18%, rgba(191, 161, 74, 0.20), transparent 60%),
     radial-gradient(900px 600px at 18% 78%, rgba(34, 49, 28, 0.10), transparent 65%),
@@ -41,6 +42,28 @@
     grid-template-columns: 1fr;
     gap: 20px;
     align-items: stretch;
+}
+
+/* New split layout: large recap on left, stacked highlights on right */
+.home-hero__grid--split {
+    grid-template-columns: 1fr;
+    gap: 20px;
+}
+
+.home-hero__main {
+    display: flex;
+    flex-direction: column;
+}
+
+.home-hero__sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.home-hero__card--large {
+    flex: 1;
+    min-height: 420px;
 }
 
 .home-hero__card {
@@ -234,6 +257,22 @@
     margin-top: auto;
 }
 
+/* Tablet landscape */
+@media (min-width: 768px) and (max-width: 979px) {
+    .home-hero__grid--split {
+        grid-template-columns: 1.2fr 1fr;
+        gap: 18px;
+    }
+
+    .home-hero__card--large {
+        min-height: 400px;
+    }
+
+    .home-hero__sidebar {
+        gap: 14px;
+    }
+}
+
 @media (min-width: 980px) {
     .home-hero {
         --home-hero-card-height: 520px;
@@ -245,6 +284,30 @@
     .home-hero__grid {
         grid-template-columns: 0.95fr 1.05fr;
         gap: 22px;
+    }
+
+    /* Split layout: recap takes ~60%, highlights ~40% */
+    .home-hero__grid--split {
+        grid-template-columns: 1.4fr 1fr;
+        gap: 24px;
+        align-items: stretch;
+    }
+
+    .home-hero__main {
+        display: flex;
+        height: 100%;
+    }
+
+    .home-hero__card--large {
+        height: 100%;
+        min-height: var(--home-hero-card-height);
+    }
+
+    .home-hero__sidebar {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+        justify-content: space-between;
     }
 
     .home-hero__media img {
@@ -269,6 +332,25 @@
 
     .home-hero__grid {
         gap: 14px;
+    }
+
+    /* Stack on mobile */
+    .home-hero__grid--split {
+        grid-template-columns: 1fr;
+        gap: 16px;
+    }
+
+    .home-hero__main {
+        order: 1;
+    }
+
+    .home-hero__sidebar {
+        order: 2;
+        gap: 12px;
+    }
+
+    .home-hero__card--large {
+        min-height: 350px;
     }
 
     .home-hero__card {
@@ -333,6 +415,14 @@
 
     .home-hero__grid {
         gap: 12px;
+    }
+
+    .home-hero__sidebar {
+        gap: 10px;
+    }
+
+    .home-hero__card--large {
+        min-height: 300px;
     }
 
     .home-hero__card {

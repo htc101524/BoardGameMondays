@@ -1,0 +1,57 @@
+@namespace BoardGameMondays.Components.Sections.Highlights
+@using BoardGameMondays.Core
+
+<div class="highlight-card @(Highlight.HasData ? "highlight-card--clickable" : "")"
+     style="--highlight-accent: @Highlight.AccentColor;"
+     @onclick="HandleClick"
+     role="@(Highlight.HasData && !string.IsNullOrEmpty(Highlight.NavigationUrl) ? "button" : "region")"
+     tabindex="@(Highlight.HasData && !string.IsNullOrEmpty(Highlight.NavigationUrl) ? "0" : "-1")"
+     aria-label="@Highlight.Title">
+
+    <div class="highlight-card__header">
+        <span class="highlight-card__kicker">@Highlight.Title</span>
+    </div>
+
+    <div class="highlight-card__body">
+        @if (Highlight.HasData)
+        {
+            @if (!string.IsNullOrWhiteSpace(Highlight.ImageUrl))
+            {
+                <div class="highlight-card__image">
+                    <img src="@Highlight.ImageUrl" alt="@Highlight.Content" loading="lazy" />
+                </div>
+            }
+
+            <div class="highlight-card__content">
+                <h3 class="highlight-card__title">@Highlight.Content</h3>
+
+                @if (!string.IsNullOrWhiteSpace(Highlight.Subtitle))
+                {
+                    <p class="highlight-card__subtitle">@Highlight.Subtitle</p>
+                }
+            </div>
+        }
+        else
+        {
+            <div class="highlight-card__empty">
+                <p class="text-muted">@Highlight.EmptyMessage</p>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public IHomeHighlight Highlight { get; set; } = default!;
+
+    [Parameter]
+    public EventCallback<IHomeHighlight> OnClick { get; set; }
+
+    private async Task HandleClick()
+    {
+        if (Highlight.HasData && OnClick.HasDelegate)
+        {
+            await OnClick.InvokeAsync(Highlight);
+        }
+    }
+}
