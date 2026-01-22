@@ -41,6 +41,52 @@ public sealed class OddsService
     /// </summary>
     private const double GenerosityFactor = 0.92;
 
+    /// <summary>
+    /// Standard appealing betting fractions (as decimal odds x100), sorted.
+    /// These produce nice fractions like 1/5, 2/5, 1/2, 4/5, 1/1, 6/5, 5/4, 11/8, 6/4, 13/8, 7/4, 15/8, 2/1, 9/4, 5/2, 11/4, 3/1, 7/2, 4/1, 9/2, 5/1, 6/1, 7/1, 8/1, 9/1, 10/1, 12/1, 14/1, 16/1, 20/1
+    /// </summary>
+    private static readonly int[] AppealingOdds = new[]
+    {
+        110,  // 1/10
+        115,  // 3/20
+        120,  // 1/5
+        125,  // 1/4
+        130,  // 3/10
+        140,  // 2/5
+        150,  // 1/2
+        160,  // 3/5
+        170,  // 7/10
+        180,  // 4/5
+        190,  // 9/10
+        200,  // 1/1 (evens)
+        210,  // 11/10
+        220,  // 6/5
+        225,  // 5/4
+        240,  // 7/5
+        250,  // 6/4 (3/2)
+        275,  // 7/4
+        300,  // 2/1
+        325,  // 9/4
+        350,  // 5/2
+        375,  // 11/4
+        400,  // 3/1
+        450,  // 7/2
+        500,  // 4/1
+        550,  // 9/2
+        600,  // 5/1
+        650,  // 11/2
+        700,  // 6/1
+        800,  // 7/1
+        900,  // 8/1
+        1000, // 9/1
+        1100, // 10/1
+        1200, // 11/1
+        1400, // 13/1
+        1600, // 15/1
+        1800, // 17/1
+        2000, // 19/1
+    };
+
     public OddsService(IDbContextFactory<ApplicationDbContext> dbFactory, RankingService rankingService)
     {
         _dbFactory = dbFactory;
@@ -218,6 +264,9 @@ public sealed class OddsService
 
             var newOdds = (int)(odds.OddsTimes100 * adjustmentMultiplier);
             newOdds = Math.Clamp(newOdds, MinOddsTimes100, MaxOddsTimes100);
+            
+            // Snap to nearest appealing fraction
+            newOdds = SnapToAppealingOdds(newOdds);
 
             odds.OddsTimes100 = newOdds;
             odds.CreatedOn = now; // Track when odds were last updated
@@ -360,6 +409,7 @@ public sealed class OddsService
     /// <summary>
     /// Converts a win probability to decimal odds (x100).
     /// Includes generosity factor to make odds better for bettors.
+    /// Snaps to nearest appealing betting fraction.
     /// </summary>
     private static int ProbabilityToOdds(double probability)
     {
@@ -379,7 +429,10 @@ public sealed class OddsService
         var generousOdds = fairOdds / GenerosityFactor;
 
         var oddsTimes100 = (int)(generousOdds * 100);
-        return Math.Clamp(oddsTimes100, MinOddsTimes100, MaxOddsTimes100);
+        oddsTimes100 = Math.Clamp(oddsTimes100, MinOddsTimes100, MaxOddsTimes100);
+        
+        // Snap to nearest appealing fraction
+        return SnapToAppealingOdds(oddsTimes100);
     }
 
     /// <summary>
@@ -399,6 +452,40 @@ public sealed class OddsService
     private static double ExpectedScore(int ratingA, int ratingB)
     {
         return 1.0 / (1.0 + Math.Pow(10, (ratingB - ratingA) / 400.0));
+    }
+
+    /// <summary>
+    /// Snaps odds to the nearest appealing betting fraction.
+    /// </summary>
+    private static int SnapToAppealingOdds(int oddsTimes100)
+    {
+        // Binary search for closest value
+        var index = Array.BinarySearch(AppealingOdds, oddsTimes100);
+        
+        if (index >= 0)
+        {
+            // Exact match
+            return AppealingOdds[index];
+        }
+
+        // BinarySearch returns bitwise complement of the index where the value would be inserted
+        var insertIndex = ~index;
+        
+        if (insertIndex == 0)
+        {
+            return AppealingOdds[0];
+        }
+        
+        if (insertIndex >= AppealingOdds.Length)
+        {
+            return AppealingOdds[^1];
+        }
+
+        // Find the closer of the two adjacent values
+        var lower = AppealingOdds[insertIndex - 1];
+        var upper = AppealingOdds[insertIndex];
+        
+        return (oddsTimes100 - lower) <= (upper - oddsTimes100) ? lower : upper;
     }
 
     /// <summary>

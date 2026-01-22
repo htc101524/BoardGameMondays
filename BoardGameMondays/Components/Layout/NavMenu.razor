@@ -1,9 +1,11 @@
-﻿@using Microsoft.AspNetCore.Components.Authorization
+﻿@using BoardGameMondays.Core
+@using Microsoft.AspNetCore.Components.Authorization
 @inject NavigationManager Navigation
 @inject IJSRuntime JS
 @inject AuthenticationStateProvider AuthStateProvider
 @inject BoardGameMondays.Core.BgmCoinService Coins
 @inject BoardGameMondays.Core.BettingService BettingService
+@inject UserPreferencesService PreferencesService
 @inject IHttpContextAccessor HttpContextAccessor
 
 @implements IDisposable
@@ -33,6 +35,10 @@
         <div class="bgm-header__right">
             @if (_userId is not null)
             {
+                @if (!string.IsNullOrWhiteSpace(_userName))
+                {
+                    <div class="text-muted small me-2" style="display: flex; align-items: center;">@_userName</div>
+                }
                 <button class="bgm-coins bgm-coinsButton" type="button" aria-label="BGM Coins" @onclick="ToggleBetsAsync">
                     <span class="bgm-coins__label">£:</span>
                     <span class="bgm-coins__value">@(_coins?.ToString() ?? "…")</span>
@@ -123,7 +129,7 @@
                             <strong>@bet.GameName</strong>
                             <span>@FormatDate(bet.GameDate)</span>
                             <span>@bet.PredictedWinnerName</span>
-                            <span>@FormatFraction(bet.OddsTimes100)</span>
+                            <span>@OddsFormatter.Format(bet.OddsTimes100, _oddsFormat)</span>
                         </li>
                     }
                 </ul>
@@ -199,6 +205,7 @@
 
     private bool _menuOpen;
     private string? _userId;
+    private string? _userName;
     private int? _coins;
     private bool _userIsAdmin;
     private bool _userIsRealAdmin;
@@ -206,6 +213,7 @@
     private bool _betsOpen;
     private bool _betsLoading;
     private IReadOnlyList<BoardGameMondays.Core.BettingService.UserBetHistory> _betHistory = Array.Empty<BoardGameMondays.Core.BettingService.UserBetHistory>();
+    private OddsDisplayFormat _oddsFormat = OddsDisplayFormat.Fraction;
     
     private bool _isInteractive;
 
@@ -283,6 +291,7 @@
         if (user.Identity?.IsAuthenticated != true)
         {
             _userId = null;
+            _userName = null;
             _coins = null;
             _userIsAdmin = false;
             StateHasChanged();
@@ -290,6 +299,7 @@
         }
 
         _userId = user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        _userName = user.Identity?.Name;
         _userIsAdmin = user.IsInRole("Admin");
         _userIsRealAdmin = _userIsAdmin || user.HasClaim(c => c.Type == "bgm:realAdmin" && c.Value == "1");
 
@@ -331,6 +341,7 @@
         }
 
         _coins = await Coins.GetCoinsAsync(_userId);
+        _oddsFormat = await PreferencesService.GetOddsDisplayFormatAsync(_userId);
         StateHasChanged();
     }
 
@@ -390,35 +401,6 @@
     private static string FormatDate(DateOnly date)
         => date.ToDateTime(TimeOnly.MinValue).ToString("d MMM yyyy");
 
-    private static string FormatFraction(int oddsTimes100)
-    {
-        if (oddsTimes100 <= 100)
-        {
-            return "1/1";
-        }
-
-        var numerator = oddsTimes100 - 100;
-        var denominator = 100;
-        var gcd = Gcd(numerator, denominator);
-        numerator /= gcd;
-        denominator /= gcd;
-        return $"{numerator}/{denominator}";
-    }
-
-    private static int Gcd(int a, int b)
-    {
-        a = Math.Abs(a);
-        b = Math.Abs(b);
-        while (b != 0)
-        {
-            var t = a % b;
-            a = b;
-            b = t;
-        }
-        return a == 0 ? 1 : a;
-    }
-
     private static string FormatNet(int net)
         => net >= 0 ? $"+{net}" : net.ToString();
 }
-

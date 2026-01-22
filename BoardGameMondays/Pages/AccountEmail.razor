@@ -1,46 +1,123 @@
+@page "/account"
 @page "/account/email"
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
 
+@using BoardGameMondays.Core
 @using Microsoft.AspNetCore.WebUtilities
 @using Microsoft.AspNetCore.Components.Authorization
 @inject NavigationManager Navigation
 @inject AuthenticationStateProvider AuthStateProvider
 @inject Microsoft.AspNetCore.Identity.UserManager<BoardGameMondays.Data.ApplicationUser> UserManager
+@inject UserPreferencesService PreferencesService
 
-<h1>Account email</h1>
+<h1>Account settings</h1>
 
-<form method="post" action="/account/email" data-enhance="false">
-    <AntiforgeryToken />
-    <div class="mb-3">
-        <label class="form-label" for="account-email">Email</label>
-        <input id="account-email" name="Email" class="form-control" value="@_email" autocomplete="email" />
-        <div class="form-text">Used for password recovery.</div>
+<div class="row">
+    <div class="col-lg-6 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Email</h5>
+            </div>
+            <div class="card-body">
+                <form method="post" action="/account/email" data-enhance="false">
+                    <AntiforgeryToken />
+                    <div class="mb-3">
+                        <label class="form-label" for="account-email">Email address</label>
+                        <input id="account-email" name="Email" class="form-control" value="@_email" autocomplete="email" />
+                        <div class="form-text">Used for password recovery.</div>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary">Save email</button>
+
+                    @if (!string.IsNullOrWhiteSpace(_message))
+                    {
+                        <div class="alert @_messageCss mt-3" role="alert">@_message</div>
+                    }
+                </form>
+
+                @if (!string.IsNullOrWhiteSpace(_email))
+                {
+                    @if (_isConfirmed)
+                    {
+                        <div class="text-success mt-3">
+                            <i class="bi bi-check-circle"></i> Email confirmed.
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="text-warning mt-3">
+                            <i class="bi bi-exclamation-triangle"></i> Email not confirmed.
+                        </div>
+                        <form method="post" action="/account/resend-confirmation" data-enhance="false">
+                            <AntiforgeryToken />
+                            <button type="submit" class="btn btn-outline-secondary mt-2">Resend confirmation email</button>
+                        </form>
+                    }
+                }
+            </div>
+        </div>
     </div>
 
-    <button type="submit" class="btn btn-primary">Save email</button>
-    <a class="btn btn-link" href="/">Back home</a>
+    <div class="col-lg-6 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Preferences</h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label">Odds display format</label>
+                    <div class="form-text mb-2">Choose how betting odds are displayed throughout the app.</div>
+                    
+                    <div class="btn-group" role="group" aria-label="Odds display format">
+                        <button type="button"
+                                class="btn @(_oddsFormat == OddsDisplayFormat.Fraction ? "btn-primary" : "btn-outline-secondary")"
+                                disabled="@_savingPreferences"
+                                @onclick="() => SetOddsFormatAsync(OddsDisplayFormat.Fraction)">
+                            <span class="d-block fw-semibold">Fractions</span>
+                            <span class="small text-muted">e.g. 3/4, 5/2</span>
+                        </button>
+                        <button type="button"
+                                class="btn @(_oddsFormat == OddsDisplayFormat.Decimal ? "btn-primary" : "btn-outline-secondary")"
+                                disabled="@_savingPreferences"
+                                @onclick="() => SetOddsFormatAsync(OddsDisplayFormat.Decimal)">
+                            <span class="d-block fw-semibold">Decimals</span>
+                            <span class="small text-muted">e.g. 1.75, 3.50</span>
+                        </button>
+                    </div>
 
-    @if (!string.IsNullOrWhiteSpace(_message))
-    {
-        <div class="alert @_messageCss mt-3" role="alert">@_message</div>
-    }
-</form>
+                    @if (!string.IsNullOrWhiteSpace(_preferencesStatus))
+                    {
+                        <div class="alert alert-success mt-2" role="alert">@_preferencesStatus</div>
+                    }
+                </div>
 
-@if (!string.IsNullOrWhiteSpace(_email))
-{
-    @if (_isConfirmed)
-    {
-        <div class="text-success mt-3">Email confirmed.</div>
-    }
-    else
-    {
-        <div class="text-warning mt-3">Email not confirmed.</div>
-        <form method="post" action="/account/resend-confirmation" data-enhance="false">
-            <AntiforgeryToken />
-            <button type="submit" class="btn btn-outline-secondary mt-2">Resend confirmation email</button>
-        </form>
-    }
-}
+                <div class="mt-4 p-3 bg-light rounded">
+                    <div class="fw-semibold mb-2">Preview</div>
+                    <div class="d-flex gap-4">
+                        <div>
+                            <span class="text-muted small">Sample odds:</span>
+                            <div class="fw-semibold">@OddsFormatter.Format(175, _oddsFormat)</div>
+                        </div>
+                        <div>
+                            <span class="text-muted small">Long shot:</span>
+                            <div class="fw-semibold">@OddsFormatter.Format(350, _oddsFormat)</div>
+                        </div>
+                        <div>
+                            <span class="text-muted small">Favorite:</span>
+                            <div class="fw-semibold">@OddsFormatter.Format(125, _oddsFormat)</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="mt-3">
+    <a class="btn btn-link" href="/">
+        <i class="bi bi-arrow-left"></i> Back home
+    </a>
+</div>
 
 @code {
     private string? _email;
@@ -48,12 +125,19 @@
     private string _messageCss = "alert-success";
     private bool _isConfirmed;
 
+    private OddsDisplayFormat _oddsFormat = OddsDisplayFormat.Fraction;
+    private bool _savingPreferences;
+    private string? _preferencesStatus;
+    private string? _userId;
+
     protected override async Task OnInitializedAsync()
     {
         var auth = await AuthStateProvider.GetAuthenticationStateAsync();
         var user = await UserManager.GetUserAsync(auth.User);
+        _userId = user?.Id;
         _email = user?.Email ?? string.Empty;
         _isConfirmed = user is not null && await UserManager.IsEmailConfirmedAsync(user);
+        _oddsFormat = user?.OddsDisplayFormat ?? OddsDisplayFormat.Fraction;
     }
 
     protected override void OnParametersSet()
@@ -84,6 +168,39 @@
         else
         {
             _message = null;
+        }
+    }
+
+    private async Task SetOddsFormatAsync(OddsDisplayFormat format)
+    {
+        if (string.IsNullOrWhiteSpace(_userId))
+        {
+            return;
+        }
+
+        _savingPreferences = true;
+        _preferencesStatus = null;
+
+        try
+        {
+            await PreferencesService.SetOddsDisplayFormatAsync(_userId, format);
+            _oddsFormat = format;
+            _preferencesStatus = "Preference saved!";
+
+            // Clear status after a delay
+            _ = Task.Delay(2000).ContinueWith(_ =>
+            {
+                _preferencesStatus = null;
+                InvokeAsync(StateHasChanged);
+            });
+        }
+        catch
+        {
+            _preferencesStatus = "Failed to save preference.";
+        }
+        finally
+        {
+            _savingPreferences = false;
         }
     }
 }

@@ -534,7 +534,7 @@
 }
 
 /* Desktop layout: show inline nav and hide full-screen popup */
-@media (min-width: 800px) {
+@media (min-width: 1024px) {
     :root {
         --bgm-header-height: var(--bgm-header-height-desktop);
     }
@@ -558,7 +558,7 @@
 }
 
 /* Mobile layout: center title, hide desktop nav, show burger and full-screen popup */
-@media (max-width: 799px) {
+@media (max-width: 1023px) {
     .bgm-header__center { display: flex; }
     .bgm-header__brand { display: none; }
     .bgm-header__desktopActions { display: none; }

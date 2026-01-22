@@ -256,6 +256,7 @@ builder.Services.AddScoped<BoardGameMondays.Core.BlogService>();
 builder.Services.AddScoped<BoardGameMondays.Core.WantToPlayService>();
 builder.Services.AddScoped<BoardGameMondays.Core.RankingService>();
 builder.Services.AddScoped<BoardGameMondays.Core.OddsService>();
+builder.Services.AddScoped<BoardGameMondays.Core.UserPreferencesService>();
 
 // Persist Data Protection keys so auth cookies remain valid across instances/restarts on Azure App Service.
 // Preferred path resolution order:
@@ -336,6 +337,7 @@ try
         await EnsureSqlServerGameNightAttendeeSnackColumnAsync(db, app.Logger);
         await EnsureSqlServerVictoryRoutesAsync(db, app.Logger);
         await EnsureSqlServerMemberEloColumnsAsync(db, app.Logger);
+        await EnsureSqlServerOddsDisplayFormatColumnAsync(db, app.Logger);
     }
 
     // Ensure identity tables exist before assigning roles.
@@ -654,6 +656,35 @@ END;
     }
 }
 
+static async Task EnsureSqlServerOddsDisplayFormatColumnAsync(ApplicationDbContext db, ILogger logger)
+{
+    if (!db.Database.IsSqlServer())
+    {
+        return;
+    }
+
+    const string sql = @"
+IF COL_LENGTH(N'dbo.AspNetUsers', N'OddsDisplayFormat') IS NULL
+BEGIN
+    ALTER TABLE [dbo].[AspNetUsers] ADD [OddsDisplayFormat] int NOT NULL DEFAULT 0;
+END;
+";
+
+    try
+    {
+        var affected = await db.Database.ExecuteSqlRawAsync(sql);
+        if (affected != 0)
+        {
+            logger.LogWarning("Ensured OddsDisplayFormat column exists in SQL Server schema.");
+        }
+    }
+    catch (Exception ex)
+    {
+        logger.LogCritical(ex, "Failed to ensure OddsDisplayFormat column exists in SQL Server schema.");
+        throw;
+    }
+}
+
 static async Task EnsureAdminRoleAssignmentsAsync(IServiceProvider services)
 {
     var config = services.GetRequiredService<IConfiguration>();
@@ -769,6 +800,30 @@ static async Task EnsureSqliteSchemaUpToDateAsync(ApplicationDbContext db)
         {
             await using var alter = connection.CreateCommand();
             alter.CommandText = "ALTER TABLE AspNetUsers ADD COLUMN BgmCoins INTEGER NOT NULL DEFAULT 100;";
+            await alter.ExecuteNonQueryAsync();
+        }
+
+        // AspNetUsers.OddsDisplayFormat
+        var hasOddsDisplayFormat = false;
+        await using (var cmd = connection.CreateCommand())
+        {
+            cmd.CommandText = "PRAGMA table_info('AspNetUsers');";
+            await using var reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                var name = reader.GetString(1);
+                if (string.Equals(name, "OddsDisplayFormat", StringComparison.OrdinalIgnoreCase))
+                {
+                    hasOddsDisplayFormat = true;
+                    break;
+                }
+            }
+        }
+
+        if (!hasOddsDisplayFormat)
+        {
+            await using var alter = connection.CreateCommand();
+            alter.CommandText = "ALTER TABLE AspNetUsers ADD COLUMN OddsDisplayFormat INTEGER NOT NULL DEFAULT 0;";
             await alter.ExecuteNonQueryAsync();
         }
 

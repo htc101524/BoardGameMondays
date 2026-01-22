@@ -1,8 +1,10 @@
 @page "/bets"
+@using BoardGameMondays.Core
 @using Microsoft.AspNetCore.Components.Authorization
 @inject AuthenticationStateProvider AuthStateProvider
 @inject BoardGameMondays.Core.BettingService BettingService
 @inject BoardGameMondays.Core.BgmCoinService Coins
+@inject UserPreferencesService PreferencesService
 
 <AuthorizeView>
     <Authorized>
@@ -46,7 +48,7 @@
                                         <div class="bgm-betCard__body">
                                             <div><strong>Pick:</strong> @bet.PredictedWinnerName</div>
                                             <div><strong>Stake:</strong> @bet.Amount</div>
-                                            <div><strong>Odds:</strong> @FormatFraction(bet.OddsTimes100)</div>
+                                            <div><strong>Odds:</strong> @OddsFormatter.Format(bet.OddsTimes100, _oddsFormat)</div>
                                         </div>
                                     </div>
                                 }
@@ -85,7 +87,7 @@
                                                 <div><strong>Winner:</strong> @winnerDisplay</div>
                                             }
                                             <div><strong>Stake:</strong> @bet.Amount</div>
-                                            <div><strong>Odds:</strong> @FormatFraction(bet.OddsTimes100)</div>
+                                            <div><strong>Odds:</strong> @OddsFormatter.Format(bet.OddsTimes100, _oddsFormat)</div>
                                             <div><strong>Return:</strong> @bet.Payout <span class="bgm-betCard__net">(@FormatNet(net))</span></div>
                                         </div>
                                     </div>
@@ -111,6 +113,7 @@
     private bool _loading = true;
     private string? _userId;
     private int? _coins;
+    private OddsDisplayFormat _oddsFormat = OddsDisplayFormat.Fraction;
     private IReadOnlyList<BoardGameMondays.Core.BettingService.UserBetHistory> _openBets = Array.Empty<BoardGameMondays.Core.BettingService.UserBetHistory>();
     private IReadOnlyList<BoardGameMondays.Core.BettingService.UserBetHistory> _settledBets = Array.Empty<BoardGameMondays.Core.BettingService.UserBetHistory>();
 
@@ -131,6 +134,7 @@
             return;
         }
 
+        _oddsFormat = await PreferencesService.GetOddsDisplayFormatAsync(_userId);
         await LoadAsync();
     }
 
@@ -146,34 +150,6 @@
 
     private static string FormatDate(DateOnly date)
         => date.ToDateTime(TimeOnly.MinValue).ToString("ddd d MMM yyyy");
-
-    private static string FormatFraction(int oddsTimes100)
-    {
-        if (oddsTimes100 <= 100)
-        {
-            return "1/1";
-        }
-
-        var numerator = oddsTimes100 - 100;
-        var denominator = 100;
-        var gcd = Gcd(numerator, denominator);
-        numerator /= gcd;
-        denominator /= gcd;
-        return $"{numerator}/{denominator}";
-    }
-
-    private static int Gcd(int a, int b)
-    {
-        a = Math.Abs(a);
-        b = Math.Abs(b);
-        while (b != 0)
-        {
-            var t = a % b;
-            a = b;
-            b = t;
-        }
-        return a == 0 ? 1 : a;
-    }
 
     private static string GetResultClass(int net)
         => net > 0 ? "is-win" : "is-loss";

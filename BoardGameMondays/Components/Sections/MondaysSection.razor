@@ -8,6 +8,7 @@
 @inject BettingService BettingService
 @inject BgmCoinService CoinService
 @inject WantToPlayService WantToPlayService
+@inject UserPreferencesService PreferencesService
 @inject IJSRuntime JS
 @inject IHttpContextAccessor HttpContextAccessor
 @inject NavigationManager Navigation
@@ -366,7 +367,7 @@
 
                                                                 <div class="bgm-teamBubble__odds" aria-label="Odds">
                                                                     <div class="text-muted small fw-semibold">Odds</div>
-                                                                    <div><span class="bgm-oddsValue">@FormatFraction(odds)</span></div>
+                                                                    <div><span class="bgm-oddsValue">@OddsFormatter.Format(odds, _oddsFormat)</span></div>
                                                                 </div>
                                                             }
                                                         </div>
@@ -497,7 +498,7 @@
 
                                                                     <div class="d-flex justify-content-between align-items-center bgm-oddsSlipRow">
                                                                         <div class="text-truncate">@team</div>
-                                                                        <div><span class="bgm-oddsValue">@FormatFraction(odds)</span></div>
+                                                                        <div><span class="bgm-oddsValue">@OddsFormatter.Format(odds, _oddsFormat)</span></div>
                                                                     </div>
                                                                 }
                                                             }
@@ -509,7 +510,7 @@
 
                                                                     <div class="d-flex justify-content-between align-items-center bgm-oddsSlipRow">
                                                                         <div class="text-truncate">@p.MemberName</div>
-                                                                        <div><span class="bgm-oddsValue">@FormatFraction(odds)</span></div>
+                                                                        <div><span class="bgm-oddsValue">@OddsFormatter.Format(odds, _oddsFormat)</span></div>
                                                                     </div>
                                                                 }
                                                             }
@@ -527,9 +528,9 @@
                                                         @if (_myBets.TryGetValue(game.Id, out var bet))
                                                         {
                                                             <div class="text-muted">
-                                                                You bet @bet.Amount on @bet.WinnerMemberName (odds @FormatFraction(bet.OddsTimes100)).
+                                                                You bet @bet.Amount on @bet.WinnerMemberName (odds @OddsFormatter.Format(bet.OddsTimes100, _oddsFormat)).
                                                                 @{
-                                                                    var profit = ComputeProfit(bet.Amount, bet.OddsTimes100);
+                                                                    var profit = OddsFormatter.ComputeProfit(bet.Amount, bet.OddsTimes100);
                                                                     if (profit is not null)
                                                                     {
                                                                         <span>Potential winnings: +@profit (return @(bet.Amount + profit.Value)).</span>
@@ -1003,6 +1004,7 @@
     private ElementReference _mondaysSectionRef;
     private string? _mondaysSectionBackgroundHex;
     private IReadOnlyList<WantToPlayService.WantToPlayEntry> _mostWanted = Array.Empty<WantToPlayService.WantToPlayEntry>();
+    private OddsDisplayFormat _oddsFormat = OddsDisplayFormat.Fraction;
 
     protected override async Task OnInitializedAsync()
     {
@@ -1021,6 +1023,7 @@
         _isAdmin = user.Identity?.IsAuthenticated == true && user.IsInRole("Admin") && !viewAsNonAdmin;
         _userId = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         _memberId = TryGetMemberId(user);
+        _oddsFormat = await PreferencesService.GetOddsDisplayFormatAsync(_userId);
 
         CoinService.Changed += OnCoinsChanged;
         WantToPlayService.Changed += OnWantToPlayChanged;
@@ -2167,49 +2170,6 @@
         }
     }
 
-    private static (int Numerator, int Denominator)? ToFraction(int? oddsTimes100)
-    {
-        if (oddsTimes100 is null || oddsTimes100 <= 100)
-        {
-            return null;
-        }
-
-        var numerator = oddsTimes100.Value - 100;
-        var denominator = 100;
-        var gcd = Gcd(numerator, denominator);
-        return (numerator / gcd, denominator / gcd);
-    }
-
-    private static int Gcd(int a, int b)
-    {
-        a = Math.Abs(a);
-        b = Math.Abs(b);
-        while (b != 0)
-        {
-            var t = a % b;
-            a = b;
-            b = t;
-        }
-        return a == 0 ? 1 : a;
-    }
-
-    private static string FormatFraction(int? oddsTimes100)
-    {
-        var f = ToFraction(oddsTimes100);
-        return f is null ? "—" : $"{f.Value.Numerator}/{f.Value.Denominator}";
-    }
-
-    private static int? ComputeProfit(int amount, int oddsTimes100)
-    {
-        var f = ToFraction(oddsTimes100);
-        if (f is null)
-        {
-            return null;
-        }
-
-        return (amount * f.Value.Numerator) / f.Value.Denominator;
-    }
-
     private int GetSelectedAmount(int gameNightGameId)
         => _selectedBetAmountByGameId.TryGetValue(gameNightGameId, out var value) ? value : 10;
 
@@ -2227,7 +2187,7 @@
         }
 
         var amount = GetSelectedAmount(game.Id);
-        return ComputeProfit(amount, odds.Value);
+        return OddsFormatter.ComputeProfit(amount, odds.Value);
     }
 
     private string GetSelectedBetWinner(int gameNightGameId)

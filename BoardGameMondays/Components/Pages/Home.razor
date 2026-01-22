@@ -388,7 +388,7 @@
                             <button type="button"
                                     class="bgm-review-switcher__button @(isSelected ? "is-active" : "")"
                                     aria-pressed="@isSelected"
-                                    @onclick="() => SelectReview(review)">
+                                    @onclick="() => SelectReviewAsync(review)">
                                 <span class="bgm-review-switcher__avatar" aria-hidden="true">
                                     @if (!string.IsNullOrWhiteSpace(review.Reviewer.AvatarUrl))
                                     {
@@ -591,10 +591,11 @@
         _thoughtsScrollBinder = null;
     }
 
-    private void SelectReview(Review review)
+    private async Task SelectReviewAsync(Review review)
     {
         _selectedReview = review;
-        _ = InvokeAsync(RefreshAgreementStateAsync);
+        await RefreshAgreementStateAsync();
+        StateHasChanged();
     }
 
     private static string FormatScore(double score)
