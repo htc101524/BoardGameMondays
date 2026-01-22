@@ -1,15 +1,20 @@
+/* =========================================================
+   LIBRARY THEME
+   Uses brand colours from brand-colors.css
+   ========================================================= */
+
 body {
-    background: #f5f3e7;
-    color: #22311c;
+    background: var(--bgm-cream);
+    color: var(--bgm-text-primary);
     font-family: 'Georgia', 'Times New Roman', serif;
     min-height: 100vh;
 }
 
 /* Legacy navbar (kept in case reused) */
 .library-navbar {
-    background: linear-gradient(90deg, rgba(245, 243, 231, 0.92) 0%, rgba(255, 251, 230, 0.92) 100%);
-    border-bottom: 1px solid rgba(75, 58, 26, 0.22);
-    box-shadow: 0 2px 10px rgba(34, 24, 10, 0.10);
+    background: var(--bgm-overlay-light);
+    border-bottom: 1px solid var(--bgm-border-medium);
+    box-shadow: var(--bgm-shadow-md);
     min-height: 64px;
     display: flex;
     align-items: center;
@@ -18,11 +23,11 @@ body {
 
 .library-title {
     font-family: 'Georgia', 'Times New Roman', serif;
-    color: #22311c !important;
+    color: var(--bgm-text-heading) !important;
     font-size: 2.2rem;
     font-weight: bold;
     letter-spacing: 2.5px;
-    text-shadow: 1px 1px 8px rgba(34, 24, 10, 0.10);
+    text-shadow: 1px 1px 8px var(--bgm-shadow-color);
     margin-right: 2vw;
 }
 
@@ -32,7 +37,7 @@ body {
 }
 
 .navbar-nav .nav-link {
-    color: #22311c !important;
+    color: var(--bgm-text-heading) !important;
     font-weight: 600;
     font-size: 1.15rem;
     margin: 0 0.7vw;
@@ -42,57 +47,57 @@ body {
 }
 
 .navbar-nav .nav-link:hover, .navbar-nav .nav-link.active {
-    color: #4b3a1a !important;
-    background: rgba(191, 161, 74, 0.18);
-    box-shadow: 0 2px 8px rgba(34, 24, 10, 0.08);
+    color: var(--bgm-leather) !important;
+    background: rgba(var(--bgm-gold-rgb), 0.18);
+    box-shadow: var(--bgm-shadow-sm);
 }
 
 h1, h2, h3, h4, h5, h6 {
-    color: #4b3a1a;
+    color: var(--bgm-text-heading);
     font-family: 'Georgia', 'Times New Roman', serif;
     font-weight: bold;
-    text-shadow: 1px 1px 8px rgba(34, 24, 10, 0.10);
+    text-shadow: 1px 1px 8px var(--bgm-shadow-color);
 }
 
 .content {
-    background: rgba(255, 255, 255, 0.70);
+    background: var(--bgm-overlay-glass);
     border-radius: 18px;
-    box-shadow: 0 10px 40px rgba(34, 24, 10, 0.10);
-    border: 1px solid rgba(75, 58, 26, 0.14);
+    box-shadow: var(--bgm-shadow-lg);
+    border: 1px solid var(--bgm-border-medium);
     margin: calc(2.5rem + var(--bgm-header-height, 0px)) auto 0 auto;
     padding: 2.5rem 3vw 2.5rem 3vw;
     max-width: 900px;
 }
 
 .lead, p, li, label, .form-label {
-    color: #22311c;
+    color: var(--bgm-text-primary);
     font-size: 1.08rem;
 }
 
 .btn-primary, .btn-success, .btn-secondary {
-    background: #22311c;
-    color: #fffbe6;
-    border: 1px solid rgba(75, 58, 26, 0.30);
+    background: var(--bgm-btn-secondary-bg);
+    color: var(--bgm-btn-secondary-text);
+    border: 1px solid var(--bgm-border-medium);
     font-weight: 600;
     border-radius: 6px;
-    box-shadow: 0 2px 8px rgba(34, 24, 10, 0.10);
+    box-shadow: var(--bgm-shadow-sm);
 }
 
 .btn-primary:hover, .btn-success:hover, .btn-secondary:hover {
-    background: #bfa14a;
-    color: #22311c;
-    border: 1px solid #22311c;
+    background: var(--bgm-gold);
+    color: var(--bgm-navy);
+    border: 1px solid var(--bgm-navy);
 }
 
 input, textarea, select {
-    background: #f5f3e7;
-    border: 1px solid #bfa14a;
-    color: #181818;
+    background: var(--bgm-cream);
+    border: 1px solid var(--bgm-gold);
+    color: var(--bgm-charcoal);
     border-radius: 4px;
     padding: 0.4rem 0.7rem;
 }
 
 input:focus, textarea:focus, select:focus {
-    border-color: #bfa14a;
-    box-shadow: 0 0 0 2px #bfa14a33;
+    border-color: var(--bgm-gold);
+    box-shadow: 0 0 0 2px var(--bgm-focus-ring);
 }

@@ -1,0 +1,247 @@
+/* =========================================================
+   BG MONDAYS — BRAND COLOUR PALETTE
+   Style: Heritage · Premium · Board Game Club
+   
+   This file is the single source of truth for all colours
+   used throughout the application. Import this file first
+   in your main CSS to ensure variables are available.
+   
+   Usage: var(--bgm-navy), var(--bgm-cream), etc.
+   ========================================================= */
+
+:root {
+    /* =======================================================
+       CORE BRAND COLOURS
+       Primary colours that define the BG Mondays identity
+       ======================================================= */
+    
+    /* Primary anchor: headers, footers, navigation */
+    --bgm-navy:              #0E1A2B;
+    --bgm-navy-rgb:          14, 26, 43;
+    
+    /* Secondary brand colour: accents, panels */
+    --bgm-forest:            #1F3D2B;
+    --bgm-forest-rgb:        31, 61, 43;
+    
+    /* Accent / emphasis: highlights, active states */
+    --bgm-maroon:            #6B1E2E;
+    --bgm-maroon-rgb:        107, 30, 46;
+    
+    /* Luxury accent: CTAs, highlights, premium elements */
+    --bgm-gold:              #C9A44C;
+    --bgm-gold-rgb:          201, 164, 76;
+    
+    /* Main page background: warm, inviting cream */
+    --bgm-cream:             #F7F5EF;
+    --bgm-cream-rgb:         247, 245, 239;
+
+    /* =======================================================
+       SUPPORTING NEUTRALS
+       Neutral tones for text, borders, and subtle elements
+       ======================================================= */
+    
+    /* Primary body text: high contrast, readable */
+    --bgm-charcoal:          #1E1E1E;
+    --bgm-charcoal-rgb:      30, 30, 30;
+    
+    /* Borders, dividers, subtle panels */
+    --bgm-soft-grey:         #E3E1DC;
+    --bgm-soft-grey-rgb:     227, 225, 220;
+    
+    /* Optional heritage accent: leather tones */
+    --bgm-leather:           #7A5A3A;
+    --bgm-leather-rgb:       122, 90, 58;
+    
+    /* Off-white for cards and elevated surfaces */
+    --bgm-ivory:             #FFFEF9;
+    --bgm-ivory-rgb:         255, 254, 249;
+    
+    /* Subtle warm grey for disabled states */
+    --bgm-muted:             #A9A7A2;
+    --bgm-muted-rgb:         169, 167, 162;
+
+    /* =======================================================
+       FUNCTIONAL UI COLOURS
+       Semantic colours for feedback and states
+       ======================================================= */
+    
+    /* Success states: confirmations, completed actions */
+    --bgm-success:           #2F7D4A;
+    --bgm-success-rgb:       47, 125, 74;
+    
+    /* Warnings / attention: alerts, caution states */
+    --bgm-warning:           #C47A2C;
+    --bgm-warning-rgb:       196, 122, 44;
+    
+    /* Errors / destructive actions: validation, critical */
+    --bgm-error:             #9B2C2C;
+    --bgm-error-rgb:         155, 44, 44;
+    
+    /* Informational: tips, guidance */
+    --bgm-info:              #2C6A9B;
+    --bgm-info-rgb:          44, 106, 155;
+
+    /* =======================================================
+       HOVER & INTERACTIVE STATES
+       Darker/lighter variants for interactive elements
+       ======================================================= */
+    
+    /* Gold button hover state */
+    --bgm-gold-hover:        #B08E3F;
+    --bgm-gold-hover-rgb:    176, 142, 63;
+    
+    /* Gold light variant for subtle backgrounds */
+    --bgm-gold-light:        #E8D9A8;
+    --bgm-gold-light-rgb:    232, 217, 168;
+    
+    /* Navy lighter variant */
+    --bgm-navy-light:        #1A2D47;
+    --bgm-navy-light-rgb:    26, 45, 71;
+    
+    /* Forest hover/active state */
+    --bgm-forest-hover:      #163022;
+    --bgm-forest-hover-rgb:  22, 48, 34;
+    
+    /* Forest light variant for backgrounds */
+    --bgm-forest-light:      #2A5239;
+    --bgm-forest-light-rgb:  42, 82, 57;
+    
+    /* Maroon hover state */
+    --bgm-maroon-hover:      #541724;
+    --bgm-maroon-hover-rgb:  84, 23, 36;
+    
+    /* Maroon light variant */
+    --bgm-maroon-light:      #8A2A3D;
+    --bgm-maroon-light-rgb:  138, 42, 61;
+
+    /* =======================================================
+       SEMANTIC ALIASES
+       Meaningful names for common use cases
+       ======================================================= */
+    
+    /* Page & Layout */
+    --bgm-page-bg:           var(--bgm-cream);
+    --bgm-card-bg:           var(--bgm-ivory);
+    --bgm-header-bg:         var(--bgm-navy);
+    --bgm-footer-bg:         var(--bgm-navy);
+    --bgm-sidebar-bg:        var(--bgm-cream);
+    
+    /* Text */
+    --bgm-text-primary:      var(--bgm-charcoal);
+    --bgm-text-secondary:    var(--bgm-leather);
+    --bgm-text-muted:        var(--bgm-muted);
+    --bgm-text-inverse:      var(--bgm-cream);
+    --bgm-text-heading:      var(--bgm-navy);
+    --bgm-text-link:         var(--bgm-forest);
+    --bgm-text-link-hover:   var(--bgm-maroon);
+    
+    /* Borders & Dividers */
+    --bgm-border-light:      var(--bgm-soft-grey);
+    --bgm-border-medium:     rgba(var(--bgm-leather-rgb), 0.25);
+    --bgm-border-dark:       var(--bgm-navy);
+    --bgm-divider:           var(--bgm-soft-grey);
+    
+    /* Buttons */
+    --bgm-btn-primary-bg:    var(--bgm-gold);
+    --bgm-btn-primary-text:  var(--bgm-navy);
+    --bgm-btn-primary-hover: var(--bgm-gold-hover);
+    
+    --bgm-btn-secondary-bg:  var(--bgm-forest);
+    --bgm-btn-secondary-text: var(--bgm-cream);
+    --bgm-btn-secondary-hover: var(--bgm-navy);
+    
+    --bgm-btn-danger-bg:     var(--bgm-error);
+    --bgm-btn-danger-text:   var(--bgm-cream);
+    --bgm-btn-danger-hover:  var(--bgm-maroon);
+    
+    /* Focus & Selection */
+    --bgm-focus-ring:        rgba(var(--bgm-gold-rgb), 0.5);
+    --bgm-selection-bg:      rgba(var(--bgm-gold-rgb), 0.2);
+    
+    /* Shadows */
+    --bgm-shadow-color:      rgba(var(--bgm-navy-rgb), 0.1);
+    --bgm-shadow-sm:         0 1px 2px var(--bgm-shadow-color);
+    --bgm-shadow-md:         0 4px 6px var(--bgm-shadow-color);
+    --bgm-shadow-lg:         0 10px 15px var(--bgm-shadow-color);
+    --bgm-shadow-xl:         0 20px 25px var(--bgm-shadow-color);
+
+    /* =======================================================
+       GRADIENTS
+       Pre-defined gradients using brand colours
+       ======================================================= */
+    
+    --bgm-gradient-gold:     linear-gradient(135deg, var(--bgm-gold) 0%, var(--bgm-gold-hover) 100%);
+    --bgm-gradient-forest:   linear-gradient(135deg, var(--bgm-forest) 0%, var(--bgm-forest-hover) 100%);
+    --bgm-gradient-navy:     linear-gradient(135deg, var(--bgm-navy) 0%, var(--bgm-navy-light) 100%);
+    --bgm-gradient-cream:    linear-gradient(180deg, var(--bgm-cream) 0%, var(--bgm-soft-grey) 100%);
+    --bgm-gradient-premium:  linear-gradient(135deg, var(--bgm-navy) 0%, var(--bgm-forest) 50%, var(--bgm-maroon) 100%);
+
+    /* =======================================================
+       OVERLAY & TRANSPARENCY
+       Semi-transparent overlays for modals, backdrops
+       ======================================================= */
+    
+    --bgm-overlay-light:     rgba(var(--bgm-cream-rgb), 0.92);
+    --bgm-overlay-dark:      rgba(var(--bgm-navy-rgb), 0.85);
+    --bgm-overlay-glass:     rgba(var(--bgm-ivory-rgb), 0.7);
+    --bgm-backdrop:          rgba(var(--bgm-charcoal-rgb), 0.5);
+}
+
+/* =======================================================
+   DARK MODE SUPPORT (Optional)
+   Override variables for dark mode if needed
+   ======================================================= */
+
+@media (prefers-color-scheme: dark) {
+    :root.theme-auto {
+        --bgm-page-bg:       var(--bgm-navy);
+        --bgm-card-bg:       var(--bgm-navy-light);
+        --bgm-text-primary:  var(--bgm-cream);
+        --bgm-text-secondary: var(--bgm-soft-grey);
+        --bgm-text-heading:  var(--bgm-gold);
+        --bgm-border-light:  rgba(var(--bgm-soft-grey-rgb), 0.2);
+    }
+}
+
+/* =======================================================
+   UTILITY CLASSES
+   Quick-apply classes for common colour needs
+   ======================================================= */
+
+/* Background Colours */
+.bg-bgm-navy      { background-color: var(--bgm-navy) !important; }
+.bg-bgm-forest    { background-color: var(--bgm-forest) !important; }
+.bg-bgm-maroon    { background-color: var(--bgm-maroon) !important; }
+.bg-bgm-gold      { background-color: var(--bgm-gold) !important; }
+.bg-bgm-cream     { background-color: var(--bgm-cream) !important; }
+.bg-bgm-charcoal  { background-color: var(--bgm-charcoal) !important; }
+.bg-bgm-soft-grey { background-color: var(--bgm-soft-grey) !important; }
+.bg-bgm-leather   { background-color: var(--bgm-leather) !important; }
+.bg-bgm-ivory     { background-color: var(--bgm-ivory) !important; }
+
+/* Text Colours */
+.text-bgm-navy      { color: var(--bgm-navy) !important; }
+.text-bgm-forest    { color: var(--bgm-forest) !important; }
+.text-bgm-maroon    { color: var(--bgm-maroon) !important; }
+.text-bgm-gold      { color: var(--bgm-gold) !important; }
+.text-bgm-cream     { color: var(--bgm-cream) !important; }
+.text-bgm-charcoal  { color: var(--bgm-charcoal) !important; }
+.text-bgm-leather   { color: var(--bgm-leather) !important; }
+
+/* Border Colours */
+.border-bgm-navy    { border-color: var(--bgm-navy) !important; }
+.border-bgm-forest  { border-color: var(--bgm-forest) !important; }
+.border-bgm-maroon  { border-color: var(--bgm-maroon) !important; }
+.border-bgm-gold    { border-color: var(--bgm-gold) !important; }
+.border-bgm-soft-grey { border-color: var(--bgm-soft-grey) !important; }
+
+/* Functional Colours */
+.bg-bgm-success   { background-color: var(--bgm-success) !important; }
+.bg-bgm-warning   { background-color: var(--bgm-warning) !important; }
+.bg-bgm-error     { background-color: var(--bgm-error) !important; }
+.bg-bgm-info      { background-color: var(--bgm-info) !important; }
+
+.text-bgm-success { color: var(--bgm-success) !important; }
+.text-bgm-warning { color: var(--bgm-warning) !important; }
+.text-bgm-error   { color: var(--bgm-error) !important; }
+.text-bgm-info    { color: var(--bgm-info) !important; }
