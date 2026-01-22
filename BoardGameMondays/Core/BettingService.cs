@@ -468,6 +468,111 @@ public sealed class BettingService
         AlreadyResolved
     }
 
+    public enum CancelBetsResult
+    {
+        Ok,
+        NotFound,
+        AlreadyResolved
+    }
+
+    /// <summary>
+    /// Cancels all unresolved bets for a game and refunds the bet amounts to each user.
+    /// This is used when a confirmed game is being removed before a winner is set.
+    /// </summary>
+    public async Task<CancelBetsResult> CancelGameBetsAsync(int gameNightGameId, CancellationToken ct = default)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+
+        var gameExists = await db.GameNightGames
+            .AsNoTracking()
+            .AnyAsync(g => g.Id == gameNightGameId, ct);
+
+        if (!gameExists)
+        {
+            return CancelBetsResult.NotFound;
+        }
+
+        // Check if any bets have already been resolved (winner was set and paid out).
+        var hasResolved = await db.GameNightGameBets
+            .AsNoTracking()
+            .AnyAsync(b => b.GameNightGameId == gameNightGameId && b.IsResolved, ct);
+
+        if (hasResolved)
+        {
+            return CancelBetsResult.AlreadyResolved;
+        }
+
+        // Load all unresolved bets to refund.
+        var bets = await db.GameNightGameBets
+            .Where(b => b.GameNightGameId == gameNightGameId && !b.IsResolved)
+            .ToListAsync(ct);
+
+        if (bets.Count == 0)
+        {
+            return CancelBetsResult.Ok;
+        }
+
+        var strategy = db.Database.CreateExecutionStrategy();
+
+        return await strategy.ExecuteAsync(async () =>
+        {
+            await using var tx = await db.Database.BeginTransactionAsync(ct);
+
+            // Refund each user's bet amount.
+            foreach (var bet in bets)
+            {
+                await _coins.TryAddAsync(db, bet.UserId, bet.Amount, ct);
+            }
+
+            // Remove all the bets.
+            db.GameNightGameBets.RemoveRange(bets);
+
+            await db.SaveChangesAsync(ct);
+            await tx.CommitAsync(ct);
+
+            return CancelBetsResult.Ok;
+        });
+    }
+
+    /// <summary>
+    /// Cancels all unresolved bets for a game and refunds the bet amounts to each user.
+    /// This overload uses the provided DbContext to participate in an external transaction.
+    /// The caller is responsible for committing the transaction.
+    /// </summary>
+    public async Task<CancelBetsResult> CancelGameBetsAsync(ApplicationDbContext db, int gameNightGameId, CancellationToken ct = default)
+    {
+        // Check if any bets have already been resolved (winner was set and paid out).
+        var hasResolved = await db.GameNightGameBets
+            .AsNoTracking()
+            .AnyAsync(b => b.GameNightGameId == gameNightGameId && b.IsResolved, ct);
+
+        if (hasResolved)
+        {
+            return CancelBetsResult.AlreadyResolved;
+        }
+
+        // Load all unresolved bets to refund.
+        var bets = await db.GameNightGameBets
+            .Where(b => b.GameNightGameId == gameNightGameId && !b.IsResolved)
+            .ToListAsync(ct);
+
+        if (bets.Count == 0)
+        {
+            return CancelBetsResult.Ok;
+        }
+
+        // Refund each user's bet amount.
+        foreach (var bet in bets)
+        {
+            await _coins.TryAddAsync(db, bet.UserId, bet.Amount, ct);
+        }
+
+        // Remove all the bets.
+        db.GameNightGameBets.RemoveRange(bets);
+
+        return CancelBetsResult.Ok;
+    }
+
     public sealed record UserBet(int Amount, Guid WinnerMemberId, string WinnerMemberName, int OddsTimes100);
 
     public sealed record UserBetHistory(

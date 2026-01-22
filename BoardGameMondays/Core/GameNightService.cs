@@ -279,6 +279,87 @@ public sealed class GameNightService
         return await GetByIdAsync(gameNightId, ct);
     }
 
+    /// <summary>
+    /// Removes a confirmed game from a game night. This is only allowed if:
+    /// - No winner has been set yet
+    /// - No bets have been resolved (paid out)
+    /// All unresolved bets will be refunded before removal.
+    /// </summary>
+    public async Task<CancelConfirmedGameResult> CancelConfirmedGameAsync(Guid gameNightId, int gameNightGameId, BettingService bettingService, CancellationToken ct = default)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        var game = await db.GameNightGames
+            .FirstOrDefaultAsync(g => g.Id == gameNightGameId && g.GameNightId == gameNightId, ct);
+
+        if (game is null)
+        {
+            return new CancelConfirmedGameResult(CancelConfirmedGameStatus.NotFound, null);
+        }
+
+        // Only allow canceling confirmed games.
+        if (!game.IsConfirmed)
+        {
+            return new CancelConfirmedGameResult(CancelConfirmedGameStatus.NotConfirmed, await GetByIdAsync(gameNightId, ct));
+        }
+
+        // Don't allow if winner is already set (IsPlayed indicates result was confirmed).
+        if (game.IsPlayed || game.WinnerMemberId is not null || game.WinnerTeamName is not null)
+        {
+            return new CancelConfirmedGameResult(CancelConfirmedGameStatus.WinnerAlreadySet, await GetByIdAsync(gameNightId, ct));
+        }
+
+        // Check if any bets have already been resolved.
+        var hasResolvedBets = await db.GameNightGameBets
+            .AsNoTracking()
+            .AnyAsync(b => b.GameNightGameId == gameNightGameId && b.IsResolved, ct);
+
+        if (hasResolvedBets)
+        {
+            return new CancelConfirmedGameResult(CancelConfirmedGameStatus.BetsAlreadyResolved, await GetByIdAsync(gameNightId, ct));
+        }
+
+        // Use execution strategy for production database resilience (required for Azure SQL retry logic).
+        var strategy = db.Database.CreateExecutionStrategy();
+
+        var cancelResult = await strategy.ExecuteAsync(async () =>
+        {
+            await using var tx = await db.Database.BeginTransactionAsync(ct);
+
+            // Refund all unresolved bets using the same db context (participates in transaction).
+            var result = await bettingService.CancelGameBetsAsync(db, gameNightGameId, ct);
+            if (result == BettingService.CancelBetsResult.AlreadyResolved)
+            {
+                await tx.RollbackAsync(ct);
+                return BettingService.CancelBetsResult.AlreadyResolved;
+            }
+
+            // Remove the game within the same transaction.
+            db.GameNightGames.Remove(game);
+            await db.SaveChangesAsync(ct);
+            await tx.CommitAsync(ct);
+
+            return BettingService.CancelBetsResult.Ok;
+        });
+
+        if (cancelResult == BettingService.CancelBetsResult.AlreadyResolved)
+        {
+            return new CancelConfirmedGameResult(CancelConfirmedGameStatus.BetsAlreadyResolved, await GetByIdAsync(gameNightId, ct));
+        }
+
+        return new CancelConfirmedGameResult(CancelConfirmedGameStatus.Ok, await GetByIdAsync(gameNightId, ct));
+    }
+
+    public enum CancelConfirmedGameStatus
+    {
+        Ok,
+        NotFound,
+        NotConfirmed,
+        WinnerAlreadySet,
+        BetsAlreadyResolved
+    }
+
+    public sealed record CancelConfirmedGameResult(CancelConfirmedGameStatus Status, GameNight? Night);
+
     public async Task<IReadOnlyList<VictoryRouteTemplate>> GetVictoryRoutesForGameAsync(Guid gameId, CancellationToken ct = default)
     {
         await using var db = await _dbFactory.CreateDbContextAsync(ct);

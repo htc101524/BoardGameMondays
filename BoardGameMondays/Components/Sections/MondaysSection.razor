@@ -247,6 +247,40 @@
                                                 </button>
                                             }
 
+                                            @if (_isAdmin && game.IsConfirmed && !game.IsPlayed && game.Winner is null && !game.IsSettled)
+                                            {
+                                                @if (_cancelConfirmedGamePending.Contains(game.Id))
+                                                {
+                                                    <button type="button"
+                                                            class="btn btn-sm btn-danger"
+                                                            disabled="@_saving"
+                                                            title="This will refund all bets and remove the game"
+                                                            @onclick="() => ConfirmCancelConfirmedGameAsync(game.Id)">
+                                                        Confirm Cancel
+                                                    </button>
+                                                    <button type="button"
+                                                            class="btn btn-sm btn-outline-secondary"
+                                                            disabled="@_saving"
+                                                            @onclick="() => AbortCancelConfirmedGame(game.Id)">
+                                                        Keep Game
+                                                    </button>
+                                                }
+                                                else
+                                                {
+                                                    <button type="button"
+                                                            class="btn btn-sm btn-outline-warning"
+                                                            disabled="@_saving"
+                                                            title="Cancel this confirmed game (refunds bets)"
+                                                            @onclick="() => BeginCancelConfirmedGame(game.Id)">
+                                                        Cancel Game
+                                                    </button>
+                                                }
+                                                @if (_cancelConfirmedGameStatusByGameId.TryGetValue(game.Id, out var cancelStatus) && !string.IsNullOrWhiteSpace(cancelStatus))
+                                                {
+                                                    <span class="text-warning small">@cancelStatus</span>
+                                                }
+                                            }
+
                                             @if (game.Winner is not null)
                                             {
                                                 <span class="badge text-bg-success">Winner: @game.Winner.Name</span>
@@ -984,6 +1018,8 @@
     private readonly Dictionary<int, string?> _betStatusByGameId = new();
     private readonly Dictionary<int, string?> _settleStatusByGameId = new();
     private readonly HashSet<int> _confirmWinnerPending = new();
+    private readonly HashSet<int> _cancelConfirmedGamePending = new();
+    private readonly Dictionary<int, string?> _cancelConfirmedGameStatusByGameId = new();
     private readonly Dictionary<int, string?> _pendingWinnerSelectionByGameId = new();
     private readonly Dictionary<int, string?> _pendingTeamWinnerSelectionByGameId = new();
     private readonly HashSet<int> _teamModeGameIds = new();
@@ -2145,6 +2181,8 @@
         _betStatusByGameId.Remove(gameNightGameId);
         _settleStatusByGameId.Remove(gameNightGameId);
         _confirmWinnerPending.Remove(gameNightGameId);
+        _cancelConfirmedGamePending.Remove(gameNightGameId);
+        _cancelConfirmedGameStatusByGameId.Remove(gameNightGameId);
         _teamModeGameIds.Remove(gameNightGameId);
         _clientTeams.Remove(gameNightGameId);
         _paletteImageUrlByGame.Remove(gameNightGameId);
@@ -2152,6 +2190,61 @@
         foreach (var key in _selectedTeamPlayerByKey.Keys.Where(k => k.GameNightGameId == gameNightGameId).ToArray())
         {
             _selectedTeamPlayerByKey.Remove(key);
+        }
+    }
+
+    private void BeginCancelConfirmedGame(int gameNightGameId)
+    {
+        _cancelConfirmedGamePending.Add(gameNightGameId);
+        _cancelConfirmedGameStatusByGameId[gameNightGameId] = "This will refund all bets placed on this game.";
+    }
+
+    private void AbortCancelConfirmedGame(int gameNightGameId)
+    {
+        _cancelConfirmedGamePending.Remove(gameNightGameId);
+        _cancelConfirmedGameStatusByGameId[gameNightGameId] = null;
+    }
+
+    private async Task ConfirmCancelConfirmedGameAsync(int gameNightGameId)
+    {
+        if (!_isAdmin || _selectedNight is null)
+        {
+            return;
+        }
+
+        _saving = true;
+        _cancelConfirmedGameStatusByGameId[gameNightGameId] = null;
+        try
+        {
+            var result = await GameNightService.CancelConfirmedGameAsync(_selectedNight.Id, gameNightGameId, BettingService);
+            
+            if (result.Status == GameNightService.CancelConfirmedGameStatus.Ok)
+            {
+                CleanupRemovedGameClientState(gameNightGameId);
+                _selectedNight = result.Night;
+                _myBets = _selectedNight is not null && !string.IsNullOrWhiteSpace(_userId)
+                    ? await BettingService.GetUserBetsForNightAsync(_selectedNight.Id, _userId)
+                    : new Dictionary<int, BettingService.UserBet>();
+                if (!string.IsNullOrWhiteSpace(_userId))
+                {
+                    _coins = await CoinService.GetCoinsAsync(_userId);
+                }
+            }
+            else
+            {
+                _cancelConfirmedGameStatusByGameId[gameNightGameId] = result.Status switch
+                {
+                    GameNightService.CancelConfirmedGameStatus.WinnerAlreadySet => "Cannot cancel: winner already set.",
+                    GameNightService.CancelConfirmedGameStatus.BetsAlreadyResolved => "Cannot cancel: bets already paid out.",
+                    GameNightService.CancelConfirmedGameStatus.NotConfirmed => "Game is not confirmed.",
+                    _ => "Could not cancel game."
+                };
+                _cancelConfirmedGamePending.Remove(gameNightGameId);
+            }
+        }
+        finally
+        {
+            _saving = false;
         }
     }
 
