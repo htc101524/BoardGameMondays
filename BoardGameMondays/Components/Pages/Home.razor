@@ -16,6 +16,7 @@
 @inject IWebHostEnvironment Env
 @inject BgmCoinService CoinService
 @inject BlogService BlogService
+@inject GameNightService GameNightService
 
 <PageTitle>Board Game Mondays</PageTitle>
 
@@ -410,7 +411,7 @@
 
 <GamesSection OnGameSelected="HandleGameSelectedAsync" />
 
-<MondaysSection />
+<MondaysSection @ref="_mondaysSection" />
 
 <BlogSection />
 
@@ -435,6 +436,8 @@
 
     // Extensible highlight system - easy to add/remove highlights
     private List<IHomeHighlight> _highlights = new();
+
+    private MondaysSection? _mondaysSection;
 
     protected override async Task OnInitializedAsync()
     {
@@ -660,7 +663,34 @@
     }
 
     private async Task GoToMondaysAsync()
-        => await JS.InvokeVoidAsync("bgm.scrollToIdNextFrame", "mondays", "smooth");
+    {
+        // Scroll to the section first
+        await JS.InvokeVoidAsync("bgm.scrollToIdNextFrame", "mondays", "smooth");
+        
+        // Get the last past Monday from the GameNightService
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        var mondayOnOrBeforeToday = GetMondayOnOrBefore(today);
+        var nextMonday = today.DayOfWeek == DayOfWeek.Monday
+            ? mondayOnOrBeforeToday
+            : mondayOnOrBeforeToday.AddDays(7);
+        
+        var pastDates = await GameNightService.GetRecentPastGameNightDatesAsync(nextMonday, take: 1);
+        var lastMonday = pastDates.FirstOrDefault();
+        
+        // If we have a last Monday and the MondaysSection is available, select it
+        // Add a small delay to ensure the section is rendered
+        if (lastMonday != default && _mondaysSection is not null)
+        {
+            await Task.Delay(50);
+            await _mondaysSection.SelectMondayAsync(lastMonday);
+        }
+    }
+
+    private static DateOnly GetMondayOnOrBefore(DateOnly date)
+    {
+        var delta = (7 + ((int)date.DayOfWeek - (int)DayOfWeek.Monday)) % 7;
+        return date.AddDays(-delta);
+    }
 
     private static Review? PickDefaultReview(BoardGame? game)
         => game?.Reviews?.OrderByDescending(r => r.CreatedOn).FirstOrDefault();

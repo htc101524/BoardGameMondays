@@ -1006,6 +1006,9 @@
     private IReadOnlyList<WantToPlayService.WantToPlayEntry> _mostWanted = Array.Empty<WantToPlayService.WantToPlayEntry>();
     private OddsDisplayFormat _oddsFormat = OddsDisplayFormat.Fraction;
 
+    [Parameter]
+    public DateOnly? InitialSelection { get; set; }
+
     protected override async Task OnInitializedAsync()
     {
         var today = DateOnly.FromDateTime(DateTime.Today);
@@ -1071,9 +1074,29 @@
         // Member options for past-night attendance management.
         _allMembers.AddRange(await GameNightService.GetAllMembersAsync());
 
-        _selected = _nextMonday;
+        // Use InitialSelection if provided and valid, otherwise default to next Monday
+        if (InitialSelection.HasValue && dates.Contains(InitialSelection.Value))
+        {
+            _selected = InitialSelection.Value;
+        }
+        else
+        {
+            _selected = _nextMonday;
+        }
         await LoadSelectedAsync();
         await RefreshMostWantedAsync();
+    }
+
+    /// <summary>
+    /// Selects a specific Monday date. Can be called from parent components.
+    /// </summary>
+    public async Task SelectMondayAsync(DateOnly date)
+    {
+        if (_items.Any(i => i.Date == date))
+        {
+            await SelectAsync(date);
+            StateHasChanged();
+        }
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
