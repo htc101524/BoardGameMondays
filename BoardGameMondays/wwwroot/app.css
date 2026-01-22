@@ -15,6 +15,8 @@
 html,
 body {
     caret-color: transparent;
+    overflow-x: hidden;
+    max-width: 100vw;
 }
 
 input,

@@ -15,6 +15,9 @@
     box-shadow: 0 6px 18px rgba(34,24,10,0.06);
     transition: box-shadow 180ms ease, background 180ms ease;
     will-change: box-shadow, background;
+    width: 100%;
+    max-width: 100vw;
+    overflow: hidden;
 }
 
 /* Dark icons/text specifically for home header (over the hero). More
@@ -39,6 +42,8 @@
     padding: 0;
     padding-right: 2.5vw;
     gap: 0;
+    max-width: 100%;
+    overflow: hidden;
 }
 
 /* Menu area - tappable square on left for mobile */
@@ -94,9 +99,11 @@
 /* Mobile centered title */
 .bgm-header__center {
     display: flex;
-    flex: 1 1 auto;
+    flex: 1 1 0;
+    min-width: 0;
     justify-content: center;
     align-items: center;
+    overflow: hidden;
 }
 
 .bgm-header__title {
@@ -114,6 +121,7 @@
     display: flex;
     align-items: stretch;
     gap: 0;
+    flex-shrink: 0;
 }
 
 /* Desktop action links container */
@@ -562,8 +570,8 @@
     .bgm-header__center { display: flex; }
     .bgm-header__brand { display: none; }
     .bgm-header__desktopActions { display: none; }
-    .bgm-header__inner { justify-content: space-between; padding-left: 0; }
-    .bgm-header__right { display: flex; align-items: stretch; gap: 0; padding-right: 1rem; }
+    .bgm-header__inner { justify-content: space-between; padding-left: 0; padding-right: 0; }
+    .bgm-header__right { display: flex; align-items: stretch; gap: 0; padding-right: 0.5rem; flex-shrink: 0; }
 
     /* Burger -> cross animation */
     .bgm-menuIcon path { transition: transform 200ms ease, opacity 140ms ease; transform-origin: center; }
@@ -572,7 +580,7 @@
     .bgm-menuButton.is-open .bgm-menuIcon path:nth-child(3) { transform: translateY(-10px) rotate(-45deg); }
 
     /* show tappable square on left */
-    .bgm-menuArea { display: flex; background: var(--bgm-menu-bg); }
+    .bgm-menuArea { display: flex; background: var(--bgm-menu-bg); flex-shrink: 0; }
     .bgm-menuArea .bgm-menuButton { border-radius: 0; }
     .bgm-menuIcon path { stroke: #fff; fill: none; }
 }
