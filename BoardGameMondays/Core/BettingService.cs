@@ -182,65 +182,71 @@ public sealed class BettingService
             return ResolveResult.AlreadyResolved;
         }
 
-        await using var tx = await db.Database.BeginTransactionAsync(ct);
-
+        // Use execution strategy for Azure SQL retry logic - wrap entire transaction in ExecuteAsync.
+        var strategy = db.Database.CreateExecutionStrategy();
         var winnerId = game.WinnerMemberId;
-        Dictionary<Guid, string?> playerTeams = new();
-        if (winnerHasTeam)
-        {
-            playerTeams = await db.GameNightGamePlayers
-                .AsNoTracking()
-                .Where(p => p.GameNightGameId == gameNightGameId)
-                .ToDictionaryAsync(p => p.MemberId, p => p.TeamName, ct);
-        }
-        var userPayouts = new Dictionary<string, int>(StringComparer.Ordinal);
 
-        foreach (var bet in unresolved)
+        await strategy.ExecuteAsync(async () =>
         {
-            var payout = 0;
-            var isWinningBet = false;
+            await using var tx = await db.Database.BeginTransactionAsync(ct);
 
+            Dictionary<Guid, string?> playerTeams = new();
             if (winnerHasTeam)
             {
-                if (playerTeams.TryGetValue(bet.PredictedWinnerMemberId, out var teamName)
-                    && !string.IsNullOrWhiteSpace(teamName)
-                    && string.Equals(teamName, game.WinnerTeamName, StringComparison.OrdinalIgnoreCase))
+                playerTeams = await db.GameNightGamePlayers
+                    .AsNoTracking()
+                    .Where(p => p.GameNightGameId == gameNightGameId)
+                    .ToDictionaryAsync(p => p.MemberId, p => p.TeamName, ct);
+            }
+            var userPayouts = new Dictionary<string, int>(StringComparer.Ordinal);
+
+            foreach (var bet in unresolved)
+            {
+                var payout = 0;
+                var isWinningBet = false;
+
+                if (winnerHasTeam)
+                {
+                    if (playerTeams.TryGetValue(bet.PredictedWinnerMemberId, out var teamName)
+                        && !string.IsNullOrWhiteSpace(teamName)
+                        && string.Equals(teamName, game.WinnerTeamName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        isWinningBet = true;
+                    }
+                }
+                else if (winnerId is Guid memberWinner && bet.PredictedWinnerMemberId == memberWinner)
                 {
                     isWinningBet = true;
                 }
-            }
-            else if (winnerId is Guid memberWinner && bet.PredictedWinnerMemberId == memberWinner)
-            {
-                isWinningBet = true;
-            }
 
-            if (isWinningBet)
-            {
-                var profit = ComputeProfit(bet.Amount, bet.OddsTimes100);
-                payout = bet.Amount + profit;
-
-                if (userPayouts.TryGetValue(bet.UserId, out var existing))
+                if (isWinningBet)
                 {
-                    userPayouts[bet.UserId] = existing + payout;
+                    var profit = ComputeProfit(bet.Amount, bet.OddsTimes100);
+                    payout = bet.Amount + profit;
+
+                    if (userPayouts.TryGetValue(bet.UserId, out var existing))
+                    {
+                        userPayouts[bet.UserId] = existing + payout;
+                    }
+                    else
+                    {
+                        userPayouts[bet.UserId] = payout;
+                    }
                 }
-                else
-                {
-                    userPayouts[bet.UserId] = payout;
-                }
+
+                bet.IsResolved = true;
+                bet.Payout = payout;
+                bet.ResolvedOn = DateTimeOffset.UtcNow;
             }
 
-            bet.IsResolved = true;
-            bet.Payout = payout;
-            bet.ResolvedOn = DateTimeOffset.UtcNow;
-        }
+            foreach (var kvp in userPayouts)
+            {
+                await _coins.TryAddAsync(db, kvp.Key, kvp.Value, ct);
+            }
 
-        foreach (var kvp in userPayouts)
-        {
-            await _coins.TryAddAsync(db, kvp.Key, kvp.Value, ct);
-        }
-
-        await db.SaveChangesAsync(ct);
-        await tx.CommitAsync(ct);
+            await db.SaveChangesAsync(ct);
+            await tx.CommitAsync(ct);
+        });
 
         // Update ELO rankings based on the game outcome
         await UpdateRankingsForGameAsync(gameNightGameId, game.WinnerMemberId, game.WinnerTeamName, ct);

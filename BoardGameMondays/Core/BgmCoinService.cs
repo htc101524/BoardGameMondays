@@ -45,17 +45,18 @@ public sealed class BgmCoinService
             return false;
         }
 
-        var affected = await db.Users
-            .Where(u => u.Id == userId && u.BgmCoins >= amount)
-            .ExecuteUpdateAsync(setters => setters.SetProperty(u => u.BgmCoins, u => u.BgmCoins - amount), ct);
-
-        if (affected > 0)
+        // When called with an external DbContext (likely inside a transaction),
+        // use traditional tracking to avoid ExecuteUpdateAsync which conflicts
+        // with SQL Server's retry execution strategy inside user transactions.
+        var user = await db.Users.FirstOrDefaultAsync(u => u.Id == userId && u.BgmCoins >= amount, ct);
+        if (user is null)
         {
-            Changed?.Invoke();
-            return true;
+            return false;
         }
 
-        return false;
+        user.BgmCoins -= amount;
+        Changed?.Invoke();
+        return true;
     }
 
     public async Task<bool> TryAddAsync(string userId, int amount, CancellationToken ct = default)
@@ -76,17 +77,18 @@ public sealed class BgmCoinService
             return false;
         }
 
-        var affected = await db.Users
-            .Where(u => u.Id == userId)
-            .ExecuteUpdateAsync(setters => setters.SetProperty(u => u.BgmCoins, u => u.BgmCoins + amount), ct);
-
-        if (affected > 0)
+        // When called with an external DbContext (likely inside a transaction),
+        // use traditional tracking to avoid ExecuteUpdateAsync which conflicts
+        // with SQL Server's retry execution strategy inside user transactions.
+        var user = await db.Users.FirstOrDefaultAsync(u => u.Id == userId, ct);
+        if (user is null)
         {
-            Changed?.Invoke();
-            return true;
+            return false;
         }
 
-        return false;
+        user.BgmCoins += amount;
+        Changed?.Invoke();
+        return true;
     }
 
     public async Task<IReadOnlyList<CoinLeaderboardItem>> GetLeaderboardAsync(int take, CancellationToken ct = default)
