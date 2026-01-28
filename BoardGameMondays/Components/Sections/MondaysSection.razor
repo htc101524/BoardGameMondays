@@ -2,6 +2,7 @@
 @using Microsoft.AspNetCore.Components.Authorization
 @using System.Security.Claims
 @using System.Globalization
+@using Microsoft.AspNetCore.SignalR.Client
 @inject GameNightService GameNightService
 @inject BoardGameService BoardGameService
 @inject AuthenticationStateProvider AuthStateProvider
@@ -1041,6 +1042,7 @@
     private string? _mondaysSectionBackgroundHex;
     private IReadOnlyList<WantToPlayService.WantToPlayEntry> _mostWanted = Array.Empty<WantToPlayService.WantToPlayEntry>();
     private OddsDisplayFormat _oddsFormat = OddsDisplayFormat.Fraction;
+    private HubConnection? _hubConnection;
 
     [Parameter]
     public DateOnly? InitialSelection { get; set; }
@@ -1137,6 +1139,37 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        if (firstRender)
+        {
+            // Initialize SignalR connection for real-time updates
+            _hubConnection = new HubConnectionBuilder()
+                .WithUrl(Navigation.ToAbsoluteUri("/gameNightHub"))
+                .WithAutomaticReconnect()
+                .Build();
+
+            _hubConnection.On<Guid, int>(GameNightHub.ReceiveOddsUpdate, async (gameNightId, gameNightGameId) =>
+            {
+                // Only refresh if we're viewing this game night
+                if (_selectedNight?.Id == gameNightId)
+                {
+                    await InvokeAsync(async () =>
+                    {
+                        _selectedNight = await GameNightService.GetByDateAsync(_selected);
+                        StateHasChanged();
+                    });
+                }
+            });
+
+            try
+            {
+                await _hubConnection.StartAsync();
+            }
+            catch
+            {
+                // Connection failed, but the app can still function without real-time updates
+            }
+        }
+
         if (_selectedNight is null)
         {
             return;
@@ -1203,6 +1236,11 @@
     {
         CoinService.Changed -= OnCoinsChanged;
         WantToPlayService.Changed -= OnWantToPlayChanged;
+        
+        if (_hubConnection is not null)
+        {
+            _ = _hubConnection.DisposeAsync();
+        }
     }
 
     private async Task RefreshMostWantedAsync()
@@ -2360,7 +2398,16 @@
                 _ => "Couldn't place bet."
             };
 
-            _myBets = await BettingService.GetUserBetsForNightAsync(_selectedNight.Id, _userId);
+            // Refresh odds, bets, and coins after a successful bet
+            if (result == BettingService.PlaceBetResult.Ok)
+            {
+                _selectedNight = await GameNightService.GetByDateAsync(_selected);
+            }
+            
+            if (_selectedNight is not null)
+            {
+                _myBets = await BettingService.GetUserBetsForNightAsync(_selectedNight.Id, _userId);
+            }
             await RefreshCoinsAsync();
         }
         finally

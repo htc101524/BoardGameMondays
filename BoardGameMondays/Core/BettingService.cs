@@ -1,6 +1,7 @@
 using BoardGameMondays.Data;
 using BoardGameMondays.Data.Entities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.SignalR;
 
 namespace BoardGameMondays.Core;
 
@@ -10,17 +11,20 @@ public sealed class BettingService
     private readonly BgmCoinService _coins;
     private readonly RankingService _ranking;
     private readonly OddsService _odds;
+    private readonly IHubContext<GameNightHub> _hubContext;
 
     public BettingService(
         IDbContextFactory<ApplicationDbContext> dbFactory,
         BgmCoinService coins,
         RankingService ranking,
-        OddsService odds)
+        OddsService odds,
+        IHubContext<GameNightHub> hubContext)
     {
         _dbFactory = dbFactory;
         _coins = coins;
         _ranking = ranking;
         _odds = odds;
+        _hubContext = hubContext;
     }
 
     public async Task<IReadOnlyDictionary<int, UserBet>> GetUserBetsForNightAsync(Guid gameNightId, string userId, CancellationToken ct = default)
@@ -134,6 +138,9 @@ public sealed class BettingService
 
             await db.SaveChangesAsync(ct);
             await tx.CommitAsync(ct);
+
+            // Broadcast odds update to all connected clients
+            await GameNightHub.BroadcastOddsUpdateAsync(_hubContext, gameNightId, gameNightGameId);
 
             return PlaceBetResult.Ok;
         });

@@ -2209,6 +2209,8 @@ app.Use(async (context, next) =>
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 
+app.MapHub<GameNightHub>("/gameNightHub");
+
 app.Run();
 
 static async Task SendEmailConfirmationAsync(
