@@ -13,6 +13,12 @@ public sealed class GameNightEntity
 
     public string? Recap { get; set; }
 
+    /// <summary>
+    /// Whether the game night has started.
+    /// When true, attendees cannot place new bets, but non-attendees can still bet.
+    /// </summary>
+    public bool HasStarted { get; set; }
+
     public List<GameNightAttendeeEntity> Attendees { get; set; } = new();
 
     public List<GameNightRsvpEntity> Rsvps { get; set; } = new();

@@ -48,7 +48,7 @@ public sealed class BettingService
             x => new UserBet(x.Amount, x.PredictedWinnerMemberId, x.WinnerName, x.OddsTimes100));
     }
 
-    public async Task<PlaceBetResult> PlaceBetAsync(Guid gameNightId, int gameNightGameId, Guid predictedWinnerMemberId, int amount, string userId, CancellationToken ct = default)
+    public async Task<PlaceBetResult> PlaceBetAsync(Guid gameNightId, int gameNightGameId, Guid predictedWinnerMemberId, int amount, string userId, Guid? userMemberId = null, CancellationToken ct = default)
     {
         if (amount <= 0)
         {
@@ -70,6 +70,20 @@ public sealed class BettingService
         if (!game.IsConfirmed)
         {
             return PlaceBetResult.NotConfirmed;
+        }
+
+        // If game night has started, check if the user is an attendee
+        // Attendees cannot place bets, but non-attendees can
+        if (game.GameNight.HasStarted && userMemberId.HasValue)
+        {
+            var isAttendee = await db.GameNightAttendees
+                .AsNoTracking()
+                .AnyAsync(a => a.GameNightId == gameNightId && a.MemberId == userMemberId.Value, ct);
+
+            if (isAttendee)
+            {
+                return PlaceBetResult.GameStarted;
+            }
         }
 
         var gameDate = GameNightService.FromDateKey(game.GameNight.DateKey);
@@ -469,7 +483,8 @@ public sealed class BettingService
         InvalidWinner,
         MissingOdds,
         AlreadyBet,
-        NotEnoughCoins
+        NotEnoughCoins,
+        GameStarted
     }
 
     public enum ResolveResult

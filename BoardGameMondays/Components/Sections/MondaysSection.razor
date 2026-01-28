@@ -248,6 +248,17 @@
                                                 </button>
                                             }
 
+                                            @if (_isAdmin && game.IsConfirmed && !game.IsSettled && game.Winner is null && _selected >= _nextMonday && !_selectedNight.HasStarted)
+                                            {
+                                                <button type="button"
+                                                        class="btn btn-sm btn-warning"
+                                                        disabled="@_saving"
+                                                        title="Block bets from attendees when game begins"
+                                                        @onclick="() => ConfirmStartGameAsync()">
+                                                    Start Game
+                                                </button>
+                                            }
+
                                             @if (_isAdmin && game.IsConfirmed && !game.IsPlayed && game.Winner is null && !game.IsSettled)
                                             {
                                                 @if (_cancelConfirmedGamePending.Contains(game.Id))
@@ -2324,6 +2335,50 @@
         }
     }
 
+    private async Task ConfirmStartGameAsync()
+    {
+        if (!_isAdmin || _selectedNight is null)
+        {
+            return;
+        }
+
+        // Show confirmation dialog
+        if (!await JS.InvokeAsync<bool>("confirm", "Start the game now? Attendees will no longer be able to place bets."))
+        {
+            return;
+        }
+
+        _saving = true;
+        _status = null;
+        try
+        {
+            _selectedNight = await GameNightService.SetHasStartedAsync(_selectedNight.Id, true);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task SetGameStartedAsync(bool hasStarted)
+    {
+        if (!_isAdmin || _selectedNight is null)
+        {
+            return;
+        }
+
+        _saving = true;
+        _status = null;
+        try
+        {
+            _selectedNight = await GameNightService.SetHasStartedAsync(_selectedNight.Id, hasStarted);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
     private async Task ConfirmGameAsync(int gameNightGameId)
     {
         if (!_isAdmin || _selectedNight is null)
@@ -2425,7 +2480,7 @@
         _betStatusByGameId[gameNightGameId] = null;
         try
         {
-            var result = await BettingService.PlaceBetAsync(_selectedNight.Id, gameNightGameId, winnerId, amount, _userId);
+            var result = await BettingService.PlaceBetAsync(_selectedNight.Id, gameNightGameId, winnerId, amount, _userId, _memberId);
             _betStatusByGameId[gameNightGameId] = result switch
             {
                 BettingService.PlaceBetResult.Ok => "Bet placed.",
@@ -2433,6 +2488,7 @@
                 BettingService.PlaceBetResult.MissingOdds => "Odds not set yet.",
                 BettingService.PlaceBetResult.NotConfirmed => "Not confirmed yet.",
                 BettingService.PlaceBetResult.AlreadyBet => "You already bet on this game.",
+                BettingService.PlaceBetResult.GameStarted => "Game started - attendees cannot bet.",
                 _ => "Couldn't place bet."
             };
 

@@ -66,6 +66,23 @@ public sealed class GameNightService
         return await GetByIdAsync(gameNightId, ct);
     }
 
+    public async Task<GameNight?> SetHasStartedAsync(Guid gameNightId, bool hasStarted, CancellationToken ct = default)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        var entity = await db.GameNights
+            .FirstOrDefaultAsync(n => n.Id == gameNightId, ct);
+
+        if (entity is null)
+        {
+            return null;
+        }
+
+        entity.HasStarted = hasStarted;
+        await db.SaveChangesAsync(ct);
+
+        return await GetByIdAsync(gameNightId, ct);
+    }
+
     public async Task<GameNight> CreateAsync(DateOnly date, CancellationToken ct = default)
     {
         var dateKey = ToDateKey(date);
@@ -112,14 +129,24 @@ public sealed class GameNightService
 
     /// <summary>
     /// Updates a member's RSVP for this night.
+    /// - Only allows existing members to RSVP (prevents fake member IDs).
     /// - Records explicit "not going" and "going" decisions.
     /// - Keeps the Attendees list in sync (IsAttending=true => attendee exists; false => attendee removed).
     /// </summary>
     public async Task<GameNight?> SetRsvpAsync(Guid gameNightId, Guid memberId, bool attending, CancellationToken ct = default)
     {
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
+
+        // Verify the game night exists
         var exists = await db.GameNights.AnyAsync(n => n.Id == gameNightId, ct);
         if (!exists)
+        {
+            return null;
+        }
+
+        // Verify the member actually exists to prevent invalid RSVPs
+        var memberExists = await db.Members.AsNoTracking().AnyAsync(m => m.Id == memberId, ct);
+        if (!memberExists)
         {
             return null;
         }
@@ -939,7 +966,7 @@ public sealed class GameNightService
             })
             .ToArray();
 
-        return new GameNight(entity.Id, date, entity.Recap, attendees, rsvps, games);
+        return new GameNight(entity.Id, date, entity.Recap, entity.HasStarted, attendees, rsvps, games);
     }
 
     public static int ToDateKey(DateOnly date)
@@ -953,7 +980,7 @@ public sealed class GameNightService
         return new DateOnly(year, month, day);
     }
 
-    public sealed record GameNight(Guid Id, DateOnly Date, string? Recap, IReadOnlyList<GameNightAttendee> Attendees, IReadOnlyList<GameNightRsvp> Rsvps, IReadOnlyList<GameNightGame> Games);
+    public sealed record GameNight(Guid Id, DateOnly Date, string? Recap, bool HasStarted, IReadOnlyList<GameNightAttendee> Attendees, IReadOnlyList<GameNightRsvp> Rsvps, IReadOnlyList<GameNightGame> Games);
 
     public sealed record GameNightAttendee(Guid MemberId, string MemberName, string? SnackBrought);
 
