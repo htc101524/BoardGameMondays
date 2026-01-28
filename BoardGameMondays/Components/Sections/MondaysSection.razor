@@ -20,7 +20,7 @@
     <div class="home-section__inner">
         <h1>Mondays</h1>
 
-        <div class="bgm-mondaysScroller" role="list" aria-label="Select a Monday">
+        <div class="bgm-mondaysScroller" role="list" aria-label="Select a Monday" @ref="_mondaysScrollerRef">
             @foreach (var item in _items)
             {
                 var isSelected = item.Date == _selected;
@@ -1039,6 +1039,7 @@
     private readonly Dictionary<int, string?> _victoryRouteStatusByGameId = new();
 
     private ElementReference _mondaysSectionRef;
+    private ElementReference _mondaysScrollerRef;
     private string? _mondaysSectionBackgroundHex;
     private IReadOnlyList<WantToPlayService.WantToPlayEntry> _mostWanted = Array.Empty<WantToPlayService.WantToPlayEntry>();
     private OddsDisplayFormat _oddsFormat = OddsDisplayFormat.Fraction;
@@ -1168,6 +1169,16 @@
             {
                 // Connection failed, but the app can still function without real-time updates
             }
+
+            // Scroll Monday scroller to show both last past and next Monday
+            try
+            {
+                await ScrollMondaysScrollerAsync();
+            }
+            catch
+            {
+                // Scroll failure is not critical
+            }
         }
 
         if (_selectedNight is null)
@@ -1246,6 +1257,33 @@
     private async Task RefreshMostWantedAsync()
     {
         _mostWanted = await WantToPlayService.GetTopWantedAsync(5);
+    }
+
+    private async Task ScrollMondaysScrollerAsync()
+    {
+        if (_lastPastMonday is null || _items.Count == 0)
+        {
+            return;
+        }
+
+        try
+        {
+            // Find indices of last past Monday and next Monday
+            var lastPastIndex = _items.FindIndex(i => i.Date == _lastPastMonday);
+            var nextMondayIndex = _items.FindIndex(i => i.Date == _nextMonday);
+
+            if (lastPastIndex < 0 || nextMondayIndex < 0)
+            {
+                return;
+            }
+
+            // Call JavaScript to scroll the container to show both
+            await JS.InvokeVoidAsync("bgm.scrollMondaysScroller", _mondaysScrollerRef, lastPastIndex, nextMondayIndex);
+        }
+        catch
+        {
+            // Scroll failure is not critical
+        }
     }
 
     private void OnWantToPlayChanged()

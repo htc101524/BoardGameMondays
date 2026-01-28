@@ -178,6 +178,57 @@ window.bgm.getBackgroundHex = (element) => {
     return null;
 };
 
+window.bgm.scrollMondaysScroller = (scrollerElement, lastPastIndex, nextMondayIndex) => {
+    if (!scrollerElement || lastPastIndex < 0 || nextMondayIndex < 0) {
+        return;
+    }
+
+    const buttons = scrollerElement.querySelectorAll('.bgm-mondayCube');
+    if (buttons.length <= lastPastIndex || buttons.length <= nextMondayIndex) {
+        return;
+    }
+
+    const lastPastButton = buttons[lastPastIndex];
+    const nextMondayButton = buttons[nextMondayIndex];
+
+    // Get the scroller's visible area
+    const scrollerRect = scrollerElement.getBoundingClientRect();
+    const lastPastRect = lastPastButton.getBoundingClientRect();
+    const nextMondayRect = nextMondayButton.getBoundingClientRect();
+
+    // Calculate scroll position to show both
+    // We want lastPastButton and nextMondayButton both visible with some padding
+    const scrollerWidth = scrollerElement.clientWidth;
+    const gap = 12; // CSS gap value
+
+    // Position where the first button (last past) should be visible
+    // We'll aim to center the range between lastPast and nextMonday in the viewport
+    const firstButtonLeftOffset = lastPastButton.offsetLeft;
+    const secondButtonRightOffset = nextMondayButton.offsetLeft + nextMondayButton.offsetWidth;
+    const totalRange = secondButtonRightOffset - firstButtonLeftOffset;
+
+    // If the range fits in the viewport, center it
+    // Otherwise, show from last past with some space to next
+    let targetScroll;
+    if (totalRange + gap * 2 <= scrollerWidth) {
+        // Both fit comfortably; center the range
+        targetScroll = firstButtonLeftOffset - (scrollerWidth - totalRange) / 2;
+    } else {
+        // They don't both fit; show last past at left with padding
+        targetScroll = firstButtonLeftOffset - gap;
+    }
+
+    // Clamp to valid scroll range
+    const maxScroll = scrollerElement.scrollWidth - scrollerWidth;
+    targetScroll = Math.max(0, Math.min(maxScroll, targetScroll));
+
+    // Smooth scroll to position
+    scrollerElement.scrollTo({
+        left: targetScroll,
+        behavior: 'smooth'
+    });
+};
+
 // Extract a lightweight 3-color palette from an image and apply it to an element as CSS vars.
 // Vars set: --bgm-c1-rgb, --bgm-c2-rgb, --bgm-c3-rgb (comma-separated RGB, e.g. "123, 45, 67")
 (() => {
