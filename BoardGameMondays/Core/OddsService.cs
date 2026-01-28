@@ -9,6 +9,19 @@ namespace BoardGameMondays.Core;
 /// </summary>
 public sealed class OddsService
 {
+    /// <summary>
+    /// Game type affects how odds are calculated.
+    /// </summary>
+    private enum GameType
+    {
+        /// <summary>No teams: each player bets on themselves winning.</summary>
+        Individual,
+        /// <summary>Two or more teams: players bet on their team winning.</summary>
+        Team,
+        /// <summary>One team: all players bet on their single team winning.</summary>
+        CoOp
+    }
+
     private readonly IDbContextFactory<ApplicationDbContext> _dbFactory;
     private readonly RankingService _rankingService;
     private readonly Random _random = new();
@@ -26,20 +39,17 @@ public sealed class OddsService
     /// <summary>
     /// How much randomness to add to initial odds (+/- this percentage of the base odds).
     /// 0.08 = 8% variance.
+    /// Only applied during GenerateInitialOddsAsync, not during cashflow adjustments.
     /// </summary>
     private const double InitialOddsRandomnessFactor = 0.08;
 
     /// <summary>
-    /// How aggressively to adjust odds based on cashflow imbalance.
-    /// Lower = more generous (less movement). We use a small factor for fun.
+    /// Target implied probability range (as percentage: 120-130% overround).
+    /// This represents the "house edge" - the amount odds favor the house.
+    /// 120% = 1.2x total probability, 130% = 1.3x total probability.
     /// </summary>
-    private const double CashflowAdjustmentFactor = 0.15;
-
-    /// <summary>
-    /// The "margin" we apply - how generous we are. 1.0 = fair odds, lower = more generous.
-    /// 0.92 means we're giving 8% more generous odds than mathematically fair.
-    /// </summary>
-    private const double GenerosityFactor = 0.92;
+    private const double MinImpliedProbability = 1.20;
+    private const double MaxImpliedProbability = 1.30;
 
     /// <summary>
     /// Standard appealing betting fractions (as decimal odds x100), sorted.
@@ -115,23 +125,28 @@ public sealed class OddsService
         var playerIds = game.Players.Select(p => p.MemberId).ToList();
         var ratings = await _rankingService.GetRatingsAsync(playerIds, ct);
 
-        // Check if this is a team game
-        var teams = game.Players
-            .Where(p => !string.IsNullOrWhiteSpace(p.TeamName))
-            .GroupBy(p => p.TeamName!)
-            .ToList();
-
+        // Determine game type
+        var gameType = DetermineGameType(game.Players);
         Dictionary<Guid, int> oddsMap;
 
-        if (teams.Count >= 2)
+        switch (gameType)
         {
-            // Team-based odds
-            oddsMap = CalculateTeamOdds(teams, ratings);
-        }
-        else
-        {
-            // Individual odds
-            oddsMap = CalculateIndividualOdds(playerIds, ratings);
+            case GameType.Team:
+                var teams = game.Players
+                    .Where(p => !string.IsNullOrWhiteSpace(p.TeamName))
+                    .GroupBy(p => p.TeamName!)
+                    .ToList();
+                oddsMap = CalculateTeamOdds(teams, ratings);
+                break;
+
+            case GameType.CoOp:
+                oddsMap = CalculateCoOpOdds(game.Players, ratings);
+                break;
+
+            case GameType.Individual:
+            default:
+                oddsMap = CalculateIndividualOdds(playerIds, ratings);
+                break;
         }
 
         // Remove existing odds and add new ones
@@ -159,6 +174,10 @@ public sealed class OddsService
 
     /// <summary>
     /// Recalculates odds for a game based on current bet cashflows.
+    /// Uses an intelligent algorithm that balances:
+    /// - Target implied probability (120-130%)
+    /// - House liability exposure per outcome
+    /// - Appealing betting fractions
     /// Should be called within the same transaction as placing a bet.
     /// </summary>
     /// <param name="db">The database context (for transaction consistency).</param>
@@ -176,18 +195,37 @@ public sealed class OddsService
             return;
         }
 
-        // Get current bet totals per outcome
+        var gameType = DetermineGameType(game.Players);
         var teams = game.Players
             .Where(p => !string.IsNullOrWhiteSpace(p.TeamName))
             .GroupBy(p => p.TeamName!)
             .ToList();
 
-        var isTeamGame = teams.Count >= 2;
+        var isTeamGame = gameType == GameType.Team;
+        var isCoOpGame = gameType == GameType.CoOp;
 
-        // Calculate total liability for each outcome
-        var liabilityByOutcome = new Dictionary<string, (int TotalBet, int PotentialPayout)>();
+        // Build liability map: for each outcome, track bets placed and potential payout
+        var liabilityByOutcome = new Dictionary<string, (int TotalBet, int PotentialPayout, double ProbabilityIfWin)>();
+        var outcomesByMember = new Dictionary<Guid, string>();
 
-        if (isTeamGame)
+        if (isCoOpGame)
+        {
+            // Co-op: all players bet on "TeamWins" outcome
+            var teamBets = game.Bets.Where(b => !b.IsResolved).ToList();
+            var totalBet = teamBets.Sum(b => b.Amount);
+            var potentialPayout = teamBets.Sum(b => ComputePayout(b.Amount, b.OddsTimes100));
+            
+            var teamOdds = game.Odds.First().OddsTimes100;
+            var impliedProb = OddsToImpliedProbability(teamOdds);
+            
+            liabilityByOutcome["TeamWins"] = (totalBet, potentialPayout, impliedProb);
+            
+            foreach (var player in game.Players)
+            {
+                outcomesByMember[player.MemberId] = "TeamWins";
+            }
+        }
+        else if (isTeamGame)
         {
             foreach (var team in teams)
             {
@@ -198,8 +236,17 @@ public sealed class OddsService
 
                 var totalBet = teamBets.Sum(b => b.Amount);
                 var potentialPayout = teamBets.Sum(b => ComputePayout(b.Amount, b.OddsTimes100));
+                
+                // Get current odds for this team (should all be the same)
+                var teamOdds = game.Odds.FirstOrDefault(o => teamMemberIds.Contains(o.MemberId))?.OddsTimes100 ?? 200;
+                var impliedProb = OddsToImpliedProbability(teamOdds);
 
-                liabilityByOutcome[team.Key] = (totalBet, potentialPayout);
+                liabilityByOutcome[team.Key] = (totalBet, potentialPayout, impliedProb);
+                
+                foreach (var memberId in teamMemberIds)
+                {
+                    outcomesByMember[memberId] = team.Key;
+                }
             }
         }
         else
@@ -212,68 +259,129 @@ public sealed class OddsService
 
                 var totalBet = playerBets.Sum(b => b.Amount);
                 var potentialPayout = playerBets.Sum(b => ComputePayout(b.Amount, b.OddsTimes100));
+                
+                var playerOdds = game.Odds.First(o => o.MemberId == player.MemberId).OddsTimes100;
+                var impliedProb = OddsToImpliedProbability(playerOdds);
 
-                liabilityByOutcome[player.MemberId.ToString()] = (totalBet, potentialPayout);
+                liabilityByOutcome[player.MemberId.ToString()] = (totalBet, potentialPayout, impliedProb);
+                outcomesByMember[player.MemberId] = player.MemberId.ToString();
             }
         }
 
         var totalBetAmount = liabilityByOutcome.Values.Sum(x => x.TotalBet);
+        
+        // For co-op games with no bets, keep odds as-is
+        if (isCoOpGame && totalBetAmount == 0)
+        {
+            return;
+        }
+        
         if (totalBetAmount == 0)
         {
             // No bets yet, odds stay the same
             return;
         }
 
-        var maxPotentialPayout = liabilityByOutcome.Values.Max(x => x.PotentialPayout);
+        // Calculate total house liability if all outcomes lose except one
+        var maxHouseLiability = liabilityByOutcome.Values.Max(x => x.PotentialPayout);
 
-        // Adjust odds based on liability imbalance
-        // If one outcome has much higher potential payout, reduce its odds
-        var now = DateTimeOffset.UtcNow;
+        // Intelligent odds adjustment algorithm:
+        // 1. For each outcome, calculate how much we need to reduce payout exposure
+        // 2. Adjust odds to balance liability AND maintain 120-130% implied probability
+        var newOddsByOutcome = new Dictionary<string, int>();
 
-        foreach (var odds in game.Odds)
+        foreach (var (outcomeKey, liability) in liabilityByOutcome)
         {
-            string outcomeKey;
-            if (isTeamGame)
+            var (totalBet, potentialPayout, _) = liability;
+            
+            if (totalBet == 0)
             {
-                var playerTeam = game.Players.FirstOrDefault(p => p.MemberId == odds.MemberId)?.TeamName;
-                if (string.IsNullOrWhiteSpace(playerTeam))
-                {
-                    continue;
-                }
-                outcomeKey = playerTeam;
-            }
-            else
-            {
-                outcomeKey = odds.MemberId.ToString();
-            }
-
-            if (!liabilityByOutcome.TryGetValue(outcomeKey, out var liability))
-            {
+                // No bets on this outcome, keep original odds
+                var firstMemberId = isTeamGame
+                    ? game.Players.First(p => p.TeamName == outcomeKey).MemberId
+                    : Guid.Parse(outcomeKey);
+                newOddsByOutcome[outcomeKey] = game.Odds.First(o => o.MemberId == firstMemberId).OddsTimes100;
                 continue;
             }
 
-            // Calculate adjustment factor based on relative liability
-            // Higher payout exposure = lower odds
-            var payoutRatio = maxPotentialPayout > 0
-                ? (double)liability.PotentialPayout / maxPotentialPayout
-                : 0;
+            // Calculate how exposed we are on this outcome
+            // If this outcome wins, we pay out potentialPayout. The "profit" or "loss" for the house is:
+            // Profit = (totalBetAmount - potentialPayout)
+            var houseNetIfThisWins = totalBetAmount - potentialPayout;
+            
+            // We want to balance liabilities: adjust odds so potential payouts are closer to equal
+            // But also respect the 120-130% implied probability constraint
+            
+            // Start with a base: odds that would make implied probability ~125% (middle of range)
+            // implied probability = 1 / odds, so we want about 1/1.25 = 0.8 probability
+            // That maps to odds around 125 (decimal 1.25)
+            
+            var currentOdds = isTeamGame
+                ? game.Odds.First(o => outcomesByMember.ContainsKey(o.MemberId) && outcomesByMember[o.MemberId] == outcomeKey).OddsTimes100
+                : game.Odds.First(o => o.MemberId == Guid.Parse(outcomeKey)).OddsTimes100;
 
-            // Reduce odds proportionally to the payout exposure
-            var adjustmentMultiplier = 1 - (payoutRatio * CashflowAdjustmentFactor);
-            adjustmentMultiplier = Math.Max(0.7, Math.Min(1.3, adjustmentMultiplier)); // Clamp adjustment
+            // Liability-based adjustment: if this outcome has much higher potential payout,
+            // we need to reduce its odds
+            var liabilityRatio = maxHouseLiability > 0 
+                ? (double)potentialPayout / maxHouseLiability 
+                : 1.0;
 
-            var newOdds = (int)(odds.OddsTimes100 * adjustmentMultiplier);
-            newOdds = Math.Clamp(newOdds, MinOddsTimes100, MaxOddsTimes100);
+            // Scale between 0.8 and 1.2: outcomes with high liability get lower odds
+            var liabilityAdjustment = 0.8 + (0.4 * (1.0 - liabilityRatio));
+            
+            // Apply adjustment conservatively to current odds
+            var adjustedOdds = (int)(currentOdds * liabilityAdjustment);
+            adjustedOdds = Math.Clamp(adjustedOdds, MinOddsTimes100, MaxOddsTimes100);
             
             // Snap to nearest appealing fraction
-            newOdds = SnapToAppealingOdds(newOdds);
-
-            odds.OddsTimes100 = newOdds;
-            odds.CreatedOn = now; // Track when odds were last updated
+            adjustedOdds = SnapToAppealingOdds(adjustedOdds);
+            
+            newOddsByOutcome[outcomeKey] = adjustedOdds;
         }
 
-        // In team games, ensure all team members have the same odds
-        if (isTeamGame)
+        // Check if adjusted odds give us 120-130% implied probability
+        // If not, scale all odds up or down slightly
+        var totalImpliedProb = newOddsByOutcome.Values.Sum(odds => OddsToImpliedProbability(odds));
+        
+        if (totalImpliedProb < MinImpliedProbability || totalImpliedProb > MaxImpliedProbability)
+        {
+            var scaleFactor = (MinImpliedProbability + MaxImpliedProbability) / 2.0 / totalImpliedProb;
+            
+            foreach (var outcome in newOddsByOutcome.Keys.ToList())
+            {
+                var scaled = (int)(newOddsByOutcome[outcome] / scaleFactor);
+                scaled = Math.Clamp(scaled, MinOddsTimes100, MaxOddsTimes100);
+                newOddsByOutcome[outcome] = SnapToAppealingOdds(scaled);
+            }
+        }
+
+        // Apply new odds to all members
+        var now = DateTimeOffset.UtcNow;
+        foreach (var odds in game.Odds)
+        {
+            var outcomeKey = isCoOpGame
+                ? "TeamWins"
+                : isTeamGame
+                    ? game.Players.First(p => p.MemberId == odds.MemberId).TeamName!
+                    : odds.MemberId.ToString();
+
+            if (newOddsByOutcome.TryGetValue(outcomeKey, out var newOdds))
+            {
+                odds.OddsTimes100 = newOdds;
+                odds.CreatedOn = now;
+            }
+        }
+
+        // Ensure all co-op and team members have the same odds
+        if (isCoOpGame)
+        {
+            var singleOdds = game.Odds.First().OddsTimes100;
+            foreach (var o in game.Odds)
+            {
+                o.OddsTimes100 = singleOdds;
+            }
+        }
+        else if (isTeamGame)
         {
             foreach (var team in teams)
             {
@@ -290,6 +398,46 @@ public sealed class OddsService
                 }
             }
         }
+    }
+
+    /// <summary>
+    /// Converts decimal odds (x100) to implied probability (0.0 to 1.0+).
+    /// Implied probability > 1.0 indicates the house margin.
+    /// </summary>
+    private static double OddsToImpliedProbability(int oddsTimes100)
+    {
+        if (oddsTimes100 <= 0)
+            return 0;
+        return 100.0 / oddsTimes100;
+    }
+
+    /// <summary>
+    /// Calculates odds for a co-op game (single team) based on team average rating.
+    /// All members get the same odds representing the team's win probability.
+    /// </summary>
+    private Dictionary<Guid, int> CalculateCoOpOdds(
+        IReadOnlyList<GameNightGamePlayerEntity> players,
+        IReadOnlyDictionary<Guid, int> ratings)
+    {
+        // Calculate average rating for the team
+        var averageRating = players.Average(p => ratings.GetValueOrDefault(p.MemberId, RankingService.DefaultRating));
+        
+        // For co-op, we assume the team is playing against a standard opponent
+        // Calculate win probability using ELO: team's rating vs average (1600)
+        var standardRating = RankingService.DefaultRating;
+        var winProbability = 1.0 / (1.0 + Math.Pow(10, (standardRating - averageRating) / 400.0));
+        
+        var odds = ProbabilityToOdds(winProbability);
+        odds = ApplyRandomness(odds);
+        
+        // Apply same odds to all team members
+        var result = new Dictionary<Guid, int>();
+        foreach (var player in players)
+        {
+            result[player.MemberId] = odds;
+        }
+        
+        return result;
     }
 
     /// <summary>
@@ -408,7 +556,7 @@ public sealed class OddsService
 
     /// <summary>
     /// Converts a win probability to decimal odds (x100).
-    /// Includes generosity factor to make odds better for bettors.
+    /// Maintains 120-130% implied probability (house margin).
     /// Snaps to nearest appealing betting fraction.
     /// </summary>
     private static int ProbabilityToOdds(double probability)
@@ -424,11 +572,12 @@ public sealed class OddsService
         }
 
         // Fair decimal odds = 1 / probability
-        // Apply generosity factor (lower = more generous to bettors)
+        // Apply target margin: aim for middle of 120-130% range (125%)
         var fairOdds = 1.0 / probability;
-        var generousOdds = fairOdds / GenerosityFactor;
+        var targetMargin = (MinImpliedProbability + MaxImpliedProbability) / 2.0;
+        var marginalOdds = fairOdds / targetMargin;
 
-        var oddsTimes100 = (int)(generousOdds * 100);
+        var oddsTimes100 = (int)(marginalOdds * 100);
         oddsTimes100 = Math.Clamp(oddsTimes100, MinOddsTimes100, MaxOddsTimes100);
         
         // Snap to nearest appealing fraction
@@ -437,6 +586,7 @@ public sealed class OddsService
 
     /// <summary>
     /// Applies small random variance to odds for fun.
+    /// ONLY used during initial odds generation, not during cashflow adjustments.
     /// </summary>
     private int ApplyRandomness(int oddsTimes100)
     {
@@ -500,6 +650,27 @@ public sealed class OddsService
 
         // Decimal odds: payout = stake * odds
         return (int)((amount * oddsTimes100) / 100.0);
+    }
+
+    /// <summary>
+    /// Determines the game type based on team structure.
+    /// </summary>
+    private static GameType DetermineGameType(IReadOnlyList<GameNightGamePlayerEntity> players)
+    {
+        var teamedPlayers = players.Where(p => !string.IsNullOrWhiteSpace(p.TeamName)).ToList();
+        var teamCount = teamedPlayers.GroupBy(p => p.TeamName).Count();
+        
+        if (teamCount >= 2)
+        {
+            return GameType.Team;
+        }
+        
+        if (teamCount == 1)
+        {
+            return GameType.CoOp;
+        }
+        
+        return GameType.Individual;
     }
 
     /// <summary>
