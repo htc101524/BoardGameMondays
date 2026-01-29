@@ -765,51 +765,94 @@ h1:focus {
 .bgm-badgeRing {
     position: relative;
     display: inline-block;
-    border-radius: 14px;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 
-.bgm-badgeRing::before {
-    content: "";
-    position: absolute;
-    inset: -3px;
-    border-radius: inherit;
-    padding: 3px;
-    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-    -webkit-mask-composite: xor;
-    mask-composite: exclude;
-    pointer-events: none;
-    z-index: 1;
+.bgm-badgeRing:hover {
+    transform: scale(1.08);
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.15);
 }
 
-.bgm-badgeRing::after {
-    content: "";
-    position: absolute;
-    inset: -3px;
-    border-radius: inherit;
-    background: linear-gradient(135deg, rgba(255, 255, 255, 0.65) 0%, rgba(255, 255, 255, 0.08) 45%, rgba(255, 255, 255, 0) 70%);
-    opacity: 0.5;
-    pointer-events: none;
-    z-index: 2;
+/* Gradient ring wrappers with rounded corners */
+.bgm-badgeRing--bronze {
+    padding: 4px;
+    background: linear-gradient(135deg, #f3d2b8 0%, #c9875b 25%, #a0623f 50%, #c9875b 75%, #f3d2b8 100%);
+    border-radius: 16px;
 }
 
-.bgm-badgeRing--bronze::before {
-    background: linear-gradient(135deg, #f3d2b8 0%, #c9875b 45%, #a0623f 70%, #efc7aa 100%);
-    box-shadow: 0 0 8px rgba(205, 127, 50, 0.4);
+.bgm-badgeRing--silver {
+    padding: 4px;
+    background: linear-gradient(135deg, #f5f7fb 0%, #ced5de 25%, #9aa4b2 50%, #ced5de 75%, #f5f7fb 100%);
+    border-radius: 16px;
 }
 
-.bgm-badgeRing--silver::before {
-    background: linear-gradient(135deg, #f5f7fb 0%, #ced5de 45%, #9aa4b2 70%, #e8edf5 100%);
-    box-shadow: 0 0 10px rgba(192, 192, 192, 0.45);
+.bgm-badgeRing--gold {
+    padding: 4px;
+    background: linear-gradient(135deg, #fff4c7 0%, #f5d77a 25%, #e5b84a 50%, #f5d77a 75%, #fff4c7 100%);
+    border-radius: 16px;
 }
 
-.bgm-badgeRing--gold::before {
-    background: linear-gradient(135deg, #fff4c7 0%, #f5d77a 45%, #e5b84a 70%, #fff2bf 100%);
-    box-shadow: 0 0 12px rgba(255, 193, 7, 0.5);
+.bgm-badgeRing--platinum {
+    padding: 4px;
+    background: linear-gradient(135deg, #a8d0ff 0%, #6fa6f5 20%, #4c8ee8 40%, #6fa6f5 60%, #8bbef9 80%, #a8d0ff 100%);
+    border-radius: 16px;
 }
 
-.bgm-badgeRing--platinum::before {
-    background: linear-gradient(135deg, #eef6ff 0%, #b8d6ff 40%, #6fa6f5 70%, #dcecff 100%);
-    box-shadow: 0 0 14px rgba(111, 166, 245, 0.5);
+/* Remove default borders from avatars inside rings */
+.bgm-badgeRing--bronze .bgm-recapAvatar,
+.bgm-badgeRing--bronze .bgm-peopleCard__avatar,
+.bgm-badgeRing--bronze .bgm-memberHero__avatar,
+.bgm-badgeRing--silver .bgm-recapAvatar,
+.bgm-badgeRing--silver .bgm-peopleCard__avatar,
+.bgm-badgeRing--silver .bgm-memberHero__avatar,
+.bgm-badgeRing--gold .bgm-recapAvatar,
+.bgm-badgeRing--gold .bgm-peopleCard__avatar,
+.bgm-badgeRing--gold .bgm-memberHero__avatar,
+.bgm-badgeRing--platinum .bgm-recapAvatar,
+.bgm-badgeRing--platinum .bgm-peopleCard__avatar,
+.bgm-badgeRing--platinum .bgm-memberHero__avatar {
+    border: none !important;
+}
+
+/* Member Badge Styles */
+.bgm-memberBadge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-size: 0.875rem;
+    font-weight: 700;
+    letter-spacing: 0.025em;
+}
+
+.bgm-memberBadge__icon {
+    font-size: 1rem;
+    line-height: 1;
+}
+
+.bgm-memberBadge--bronze {
+    background: linear-gradient(135deg, #f3d2b8 0%, #c9875b 50%, #a0623f 100%);
+    color: #2c1810;
+    text-shadow: 0 1px 2px rgba(255, 255, 255, 0.3);
+}
+
+.bgm-memberBadge--silver {
+    background: linear-gradient(135deg, #f5f7fb 0%, #ced5de 50%, #9aa4b2 100%);
+    color: #1a1e24;
+    text-shadow: 0 1px 2px rgba(255, 255, 255, 0.4);
+}
+
+.bgm-memberBadge--gold {
+    background: linear-gradient(135deg, #fff4c7 0%, #f5d77a 50%, #e5b84a 100%);
+    color: #2d2410;
+    text-shadow: 0 1px 2px rgba(255, 255, 255, 0.4);
+}
+
+.bgm-memberBadge--platinum {
+    background: linear-gradient(135deg, #a8d0ff 0%, #6fa6f5 40%, #4c8ee8 60%, #6fa6f5 100%);
+    color: #0d2642;
+    text-shadow: 0 1px 2px rgba(255, 255, 255, 0.5);
 }
 
 .form-floating > .form-control-plaintext::placeholder, .form-floating > .form-control::placeholder {

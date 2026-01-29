@@ -216,6 +216,7 @@
     private OddsDisplayFormat _oddsFormat = OddsDisplayFormat.Fraction;
     
     private bool _isInteractive;
+    private bool _disposed;
 
     protected override async Task OnInitializedAsync()
     {
@@ -235,6 +236,7 @@
 
     public void Dispose()
     {
+        _disposed = true;
         AuthStateProvider.AuthenticationStateChanged -= OnAuthStateChanged;
         Coins.Changed -= OnCoinsChanged;
     }
@@ -243,14 +245,20 @@
     {
         _ = InvokeAsync(async () =>
         {
+            if (_disposed) return;
             await task;
+            if (_disposed) return;
             await RefreshCoinsAsync();
         });
     }
 
     private void OnCoinsChanged()
     {
-        _ = InvokeAsync(RefreshCoinsAsync);
+        _ = InvokeAsync(async () =>
+        {
+            if (_disposed) return;
+            await RefreshCoinsAsync();
+        });
     }
 
     private async Task ToggleBetsAsync()

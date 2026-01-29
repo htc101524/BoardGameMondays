@@ -241,9 +241,9 @@ public sealed class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             .HasForeignKey(x => x.GameId)
             .OnDelete(DeleteBehavior.Cascade);
 
+        // Non-unique index: allow the same game to be played multiple times per night
         builder.Entity<GameNightGameEntity>()
-            .HasIndex(x => new { x.GameNightId, x.GameId })
-            .IsUnique();
+            .HasIndex(x => new { x.GameNightId, x.GameId });
 
         builder.Entity<GameNightGameEntity>()
             .HasOne(x => x.WinnerMember)

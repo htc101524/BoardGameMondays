@@ -242,12 +242,15 @@ public sealed class ShopService
 
             try
             {
-                // Deduct coins using the same db context to participate in transaction
-                var spendSuccess = await _coinService.TrySpendAsync(db, userId, item.Price, ct);
-                if (!spendSuccess)
+                // Deduct coins only if the item has a cost
+                if (item.Price > 0)
                 {
-                    await tx.RollbackAsync(ct);
-                    return false;
+                    var spendSuccess = await _coinService.TrySpendAsync(db, userId, item.Price, ct);
+                    if (!spendSuccess)
+                    {
+                        await tx.RollbackAsync(ct);
+                        return false;
+                    }
                 }
 
                 // Record purchase
@@ -378,8 +381,8 @@ public sealed class ShopService
     {
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
         
-        // Get the user's purchased badge ring (if any)
-        var badgeRing = await db.UserPurchases
+        // Get all the user's purchased badge rings
+        var badgeRings = await db.UserPurchases
             .Where(up => up.UserId == userId)
             .Join(db.ShopItems,
                 up => up.ShopItemId,
@@ -387,9 +390,20 @@ public sealed class ShopService
                 (up, si) => new { si.ItemType, si.Data })
             .Where(x => x.ItemType == "BadgeRing")
             .Select(x => x.Data)
-            .FirstOrDefaultAsync(ct);
+            .ToListAsync(ct);
+        
+        if (badgeRings.Count == 0)
+        {
+            return null;
+        }
+        
+        // Return the best ring (platinum > gold > silver > bronze)
+        if (badgeRings.Contains("platinum")) return "platinum";
+        if (badgeRings.Contains("gold")) return "gold";
+        if (badgeRings.Contains("silver")) return "silver";
+        if (badgeRings.Contains("bronze")) return "bronze";
             
-        return badgeRing;
+        return badgeRings.FirstOrDefault();
     }
 
     private static ShopItem ToDomain(ShopItemEntity entity)

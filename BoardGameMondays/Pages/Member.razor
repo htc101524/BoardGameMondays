@@ -1,11 +1,13 @@
 @page "/people/{MemberId:guid}"
 @using BoardGameMondays.Data
 @using BoardGameMondays.Data.Entities
+@using BoardGameMondays.Core
 @using Microsoft.AspNetCore.Components.Authorization
 @using Microsoft.AspNetCore.Components.Forms
 @using Microsoft.EntityFrameworkCore
 @inject IDbContextFactory<ApplicationDbContext> DbFactory
 @inject AuthenticationStateProvider AuthStateProvider
+@inject ShopService ShopService
 @inject NavigationManager Navigation
 
 @if (_loading)
@@ -27,21 +29,34 @@ else
     <div class="container py-4">
         <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
             <div class="d-flex align-items-center gap-3">
-                <div class="bgm-memberHero__avatar" aria-hidden="true">
-                    @if (!string.IsNullOrWhiteSpace(_member.AvatarUrl))
-                    {
-                        <img src="@_member.AvatarUrl" alt="" />
-                    }
-                    else
-                    {
-                        @(string.IsNullOrWhiteSpace(_member.Name) ? "?" : _member.Name[..1].ToUpperInvariant())
-                    }
+                @{
+                    var badgeRing = _badgeRing;
+                    var ringClass = !string.IsNullOrWhiteSpace(badgeRing) ? $"bgm-badgeRing bgm-badgeRing--{badgeRing}" : "";
+                }
+                <div class="@ringClass">
+                    <div class="bgm-memberHero__avatar" aria-hidden="true">
+                        @if (!string.IsNullOrWhiteSpace(_member.AvatarUrl))
+                        {
+                            <img src="@_member.AvatarUrl" alt="" />
+                        }
+                        else
+                        {
+                            @(string.IsNullOrWhiteSpace(_member.Name) ? "?" : _member.Name[..1].ToUpperInvariant())
+                        }
+                    </div>
                 </div>
                 <div>
                     <h1 class="mb-0">@_member.Name</h1>
                     @if (!string.IsNullOrWhiteSpace(_member.ProfileTagline))
                     {
                         <div class="text-muted">@_member.ProfileTagline</div>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(badgeRing))
+                    {
+                        <div class="bgm-memberBadge bgm-memberBadge--@badgeRing mt-2">
+                            <span class="bgm-memberBadge__icon">★</span>
+                            <span class="bgm-memberBadge__text">@(char.ToUpperInvariant(badgeRing[0]) + badgeRing.Substring(1)) Member</span>
+                        </div>
                     }
                 </div>
             </div>
@@ -273,6 +288,7 @@ else
     private bool _canEdit;
 
     private MemberEntity? _member;
+    private string? _badgeRing;
 
     private MemberStats _stats = new();
     private List<TopGame> _topGames = new();
@@ -288,6 +304,26 @@ else
     {
         _loading = true;
         _saveMessage = null;
+        
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _member = await db.Members.FirstOrDefaultAsync(m => m.Id == MemberId);
+        
+        if (_member is not null)
+        {
+            // Find the userId for this member by looking up their claims
+            var userId = await db.UserClaims
+                .AsNoTracking()
+                .Where(c => c.ClaimType == "bgm:memberId" && c.ClaimValue == MemberId.ToString())
+                .Select(c => c.UserId)
+                .FirstOrDefaultAsync();
+            
+            if (!string.IsNullOrWhiteSpace(userId))
+            {
+                _badgeRing = await ShopService.GetUserBadgeRingAsync(userId);
+            }
+        }
+        
+        _canEdit = false;
         await LoadAsync();
         _loading = false;
     }
