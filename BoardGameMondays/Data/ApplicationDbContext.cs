@@ -348,5 +348,30 @@ public sealed class ApplicationDbContext : IdentityDbContext<ApplicationUser>
         builder.Entity<BlogPostEntity>()
             .HasIndex(x => x.Slug)
             .IsUnique();
+
+        // Performance indexes for frequently queried fields
+        builder.Entity<GameNightGameEntity>()
+            .HasIndex(x => x.IsConfirmed);
+
+        builder.Entity<GameNightGameEntity>()
+            .HasIndex(x => x.IsPlayed);
+
+        builder.Entity<GameNightGameEntity>()
+            .HasIndex(x => x.WinnerMemberId);
+
+        builder.Entity<GameNightGameBetEntity>()
+            .HasIndex(x => x.IsResolved);
+
+        builder.Entity<GameNightGameBetEntity>()
+            .HasIndex(x => x.UserId);
+
+        builder.Entity<UserPurchaseEntity>()
+            .HasIndex(x => x.UserId);
+
+        builder.Entity<UserPurchaseEntity>()
+            .HasIndex(x => x.ShopItemId);
+
+        builder.Entity<ShopItemEntity>()
+            .HasIndex(x => x.IsActive);
     }
 }

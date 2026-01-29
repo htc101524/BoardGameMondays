@@ -74,48 +74,71 @@ public sealed class WantToPlayService
     {
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
 
-        var votes = await db.WantToPlayVotes
+        // Preload last played dates to filter votes efficiently
+        var lastPlayedByGame = await db.GameNightGames
             .AsNoTracking()
+            .Where(g => g.IsPlayed)
+            .GroupBy(g => g.GameId)
+            .Select(g => new { GameId = g.Key, LastPlayedDateKey = g.Max(x => x.GameNight.DateKey) })
+            .ToDictionaryAsync(x => x.GameId, x => x.LastPlayedDateKey, ct);
+
+        // Get votes with game info in a single query, filtering out votes older than last play
+        var voteCounts = await db.WantToPlayVotes
+            .AsNoTracking()
+            .GroupBy(v => v.GameId)
+            .Select(g => new
+            {
+                GameId = g.Key,
+                Votes = g.Select(v => new { v.CreatedOn }).ToList()
+            })
             .ToListAsync(ct);
 
-        if (votes.Count == 0)
+        // Filter votes that are after the game was last played
+        var validCounts = new Dictionary<Guid, int>();
+        foreach (var voteGroup in voteCounts)
+        {
+            if (lastPlayedByGame.TryGetValue(voteGroup.GameId, out var lastPlayedKey))
+            {
+                var validVotes = voteGroup.Votes.Count(v =>
+                {
+                    var voteKey = GameNightService.ToDateKey(DateOnly.FromDateTime(v.CreatedOn.UtcDateTime));
+                    return voteKey > lastPlayedKey;
+                });
+
+                if (validVotes > 0)
+                {
+                    validCounts[voteGroup.GameId] = validVotes;
+                }
+            }
+            else
+            {
+                // Game has never been played, all votes count
+                validCounts[voteGroup.GameId] = voteGroup.Votes.Count;
+            }
+        }
+
+        if (validCounts.Count == 0)
         {
             return Array.Empty<WantToPlayEntry>();
         }
 
-        var played = await db.GameNightGames
-            .AsNoTracking()
-            .Where(g => g.IsPlayed)
-            .Select(g => new { g.GameId, g.GameNight.DateKey })
-            .ToListAsync(ct);
+        // Get top game IDs
+        var topGameIds = validCounts
+            .OrderByDescending(x => x.Value)
+            .Take(take)
+            .Select(x => x.Key)
+            .ToList();
 
-        var lastPlayedByGame = played
-            .GroupBy(x => x.GameId)
-            .ToDictionary(g => g.Key, g => g.Max(x => x.DateKey));
-
+        // Fetch game details for only the top games
         var games = await db.Games
             .AsNoTracking()
+            .Where(g => topGameIds.Contains(g.Id))
             .Select(g => new { g.Id, g.Name, g.ImageUrl })
             .ToListAsync(ct);
 
         var gameLookup = games.ToDictionary(g => g.Id, g => g);
-        var counts = new Dictionary<Guid, int>();
 
-        foreach (var vote in votes)
-        {
-            if (lastPlayedByGame.TryGetValue(vote.GameId, out var lastPlayedKey))
-            {
-                var voteKey = GameNightService.ToDateKey(DateOnly.FromDateTime(vote.CreatedOn.UtcDateTime));
-                if (voteKey <= lastPlayedKey)
-                {
-                    continue;
-                }
-            }
-
-            counts[vote.GameId] = counts.TryGetValue(vote.GameId, out var current) ? current + 1 : 1;
-        }
-
-        return counts
+        return validCounts
             .OrderByDescending(x => x.Value)
             .ThenBy(x => gameLookup.TryGetValue(x.Key, out var g) ? g.Name : string.Empty)
             .Take(take)

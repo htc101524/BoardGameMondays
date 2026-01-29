@@ -89,12 +89,47 @@ public sealed class RecapStatsService
             .Distinct()
             .ToListAsync(ct);
 
+        if (currentWinners.Count == 0)
+        {
+            return stats;
+        }
+
+        // Preload ALL wins and attendances for relevant members to avoid N+1
+        var winnerIds = currentWinners.Select(w => w.WinnerMemberId!.Value).ToHashSet();
+        
+        var allWins = await db.GameNightGames
+            .AsNoTracking()
+            .Where(g => g.WinnerMemberId != null && winnerIds.Contains(g.WinnerMemberId.Value))
+            .Select(g => new { g.WinnerMemberId, g.GameNight.DateKey })
+            .ToListAsync(ct);
+
+        var winsByMemberAndDate = allWins
+            .GroupBy(w => w.WinnerMemberId!.Value)
+            .ToDictionary(
+                g => g.Key,
+                g => g.Select(x => x.DateKey).ToHashSet());
+
+        var allAttendances = await db.GameNightAttendees
+            .AsNoTracking()
+            .Where(a => winnerIds.Contains(a.MemberId))
+            .Select(a => new { a.MemberId, a.GameNight.DateKey })
+            .ToListAsync(ct);
+
+        var attendancesByMemberAndDate = allAttendances
+            .GroupBy(a => a.MemberId)
+            .ToDictionary(
+                g => g.Key,
+                g => g.Select(x => x.DateKey).ToHashSet());
+
         foreach (var winner in currentWinners)
         {
             if (winner.WinnerMemberId is null) continue;
 
             var memberId = winner.WinnerMemberId.Value;
             var memberName = winner.Name;
+
+            var memberWins = winsByMemberAndDate.GetValueOrDefault(memberId, new HashSet<int>());
+            var memberAttendances = attendancesByMemberAndDate.GetValueOrDefault(memberId, new HashSet<int>());
 
             // Count consecutive weeks with at least one win (including current)
             var consecutiveWins = 1;
@@ -103,10 +138,7 @@ public sealed class RecapStatsService
             for (var i = currentIndex + 1; i < allDateKeys.Count; i++)
             {
                 var previousDateKey = allDateKeys[i];
-                var hadWin = await db.GameNightGames
-                    .AsNoTracking()
-                    .Include(g => g.GameNight)
-                    .AnyAsync(g => g.GameNight.DateKey == previousDateKey && g.WinnerMemberId == memberId, ct);
+                var hadWin = memberWins.Contains(previousDateKey);
 
                 if (hadWin)
                 {
@@ -115,10 +147,7 @@ public sealed class RecapStatsService
                 else
                 {
                     // Check if they attended but didn't win - that breaks the streak
-                    var attended = await db.GameNightAttendees
-                        .AsNoTracking()
-                        .Include(a => a.GameNight)
-                        .AnyAsync(a => a.GameNight.DateKey == previousDateKey && a.MemberId == memberId, ct);
+                    var attended = memberAttendances.Contains(previousDateKey);
 
                     if (attended)
                     {
@@ -170,10 +199,45 @@ public sealed class RecapStatsService
 
         var losers = currentAttendees.Where(a => !currentWinnerIds.Contains(a.MemberId)).ToList();
 
+        if (losers.Count == 0)
+        {
+            return stats;
+        }
+
+        // Preload all attendances and wins for losers to avoid N+1
+        var loserIds = losers.Select(l => l.MemberId).ToHashSet();
+        
+        var allAttendances = await db.GameNightAttendees
+            .AsNoTracking()
+            .Where(a => loserIds.Contains(a.MemberId))
+            .Select(a => new { a.MemberId, a.GameNight.DateKey })
+            .ToListAsync(ct);
+
+        var attendancesByMemberAndDate = allAttendances
+            .GroupBy(a => a.MemberId)
+            .ToDictionary(
+                g => g.Key,
+                g => g.Select(x => x.DateKey).ToHashSet());
+
+        var allWins = await db.GameNightGames
+            .AsNoTracking()
+            .Where(g => g.WinnerMemberId != null && loserIds.Contains(g.WinnerMemberId.Value))
+            .Select(g => new { g.WinnerMemberId, g.GameNight.DateKey })
+            .ToListAsync(ct);
+
+        var winsByMemberAndDate = allWins
+            .GroupBy(w => w.WinnerMemberId!.Value)
+            .ToDictionary(
+                g => g.Key,
+                g => g.Select(x => x.DateKey).ToHashSet());
+
         foreach (var loser in losers)
         {
             var memberId = loser.MemberId;
             var memberName = loser.Name;
+
+            var memberAttendances = attendancesByMemberAndDate.GetValueOrDefault(memberId, new HashSet<int>());
+            var memberWins = winsByMemberAndDate.GetValueOrDefault(memberId, new HashSet<int>());
 
             // Count consecutive weeks attending without a win
             var losingStreak = 1;
@@ -183,20 +247,14 @@ public sealed class RecapStatsService
             {
                 var previousDateKey = allDateKeys[i];
 
-                var attended = await db.GameNightAttendees
-                    .AsNoTracking()
-                    .Include(a => a.GameNight)
-                    .AnyAsync(a => a.GameNight.DateKey == previousDateKey && a.MemberId == memberId, ct);
+                var attended = memberAttendances.Contains(previousDateKey);
 
                 if (!attended)
                 {
                     continue; // Skip weeks they didn't attend
                 }
 
-                var hadWin = await db.GameNightGames
-                    .AsNoTracking()
-                    .Include(g => g.GameNight)
-                    .AnyAsync(g => g.GameNight.DateKey == previousDateKey && g.WinnerMemberId == memberId, ct);
+                var hadWin = memberWins.Contains(previousDateKey);
 
                 if (hadWin)
                 {
@@ -237,10 +295,32 @@ public sealed class RecapStatsService
             .Select(a => new { a.MemberId, a.Member.Name })
             .ToListAsync(ct);
 
+        if (currentAttendees.Count == 0)
+        {
+            return stats;
+        }
+
+        // Preload all attendances for current attendees to avoid N+1
+        var attendeeIds = currentAttendees.Select(a => a.MemberId).ToHashSet();
+        
+        var allAttendances = await db.GameNightAttendees
+            .AsNoTracking()
+            .Where(a => attendeeIds.Contains(a.MemberId))
+            .Select(a => new { a.MemberId, a.GameNight.DateKey })
+            .ToListAsync(ct);
+
+        var attendancesByMemberAndDate = allAttendances
+            .GroupBy(a => a.MemberId)
+            .ToDictionary(
+                g => g.Key,
+                g => g.Select(x => x.DateKey).ToHashSet());
+
         foreach (var attendee in currentAttendees)
         {
             var memberId = attendee.MemberId;
             var memberName = attendee.Name;
+
+            var memberAttendances = attendancesByMemberAndDate.GetValueOrDefault(memberId, new HashSet<int>());
 
             // Count consecutive weeks attending (including current)
             var consecutiveAttendance = 1;
@@ -250,10 +330,7 @@ public sealed class RecapStatsService
             {
                 var previousDateKey = allDateKeys[i];
 
-                var attended = await db.GameNightAttendees
-                    .AsNoTracking()
-                    .Include(a => a.GameNight)
-                    .AnyAsync(a => a.GameNight.DateKey == previousDateKey && a.MemberId == memberId, ct);
+                var attended = memberAttendances.Contains(previousDateKey);
 
                 if (attended)
                 {
@@ -296,19 +373,30 @@ public sealed class RecapStatsService
             .Select(a => new { a.MemberId, a.Member.Name })
             .ToListAsync(ct);
 
+        if (currentAttendees.Count == 0)
+        {
+            return stats;
+        }
+
+        // Preload all previous attendances for these members
+        var attendeeIds = currentAttendees.Select(a => a.MemberId).ToHashSet();
+        
+        var previousAttendances = await db.GameNightAttendees
+            .AsNoTracking()
+            .Where(a => attendeeIds.Contains(a.MemberId) && a.GameNight.DateKey < currentDateKey)
+            .Select(a => a.MemberId)
+            .Distinct()
+            .ToListAsync(ct);
+
+        var membersWithPreviousAttendance = previousAttendances.ToHashSet();
+
         foreach (var attendee in currentAttendees)
         {
             var memberId = attendee.MemberId;
             var memberName = attendee.Name;
 
             // Check if they have any previous attendance
-            var previousAttendance = await db.GameNightAttendees
-                .AsNoTracking()
-                .Include(a => a.GameNight)
-                .Where(a => a.MemberId == memberId && a.GameNight.DateKey < currentDateKey)
-                .AnyAsync(ct);
-
-            if (!previousAttendance)
+            if (!membersWithPreviousAttendance.Contains(memberId))
             {
                 stats.Add(new InterestingStat(
                     StatType.FirstTimeAttendance,
@@ -340,7 +428,39 @@ public sealed class RecapStatsService
             .Distinct()
             .ToListAsync(ct);
 
+        if (currentWinners.Count == 0)
+        {
+            return stats;
+        }
+
         var currentIndex = allDateKeys.IndexOf(currentDateKey);
+
+        // Preload all attendances and wins for winners to avoid N+1
+        var winnerIds = currentWinners.Select(w => w.WinnerMemberId!.Value).ToHashSet();
+        
+        var allAttendances = await db.GameNightAttendees
+            .AsNoTracking()
+            .Where(a => winnerIds.Contains(a.MemberId))
+            .Select(a => new { a.MemberId, a.GameNight.DateKey })
+            .ToListAsync(ct);
+
+        var attendancesByMemberAndDate = allAttendances
+            .GroupBy(a => a.MemberId)
+            .ToDictionary(
+                g => g.Key,
+                g => g.Select(x => x.DateKey).ToHashSet());
+
+        var allWins = await db.GameNightGames
+            .AsNoTracking()
+            .Where(g => g.WinnerMemberId != null && winnerIds.Contains(g.WinnerMemberId.Value))
+            .Select(g => new { g.WinnerMemberId, g.GameNight.DateKey })
+            .ToListAsync(ct);
+
+        var winsByMemberAndDate = allWins
+            .GroupBy(w => w.WinnerMemberId!.Value)
+            .ToDictionary(
+                g => g.Key,
+                g => g.Select(x => x.DateKey).ToHashSet());
 
         foreach (var winner in currentWinners)
         {
@@ -349,6 +469,9 @@ public sealed class RecapStatsService
             var memberId = winner.WinnerMemberId.Value;
             var memberName = winner.Name;
 
+            var memberAttendances = attendancesByMemberAndDate.GetValueOrDefault(memberId, new HashSet<int>());
+            var memberWins = winsByMemberAndDate.GetValueOrDefault(memberId, new HashSet<int>());
+
             // Count how many consecutive weeks (before this one) they attended without winning
             var droughtLength = 0;
 
@@ -356,20 +479,14 @@ public sealed class RecapStatsService
             {
                 var previousDateKey = allDateKeys[i];
 
-                var attended = await db.GameNightAttendees
-                    .AsNoTracking()
-                    .Include(a => a.GameNight)
-                    .AnyAsync(a => a.GameNight.DateKey == previousDateKey && a.MemberId == memberId, ct);
+                var attended = memberAttendances.Contains(previousDateKey);
 
                 if (!attended)
                 {
                     continue; // Skip weeks they didn't attend
                 }
 
-                var hadWin = await db.GameNightGames
-                    .AsNoTracking()
-                    .Include(g => g.GameNight)
-                    .AnyAsync(g => g.GameNight.DateKey == previousDateKey && g.WinnerMemberId == memberId, ct);
+                var hadWin = memberWins.Contains(previousDateKey);
 
                 if (hadWin)
                 {
