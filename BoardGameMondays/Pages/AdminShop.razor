@@ -11,54 +11,83 @@
 
     <AuthorizeView Roles="Admin">
         <Authorized>
-            <div class="mb-4">
-                <button type="button" class="btn btn-primary" @onclick="() => ShowCreateModal()">
-                    + Add Item
-                </button>
-            </div>
-
-            @if (_items is null)
+            @if (!_passwordAccepted)
             {
-                <div class="text-muted">Loading…</div>
-            }
-            else if (_items.Count == 0)
-            {
-                <div class="alert alert-info">No items yet.</div>
+                <div class="card mt-3" style="max-width: 480px;">
+                    <div class="card-body">
+                        <h5 class="card-title">Admin Shop Access</h5>
+                        <p class="text-muted small mb-3">Enter the admin shop password to manage emoji packs.</p>
+                        <div class="input-group">
+                            <input type="password" class="form-control" placeholder="Admin shop password" @bind="_passwordInput" />
+                            <button type="button" class="btn btn-primary" @onclick="UnlockAdminShop">Unlock</button>
+                        </div>
+                        @if (!string.IsNullOrWhiteSpace(_passwordError))
+                        {
+                            <div class="text-danger small mt-2">@_passwordError</div>
+                        }
+                    </div>
+                </div>
             }
             else
             {
-                <div class="table-responsive">
-                    <table class="table table-striped">
-                        <thead>
-                            <tr>
-                                <th>Name</th>
-                                <th>Description</th>
-                                <th>Type</th>
-                                <th>Price</th>
-                                <th>Members Only</th>
-                                <th>Active</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach (var item in _items.OrderBy(i => i.Name))
-                            {
-                                <tr>
-                                    <td>@item.Name</td>
-                                    <td>@item.Description</td>
-                                    <td><span class="badge bg-secondary">@item.ItemType</span></td>
-                                    <td>@item.Price</td>
-                                    <td>@(item.MembersOnly ? "✓" : "—")</td>
-                                    <td>@(item.IsActive ? "✓" : "✗")</td>
-                                    <td>
-                                        <button type="button" class="btn btn-sm btn-outline-primary" @onclick="() => EditItem(item)">Edit</button>
-                                        <button type="button" class="btn btn-sm btn-outline-danger" @onclick="() => DeleteItemAsync(item.Id)">Delete</button>
-                                    </td>
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
+                <div class="mb-3 text-muted small">Badge rings are locked and managed in code. This page only manages emoji packs.</div>
+                <div class="mb-4">
+                    <button type="button" class="btn btn-primary" @onclick="() => ShowCreateModal()">
+                        + Add Emoji Pack
+                    </button>
                 </div>
+
+                @if (_items is null)
+                {
+                    <div class="text-muted">Loading…</div>
+                }
+                else if (_items.Count == 0)
+                {
+                    <div class="alert alert-info">No items yet.</div>
+                }
+                else
+                {
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Description</th>
+                                    <th>Type</th>
+                                    <th>Price</th>
+                                    <th>Members Only</th>
+                                    <th>Active</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var item in _items.OrderBy(i => i.Name))
+                                {
+                                    var isRing = item.ItemType == "BadgeRing";
+                                    <tr>
+                                        <td>@item.Name</td>
+                                        <td>@item.Description</td>
+                                        <td><span class="badge bg-secondary">@item.ItemType</span></td>
+                                        <td>@item.Price</td>
+                                        <td>@(item.MembersOnly ? "✓" : "—")</td>
+                                        <td>@(item.IsActive ? "✓" : "✗")</td>
+                                        <td>
+                                            @if (isRing)
+                                            {
+                                                <span class="badge bg-light text-muted">Locked</span>
+                                            }
+                                            else
+                                            {
+                                                <button type="button" class="btn btn-sm btn-outline-primary" @onclick="() => EditItem(item)">Edit</button>
+                                                <button type="button" class="btn btn-sm btn-outline-danger" @onclick="() => DeleteItemAsync(item.Id)">Delete</button>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
             }
         </Authorized>
         <NotAuthorized>
@@ -91,10 +120,7 @@
 
                         <div class="mb-3">
                             <label class="form-label">Type</label>
-                            <select class="form-select" @bind="_itemForm.ItemType">
-                                <option value="EmojiPack">Emoji Pack</option>
-                                <option value="BadgeCosmetic">Badge Cosmetic</option>
-                            </select>
+                            <div class="form-control-plaintext">Emoji Pack</div>
                         </div>
 
                         <div class="mb-3">
@@ -102,13 +128,10 @@
                             <input type="number" class="form-control" @bind="_itemForm.Price" min="1" />
                         </div>
 
-                        @if (_itemForm.ItemType == "EmojiPack")
-                        {
-                            <div class="mb-3">
-                                <label class="form-label">Emojis (comma-separated)</label>
-                                <input type="text" class="form-control" @bind="_itemForm.Data" placeholder="👍,❌,🏆,🎉,🎲,🔥" />
-                            </div>
-                        }
+                        <div class="mb-3">
+                            <label class="form-label">Emojis (comma-separated)</label>
+                            <input type="text" class="form-control" @bind="_itemForm.Data" placeholder="👍,❌,🏆,🎉,🎲,🔥" />
+                        </div>
 
                         <div class="mb-3 form-check">
                             <input type="checkbox" class="form-check-input" @bind="_itemForm.MembersOnly" />
@@ -140,11 +163,15 @@
 }
 
 @code {
+    private const string AdminShopPassword = "bgm-shop-admin-2026";
     private IReadOnlyList<ShopService.ShopItem>? _items;
     private bool _showModal;
     private ShopService.ShopItem? _editingItem;
     private ShopItemFormData _itemForm = new();
     private bool _saving;
+    private string _passwordInput = string.Empty;
+    private bool _passwordAccepted;
+    private string? _passwordError;
 
     protected override async Task OnInitializedAsync()
     {
@@ -155,10 +182,28 @@
         }
     }
 
+    private void UnlockAdminShop()
+    {
+        if (string.Equals(_passwordInput, AdminShopPassword, StringComparison.Ordinal))
+        {
+            _passwordAccepted = true;
+            _passwordError = null;
+            _passwordInput = string.Empty;
+        }
+        else
+        {
+            _passwordAccepted = false;
+            _passwordError = "Incorrect password.";
+        }
+    }
+
     private void ShowCreateModal()
     {
         _editingItem = null;
-        _itemForm = new ShopItemFormData();
+        _itemForm = new ShopItemFormData
+        {
+            ItemType = "EmojiPack"
+        };
         _showModal = true;
     }
 
@@ -171,16 +216,22 @@
 
     private void EditItem(ShopService.ShopItem item)
     {
+        if (item.ItemType != "EmojiPack")
+        {
+            _ = JS.InvokeVoidAsync("alert", "Badge rings are locked and cannot be edited here.");
+            return;
+        }
+
         _editingItem = item;
         _itemForm = new ShopItemFormData
         {
             Name = item.Name,
             Description = item.Description,
-            ItemType = item.ItemType,
+            ItemType = "EmojiPack",
             Price = item.Price,
             MembersOnly = item.MembersOnly,
             IsActive = item.IsActive,
-            Data = item.ItemType == "EmojiPack" ? string.Join(",", item.Emojis) : ""
+            Data = string.Join(",", item.Emojis)
         };
         _showModal = true;
     }
@@ -197,13 +248,19 @@
                     _itemForm.Name,
                     _itemForm.Description,
                     _itemForm.Price,
-                    _itemForm.ItemType,
+                    "EmojiPack",
                     _itemForm.Data,
                     _itemForm.MembersOnly,
                     _itemForm.IsActive);
             }
             else
             {
+                if (_editingItem.ItemType != "EmojiPack")
+                {
+                    await JS.InvokeVoidAsync("alert", "Badge rings are locked and cannot be edited here.");
+                    return;
+                }
+
                 // Update existing item
                 await ShopService.UpdateItemAsync(
                     _editingItem.Id,

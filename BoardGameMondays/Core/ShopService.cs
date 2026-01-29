@@ -91,6 +91,11 @@ public sealed class ShopService
             return false;
         }
 
+        if (item.ItemType == "BadgeRing")
+        {
+            return false;
+        }
+
         item.Name = name;
         item.Description = description;
         item.Price = price;
@@ -109,6 +114,17 @@ public sealed class ShopService
     {
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
 
+        var item = await db.ShopItems.FindAsync(new object[] { itemId }, ct);
+        if (item is null)
+        {
+            return false;
+        }
+
+        if (item.ItemType == "BadgeRing")
+        {
+            return false;
+        }
+
         // Check if anyone has purchased this item
         var hasPurchases = await db.UserPurchases
             .AsNoTracking()
@@ -117,12 +133,6 @@ public sealed class ShopService
         if (hasPurchases)
         {
             return false; // Cannot delete if purchases exist
-        }
-
-        var item = await db.ShopItems.FindAsync(new object[] { itemId }, ct);
-        if (item is null)
-        {
-            return false;
         }
 
         db.ShopItems.Remove(item);
