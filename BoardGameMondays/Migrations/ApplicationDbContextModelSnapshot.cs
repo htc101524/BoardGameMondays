@@ -18,9 +18,10 @@ namespace BoardGameMondays.Migrations
 #pragma warning disable 612, 618
             modelBuilder
                 .HasAnnotation("ProductVersion", "9.0.1")
-                .HasAnnotation("Relational:MaxIdentifierLength", 128);
-
-            SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
+                .HasAnnotation("Relational:MaxIdentifierLength", 128)
+                .HasAnnotation("SqlServer:IdentityIncrement", 1)
+                .HasAnnotation("SqlServer:IdentitySeed", 1L)
+                .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
 
             modelBuilder.Entity("BoardGameMondays.Data.ApplicationUser", b =>
                 {
@@ -125,7 +126,7 @@ namespace BoardGameMondays.Migrations
                     b.HasIndex("Slug")
                         .IsUnique();
 
-                    b.ToTable("BlogPosts");
+                    b.ToTable("BlogPosts", (string)null);
                 });
 
             modelBuilder.Entity("BoardGameMondays.Data.Entities.BoardGameEntity", b =>
@@ -174,32 +175,34 @@ namespace BoardGameMondays.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Games");
+                    b.ToTable("Games", (string)null);
                 });
 
             modelBuilder.Entity("BoardGameMondays.Data.Entities.FeaturedStateEntity", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+                        .HasColumnType("int")
+                        .HasAnnotation("SqlServer:IdentityIncrement", 1)
+                        .HasAnnotation("SqlServer:IdentitySeed", 1L)
+                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
 
                     b.Property<Guid?>("FeaturedGameId")
                         .HasColumnType("uniqueidentifier");
 
                     b.HasKey("Id");
 
-                    b.ToTable("FeaturedState");
+                    b.ToTable("FeaturedState", (string)null);
                 });
 
             modelBuilder.Entity("BoardGameMondays.Data.Entities.GameNightAttendeeEntity", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+                        .HasColumnType("int")
+                        .HasAnnotation("SqlServer:IdentityIncrement", 1)
+                        .HasAnnotation("SqlServer:IdentitySeed", 1L)
+                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
 
                     b.Property<long>("CreatedOn")
                         .HasColumnType("bigint");
@@ -221,7 +224,7 @@ namespace BoardGameMondays.Migrations
                     b.HasIndex("GameNightId", "MemberId")
                         .IsUnique();
 
-                    b.ToTable("GameNightAttendees");
+                    b.ToTable("GameNightAttendees", (string)null);
                 });
 
             modelBuilder.Entity("BoardGameMondays.Data.Entities.GameNightEntity", b =>
@@ -244,16 +247,17 @@ namespace BoardGameMondays.Migrations
                     b.HasIndex("DateKey")
                         .IsUnique();
 
-                    b.ToTable("GameNights");
+                    b.ToTable("GameNights", (string)null);
                 });
 
             modelBuilder.Entity("BoardGameMondays.Data.Entities.GameNightGameBetEntity", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+                        .HasColumnType("int")
+                        .HasAnnotation("SqlServer:IdentityIncrement", 1)
+                        .HasAnnotation("SqlServer:IdentitySeed", 1L)
+                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
 
                     b.Property<int>("Amount")
                         .HasColumnType("int");
@@ -295,16 +299,17 @@ namespace BoardGameMondays.Migrations
                     b.HasIndex("GameNightGameId", "UserId")
                         .IsUnique();
 
-                    b.ToTable("GameNightGameBets");
+                    b.ToTable("GameNightGameBets", (string)null);
                 });
 
             modelBuilder.Entity("BoardGameMondays.Data.Entities.GameNightGameEntity", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+                        .HasColumnType("int")
+                        .HasAnnotation("SqlServer:IdentityIncrement", 1)
+                        .HasAnnotation("SqlServer:IdentitySeed", 1L)
+                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
 
                     b.Property<long>("CreatedOn")
                         .HasColumnType("bigint");
@@ -341,16 +346,17 @@ namespace BoardGameMondays.Migrations
                     b.HasIndex("GameNightId", "GameId")
                         .IsUnique();
 
-                    b.ToTable("GameNightGames");
+                    b.ToTable("GameNightGames", (string)null);
                 });
 
             modelBuilder.Entity("BoardGameMondays.Data.Entities.GameNightGameOddsEntity", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+                        .HasColumnType("int")
+                        .HasAnnotation("SqlServer:IdentityIncrement", 1)
+                        .HasAnnotation("SqlServer:IdentitySeed", 1L)
+                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
 
                     b.Property<long>("CreatedOn")
                         .HasColumnType("bigint");
@@ -371,16 +377,17 @@ namespace BoardGameMondays.Migrations
                     b.HasIndex("GameNightGameId", "MemberId")
                         .IsUnique();
 
-                    b.ToTable("GameNightGameOdds");
+                    b.ToTable("GameNightGameOdds", (string)null);
                 });
 
             modelBuilder.Entity("BoardGameMondays.Data.Entities.GameNightGamePlayerEntity", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+                        .HasColumnType("int")
+                        .HasAnnotation("SqlServer:IdentityIncrement", 1)
+                        .HasAnnotation("SqlServer:IdentitySeed", 1L)
+                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
 
                     b.Property<long>("CreatedOn")
                         .HasColumnType("bigint");
@@ -402,16 +409,17 @@ namespace BoardGameMondays.Migrations
                     b.HasIndex("GameNightGameId", "MemberId")
                         .IsUnique();
 
-                    b.ToTable("GameNightGamePlayers");
+                    b.ToTable("GameNightGamePlayers", (string)null);
                 });
 
             modelBuilder.Entity("BoardGameMondays.Data.Entities.GameNightGameTeamEntity", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+                        .HasColumnType("int")
+                        .HasAnnotation("SqlServer:IdentityIncrement", 1)
+                        .HasAnnotation("SqlServer:IdentitySeed", 1L)
+                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
 
                     b.Property<string>("ColorHex")
                         .HasMaxLength(16)
@@ -430,16 +438,17 @@ namespace BoardGameMondays.Migrations
                     b.HasIndex("GameNightGameId", "TeamName")
                         .IsUnique();
 
-                    b.ToTable("GameNightGameTeams");
+                    b.ToTable("GameNightGameTeams", (string)null);
                 });
 
             modelBuilder.Entity("BoardGameMondays.Data.Entities.GameNightGameVictoryRouteValueEntity", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+                        .HasColumnType("int")
+                        .HasAnnotation("SqlServer:IdentityIncrement", 1)
+                        .HasAnnotation("SqlServer:IdentitySeed", 1L)
+                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
 
                     b.Property<int>("GameNightGameId")
                         .HasColumnType("int");
@@ -461,16 +470,17 @@ namespace BoardGameMondays.Migrations
                     b.HasIndex("GameNightGameId", "VictoryRouteId")
                         .IsUnique();
 
-                    b.ToTable("GameNightGameVictoryRouteValues");
+                    b.ToTable("GameNightGameVictoryRouteValues", (string)null);
                 });
 
             modelBuilder.Entity("BoardGameMondays.Data.Entities.GameNightRsvpEntity", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+                        .HasColumnType("int")
+                        .HasAnnotation("SqlServer:IdentityIncrement", 1)
+                        .HasAnnotation("SqlServer:IdentitySeed", 1L)
+                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
 
                     b.Property<long>("CreatedOn")
                         .HasColumnType("bigint");
@@ -491,7 +501,7 @@ namespace BoardGameMondays.Migrations
                     b.HasIndex("GameNightId", "MemberId")
                         .IsUnique();
 
-                    b.ToTable("GameNightRsvps");
+                    b.ToTable("GameNightRsvps", (string)null);
                 });
 
             modelBuilder.Entity("BoardGameMondays.Data.Entities.GameResultReactionEntity", b =>
@@ -520,7 +530,7 @@ namespace BoardGameMondays.Migrations
 
                     b.HasIndex("GameNightGameId");
 
-                    b.ToTable("GameResultReactions");
+                    b.ToTable("GameResultReactions", (string)null);
                 });
 
             modelBuilder.Entity("BoardGameMondays.Data.Entities.MemberEntity", b =>
@@ -579,16 +589,17 @@ namespace BoardGameMondays.Migrations
                     b.HasIndex("Name")
                         .IsUnique();
 
-                    b.ToTable("Members");
+                    b.ToTable("Members", (string)null);
                 });
 
             modelBuilder.Entity("BoardGameMondays.Data.Entities.ReviewAgreementEntity", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+                        .HasColumnType("int")
+                        .HasAnnotation("SqlServer:IdentityIncrement", 1)
+                        .HasAnnotation("SqlServer:IdentitySeed", 1L)
+                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
 
                     b.Property<long>("CreatedOn")
                         .HasColumnType("bigint");
@@ -610,7 +621,7 @@ namespace BoardGameMondays.Migrations
                     b.HasIndex("UserId", "ReviewId")
                         .IsUnique();
 
-                    b.ToTable("ReviewAgreements");
+                    b.ToTable("ReviewAgreements", (string)null);
                 });
 
             modelBuilder.Entity("BoardGameMondays.Data.Entities.ReviewEntity", b =>
@@ -645,7 +656,7 @@ namespace BoardGameMondays.Migrations
 
                     b.HasIndex("ReviewerId");
 
-                    b.ToTable("Reviews");
+                    b.ToTable("Reviews", (string)null);
                 });
 
             modelBuilder.Entity("BoardGameMondays.Data.Entities.ShopItemEntity", b =>
@@ -677,6 +688,9 @@ namespace BoardGameMondays.Migrations
                     b.Property<bool>("MembersOnly")
                         .HasColumnType("bit");
 
+                    b.Property<int>("MinWinsRequired")
+                        .HasColumnType("int");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(128)
@@ -689,7 +703,7 @@ namespace BoardGameMondays.Migrations
 
                     b.HasIndex("IsActive");
 
-                    b.ToTable("ShopItems");
+                    b.ToTable("ShopItems", (string)null);
                 });
 
             modelBuilder.Entity("BoardGameMondays.Data.Entities.TicketEntity", b =>
@@ -719,16 +733,17 @@ namespace BoardGameMondays.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Tickets");
+                    b.ToTable("Tickets", (string)null);
                 });
 
             modelBuilder.Entity("BoardGameMondays.Data.Entities.TicketPriorityEntity", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+                        .HasColumnType("int")
+                        .HasAnnotation("SqlServer:IdentityIncrement", 1)
+                        .HasAnnotation("SqlServer:IdentitySeed", 1L)
+                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
 
                     b.Property<string>("AdminUserId")
                         .IsRequired()
@@ -753,7 +768,7 @@ namespace BoardGameMondays.Migrations
                     b.HasIndex("AdminUserId", "Type", "Rank")
                         .IsUnique();
 
-                    b.ToTable("TicketPriorities");
+                    b.ToTable("TicketPriorities", (string)null);
                 });
 
             modelBuilder.Entity("BoardGameMondays.Data.Entities.UserPurchaseEntity", b =>
@@ -779,7 +794,7 @@ namespace BoardGameMondays.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("UserPurchases");
+                    b.ToTable("UserPurchases", (string)null);
                 });
 
             modelBuilder.Entity("BoardGameMondays.Data.Entities.VictoryRouteEntity", b =>
@@ -810,7 +825,7 @@ namespace BoardGameMondays.Migrations
                     b.HasIndex("GameId", "SortOrder")
                         .IsUnique();
 
-                    b.ToTable("VictoryRoutes");
+                    b.ToTable("VictoryRoutes", (string)null);
                 });
 
             modelBuilder.Entity("BoardGameMondays.Data.Entities.VictoryRouteOptionEntity", b =>
@@ -835,16 +850,17 @@ namespace BoardGameMondays.Migrations
                     b.HasIndex("VictoryRouteId", "SortOrder")
                         .IsUnique();
 
-                    b.ToTable("VictoryRouteOptions");
+                    b.ToTable("VictoryRouteOptions", (string)null);
                 });
 
             modelBuilder.Entity("BoardGameMondays.Data.Entities.WantToPlayVoteEntity", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+                        .HasColumnType("int")
+                        .HasAnnotation("SqlServer:IdentityIncrement", 1)
+                        .HasAnnotation("SqlServer:IdentitySeed", 1L)
+                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
 
                     b.Property<long>("CreatedOn")
                         .HasColumnType("bigint");
@@ -869,7 +885,7 @@ namespace BoardGameMondays.Migrations
                     b.HasIndex("UserId", "GameId", "WeekKey")
                         .IsUnique();
 
-                    b.ToTable("WantToPlayVotes");
+                    b.ToTable("WantToPlayVotes", (string)null);
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRole", b =>
@@ -903,9 +919,10 @@ namespace BoardGameMondays.Migrations
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+                        .HasColumnType("int")
+                        .HasAnnotation("SqlServer:IdentityIncrement", 1)
+                        .HasAnnotation("SqlServer:IdentitySeed", 1L)
+                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
 
                     b.Property<string>("ClaimType")
                         .HasColumnType("nvarchar(max)");
@@ -928,9 +945,10 @@ namespace BoardGameMondays.Migrations
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+                        .HasColumnType("int")
+                        .HasAnnotation("SqlServer:IdentityIncrement", 1)
+                        .HasAnnotation("SqlServer:IdentitySeed", 1L)
+                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.IdentityColumn);
 
                     b.Property<string>("ClaimType")
                         .HasColumnType("nvarchar(max)");

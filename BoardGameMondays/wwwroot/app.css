@@ -761,6 +761,57 @@ h1:focus {
     border-color: #929292;
 }
 
+/* Badge Ring Styles */
+.bgm-badgeRing {
+    position: relative;
+    display: inline-block;
+    border-radius: 14px;
+}
+
+.bgm-badgeRing::before {
+    content: "";
+    position: absolute;
+    inset: -3px;
+    border-radius: inherit;
+    padding: 3px;
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+    z-index: 1;
+}
+
+.bgm-badgeRing::after {
+    content: "";
+    position: absolute;
+    inset: -3px;
+    border-radius: inherit;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.65) 0%, rgba(255, 255, 255, 0.08) 45%, rgba(255, 255, 255, 0) 70%);
+    opacity: 0.5;
+    pointer-events: none;
+    z-index: 2;
+}
+
+.bgm-badgeRing--bronze::before {
+    background: linear-gradient(135deg, #f3d2b8 0%, #c9875b 45%, #a0623f 70%, #efc7aa 100%);
+    box-shadow: 0 0 8px rgba(205, 127, 50, 0.4);
+}
+
+.bgm-badgeRing--silver::before {
+    background: linear-gradient(135deg, #f5f7fb 0%, #ced5de 45%, #9aa4b2 70%, #e8edf5 100%);
+    box-shadow: 0 0 10px rgba(192, 192, 192, 0.45);
+}
+
+.bgm-badgeRing--gold::before {
+    background: linear-gradient(135deg, #fff4c7 0%, #f5d77a 45%, #e5b84a 70%, #fff2bf 100%);
+    box-shadow: 0 0 12px rgba(255, 193, 7, 0.5);
+}
+
+.bgm-badgeRing--platinum::before {
+    background: linear-gradient(135deg, #eef6ff 0%, #b8d6ff 40%, #6fa6f5 70%, #dcecff 100%);
+    box-shadow: 0 0 14px rgba(111, 166, 245, 0.5);
+}
+
 .form-floating > .form-control-plaintext::placeholder, .form-floating > .form-control::placeholder {
     color: var(--bs-secondary-color);
     text-align: end;

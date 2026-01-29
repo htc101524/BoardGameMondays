@@ -10,6 +10,7 @@
 @inject AuthenticationStateProvider AuthStateProvider
 @inject IHttpContextAccessor HttpContextAccessor
 @inject IConfiguration Configuration
+@inject ShopService ShopService
 
 <section id="people" class="home-section" aria-label="People">
     @* PageTitle is normally provided by the hosting shell; omit here to avoid component resolution issues. *@
@@ -41,15 +42,21 @@
             {
                 <a class="bgm-peopleCard bgm-peopleCard--link" role="listitem" aria-label="@member.Name" href="/people/@member.Id">
                     <div class="bgm-peopleCard__top">
-                        <div class="bgm-peopleCard__avatar" aria-hidden="true">
-                            @if (!string.IsNullOrWhiteSpace(member.AvatarUrl))
-                            {
-                                <img src="@member.AvatarUrl" alt="" />
-                            }
-                            else
-                            {
-                                @(string.IsNullOrWhiteSpace(member.Name) ? "?" : member.Name[..1].ToUpperInvariant())
-                            }
+                        @{
+                            var badgeRing = _badgeRings.GetValueOrDefault(member.Id);
+                            var ringClass = !string.IsNullOrWhiteSpace(badgeRing) ? $"bgm-badgeRing bgm-badgeRing--{badgeRing}" : "";
+                        }
+                        <div class="@ringClass">
+                            <div class="bgm-peopleCard__avatar" aria-hidden="true">
+                                @if (!string.IsNullOrWhiteSpace(member.AvatarUrl))
+                                {
+                                    <img src="@member.AvatarUrl" alt="" />
+                                }
+                                else
+                                {
+                                    @(string.IsNullOrWhiteSpace(member.Name) ? "?" : member.Name[..1].ToUpperInvariant())
+                                }
+                            </div>
                         </div>
                         <div class="bgm-peopleCard__who">
                             <div class="bgm-peopleCard__name">@member.Name</div>
@@ -74,6 +81,7 @@
     private string? _avatarMessage;
     private string _avatarMessageCss = "alert-info";
     private IReadOnlyList<MemberCard> _members = Array.Empty<MemberCard>();
+    private Dictionary<Guid, string> _badgeRings = new();
     private bool _isAdmin;
 
     protected override async Task OnInitializedAsync()
@@ -110,6 +118,30 @@
             .OrderBy(m => m.Name)
             .Select(m => new MemberCard(m.Id, m.Name, m.ProfileTagline, m.FunFact, m.AvatarUrl))
             .ToListAsync();
+        
+        // Load badge rings for all members
+        var memberUserIds = await db.UserClaims
+            .AsNoTracking()
+            .Where(c => c.ClaimType == "bgm:memberId" && _members.Select(m => m.Id.ToString()).Contains(c.ClaimValue))
+            .Select(c => c.UserId)
+            .ToListAsync();
+        
+        foreach (var userId in memberUserIds)
+        {
+            var badgeRing = await ShopService.GetUserBadgeRingAsync(userId);
+            if (!string.IsNullOrWhiteSpace(badgeRing))
+            {
+                var memberIdClaim = await db.UserClaims
+                    .Where(c => c.UserId == userId && c.ClaimType == "bgm:memberId")
+                    .Select(c => c.ClaimValue)
+                    .FirstOrDefaultAsync();
+                
+                if (memberIdClaim is not null && Guid.TryParse(memberIdClaim, out var memberId))
+                {
+                    _badgeRings[memberId] = badgeRing;
+                }
+            }
+        }
     }
     
     private async Task<HashSet<string>> GetAdminUserIdsAsync(ApplicationDbContext db)

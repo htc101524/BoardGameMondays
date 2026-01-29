@@ -8,9 +8,10 @@ public sealed class ApplicationDbContextFactory : IDesignTimeDbContextFactory<Ap
 {
     public ApplicationDbContext CreateDbContext(string[] args)
     {
-        // IMPORTANT: Migrations are intended for production (Azure SQL / SQL Server).
-        // Developers may run SQLite locally, but EF migrations must be generated against SQL Server
-        // to avoid provider-specific model diffs that cause PendingModelChangesWarning at runtime.
+        // Design-time factory for EF migrations.
+        // Uses the connection string from configuration (Development or Production).
+        // Falls back to a default SQL Server connection for migration generation if SQLite is configured
+        // AND no explicit --connection argument was passed via EF tools.
 
         var basePath = Directory.GetCurrentDirectory();
 
@@ -23,17 +24,37 @@ public sealed class ApplicationDbContextFactory : IDesignTimeDbContextFactory<Ap
 
         var connectionString = configuration.GetConnectionString("DefaultConnection");
 
-        // If the configured connection string is SQLite, fall back to a local SQL Server-formatted
-        // string purely for migrations generation (no connection is required to scaffold migrations).
-        if (IsSqliteConnectionString(connectionString))
+        // Check if an explicit connection string was passed via --connection argument
+        // EF tools pass this as an environment variable
+        var explicitConnection = Environment.GetEnvironmentVariable("EFCORETOOLSDB");
+        if (!string.IsNullOrWhiteSpace(explicitConnection))
         {
-            connectionString = null;
+            connectionString = explicitConnection;
         }
 
-        connectionString ??= "Server=localhost;Database=BoardGameMondays;User Id=sa;Password=ChangeMe!123;Encrypt=False;";
-
         var optionsBuilder = new DbContextOptionsBuilder<ApplicationDbContext>();
-        optionsBuilder.UseSqlServer(connectionString);
+
+        // Use the appropriate provider based on the connection string format
+        if (IsSqliteConnectionString(connectionString))
+        {
+            optionsBuilder.UseSqlite(connectionString);
+        }
+        else if (!string.IsNullOrWhiteSpace(connectionString))
+        {
+            optionsBuilder.UseSqlServer(connectionString, sql =>
+            {
+                sql.EnableRetryOnFailure(
+                    maxRetryCount: 10,
+                    maxRetryDelay: TimeSpan.FromSeconds(30),
+                    errorNumbersToAdd: null);
+            });
+        }
+        else
+        {
+            // Fall back to SQL Server for migration generation when no valid connection is available
+            connectionString = "Server=localhost;Database=BoardGameMondays;User Id=sa;Password=ChangeMe!123;Encrypt=False;";
+            optionsBuilder.UseSqlServer(connectionString);
+        }
 
         return new ApplicationDbContext(optionsBuilder.Options);
     }

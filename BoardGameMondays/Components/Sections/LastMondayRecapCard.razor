@@ -1,8 +1,11 @@
 @using BoardGameMondays.Core
+@using BoardGameMondays.Data
+@using Microsoft.EntityFrameworkCore
 @inject GameNightService GameNightService
 @inject BettingService BettingService
 @inject RecapStatsService StatsService
-
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject ShopService ShopService
 @if (_night is null)
 {
     <div class="bgm-recapFrame" aria-label="Last Monday recap">
@@ -40,13 +43,25 @@ else
                             <div class="bgm-attendeeAvatars">
                                 @foreach (var attendee in _night.Attendees.Take(8))
                                 {
-                                    <div class="bgm-attendeeAvatar" title="@attendee.MemberName">
-                                        @GetInitials(attendee.MemberName)
+                                    var avatarUrl = _memberAvatars.GetValueOrDefault(attendee.MemberId);
+                                    var badgeRing = _badgeRings.GetValueOrDefault(attendee.MemberId);
+                                    var ringClass = !string.IsNullOrWhiteSpace(badgeRing) ? $"bgm-badgeRing bgm-badgeRing--{badgeRing}" : "";
+                                    <div class="@ringClass">
+                                        <div class="bgm-recapAvatar" title="@attendee.MemberName">
+                                            @if (!string.IsNullOrWhiteSpace(avatarUrl))
+                                            {
+                                                <img src="@avatarUrl" alt="@attendee.MemberName" />
+                                            }
+                                            else
+                                            {
+                                                @GetInitials(attendee.MemberName)
+                                            }
+                                        </div>
                                     </div>
                                 }
                                 @if (_night.Attendees.Count > 8)
                                 {
-                                    <div class="bgm-attendeeAvatar bgm-attendeeAvatar--more" title="@(_night.Attendees.Count - 8) more">
+                                    <div class="bgm-recapAvatar bgm-recapAvatar--more" title="@(_night.Attendees.Count - 8) more">
                                         +@(_night.Attendees.Count - 8)
                                     </div>
                                 }
@@ -132,6 +147,8 @@ else
     private GameNightService.GameNight? _night;
     private IReadOnlyList<BettingService.NightNetResult> _net = Array.Empty<BettingService.NightNetResult>();
     private RecapStatsService.InterestingStat? _interestingStat;
+    private Dictionary<Guid, string?> _memberAvatars = new();
+    private Dictionary<Guid, string> _badgeRings = new();
 
     protected override async Task OnInitializedAsync()
     {
@@ -149,6 +166,50 @@ else
             {
                 _net = await BettingService.GetNightNetResultsAsync(_night.Id);
                 _interestingStat = await StatsService.GetInterestingStatAsync(_night.Date);
+                await LoadMemberAvatarsAsync();
+            }
+        }
+    }
+
+    private async Task LoadMemberAvatarsAsync()
+    {
+        if (_night is null || _night.Attendees.Count == 0)
+        {
+            return;
+        }
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var memberIds = _night.Attendees.Select(a => a.MemberId).ToList();
+        
+        var avatars = await db.Members
+            .AsNoTracking()
+            .Where(m => memberIds.Contains(m.Id))
+            .Select(m => new { m.Id, m.AvatarUrl })
+            .ToListAsync();
+
+        _memberAvatars = avatars.ToDictionary(a => a.Id, a => a.AvatarUrl);
+        
+        // Load badge rings for attendees
+        var memberUserIds = await db.UserClaims
+            .AsNoTracking()
+            .Where(c => c.ClaimType == "bgm:memberId" && memberIds.Select(m => m.ToString()).Contains(c.ClaimValue))
+            .Select(c => c.UserId)
+            .ToListAsync();
+        
+        foreach (var userId in memberUserIds)
+        {
+            var badgeRing = await ShopService.GetUserBadgeRingAsync(userId);
+            if (!string.IsNullOrWhiteSpace(badgeRing))
+            {
+                var memberIdClaim = await db.UserClaims
+                    .Where(c => c.UserId == userId && c.ClaimType == "bgm:memberId")
+                    .Select(c => c.ClaimValue)
+                    .FirstOrDefaultAsync();
+                
+                if (memberIdClaim is not null && Guid.TryParse(memberIdClaim, out var memberId))
+                {
+                    _badgeRings[memberId] = badgeRing;
+                }
             }
         }
     }

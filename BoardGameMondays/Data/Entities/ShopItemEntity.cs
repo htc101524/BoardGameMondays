@@ -45,5 +45,10 @@ public sealed class ShopItemEntity
     /// </summary>
     public bool MembersOnly { get; set; } = false;
 
+    /// <summary>
+    /// Minimum number of wins required to purchase this item. 0 means no requirement.
+    /// </summary>
+    public int MinWinsRequired { get; set; } = 0;
+
     public DateTimeOffset CreatedOn { get; set; } = DateTimeOffset.UtcNow;
 }

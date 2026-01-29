@@ -1,9 +1,12 @@
 @page "/shop"
 @using BoardGameMondays.Core
+@using BoardGameMondays.Data
 @using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.EntityFrameworkCore
 @inject ShopService ShopService
 @inject BgmCoinService CoinService
 @inject AuthenticationStateProvider AuthStateProvider
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
 
 <div class="container py-4">
     <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
@@ -55,6 +58,25 @@
                                             </div>
                                         </div>
                                     }
+                                    else if (item.ItemType == "BadgeRing")
+                                    {
+                                        var ringClass = $"bgm-badgeRing bgm-badgeRing--{item.Data}";
+                                        <div class="mb-3 text-center">
+                                            <div class="@ringClass" style="width: 80px; height: 80px; margin: 0 auto;">
+                                                <div style="width: 100%; height: 100%; border-radius: 12px; background: rgba(191, 161, 74, 0.18); border: 1px solid rgba(75, 58, 26, 0.14); display: grid; place-items: center; font-weight: 800; font-size: 2rem; color: #22311c;">👤</div>
+                                            </div>
+                                        </div>
+                                    }
+
+                                    @if (item.MinWinsRequired > 0)
+                                    {
+                                        var hasEnoughWins = _userWins >= item.MinWinsRequired;
+                                        var winsClass = hasEnoughWins ? "text-success" : "text-danger";
+                                        <div class="mb-2 small">
+                                            <div class="@winsClass fw-semibold">Requires @item.MinWinsRequired win@(item.MinWinsRequired == 1 ? "" : "s")</div>
+                                            <div class="text-muted">You have @_userWins win@(_userWins == 1 ? "" : "s")</div>
+                                        </div>
+                                    }
 
                                     <div class="d-flex justify-content-between align-items-center">
                                         <div class="fw-semibold">@item.Price 💰</div>
@@ -94,6 +116,7 @@
     private int? _coins;
     private string? _userId;
     private bool _saving;
+    private int _userWins;
 
     protected override async Task OnInitializedAsync()
     {
@@ -109,6 +132,20 @@
 
             var coinsResult = await CoinService.GetCoinsAsync(_userId);
             _coins = coinsResult;
+            
+            // Get user's win count
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var memberIdClaim = await db.UserClaims
+                .Where(c => c.UserId == _userId && c.ClaimType == "bgm:memberId")
+                .Select(c => c.ClaimValue)
+                .FirstOrDefaultAsync();
+            
+            if (memberIdClaim is not null && Guid.TryParse(memberIdClaim, out var memberId))
+            {
+                _userWins = await db.GameNightGames
+                    .Where(g => g.WinnerMemberId == memberId && g.IsPlayed)
+                    .CountAsync();
+            }
         }
     }
 
@@ -122,16 +159,24 @@
         _saving = true;
         try
         {
-            var success = await ShopService.PurchaseItemAsync(_userId, itemId);
-            if (success)
+            var result = await ShopService.PurchaseItemAsync(_userId, itemId);
+            if (result == BoardGameMondays.Core.PurchaseResult.Success)
             {
                 _ownedItemIds.Add(itemId);
                 var coinsResult = await CoinService.GetCoinsAsync(_userId);
                 _coins = coinsResult;
             }
+            else if (result == BoardGameMondays.Core.PurchaseResult.InsufficientWins)
+            {
+                // Show message that user needs more wins
+            }
+            else if (result == BoardGameMondays.Core.PurchaseResult.InsufficientCoins)
+            {
+                // Show message that user needs more coins
+            }
             else
             {
-                // Purchase failed - could be insufficient funds, already owned, etc.
+                // Other purchase failure
             }
         }
         finally

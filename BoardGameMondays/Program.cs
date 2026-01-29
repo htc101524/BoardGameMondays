@@ -343,6 +343,7 @@ try
         await EnsureSqlServerVictoryRoutesAsync(db, app.Logger);
         await EnsureSqlServerMemberEloColumnsAsync(db, app.Logger);
         await EnsureSqlServerOddsDisplayFormatColumnAsync(db, app.Logger);
+        await EnsureSqlServerShopItemColumnsAsync(db, app.Logger);
     }
 
     // Ensure identity tables exist before assigning roles.
@@ -686,6 +687,35 @@ END;
     catch (Exception ex)
     {
         logger.LogCritical(ex, "Failed to ensure OddsDisplayFormat column exists in SQL Server schema.");
+        throw;
+    }
+}
+
+static async Task EnsureSqlServerShopItemColumnsAsync(ApplicationDbContext db, ILogger logger)
+{
+    if (!db.Database.IsSqlServer())
+    {
+        return;
+    }
+
+    const string sql = @"
+IF COL_LENGTH(N'dbo.ShopItems', N'MinWinsRequired') IS NULL
+BEGIN
+    ALTER TABLE [dbo].[ShopItems] ADD [MinWinsRequired] int NOT NULL DEFAULT 0;
+END;
+";
+
+    try
+    {
+        var affected = await db.Database.ExecuteSqlRawAsync(sql);
+        if (affected != 0)
+        {
+            logger.LogWarning("Ensured MinWinsRequired column exists in ShopItems table.");
+        }
+    }
+    catch (Exception ex)
+    {
+        logger.LogCritical(ex, "Failed to ensure MinWinsRequired column exists in ShopItems table.");
         throw;
     }
 }
@@ -1608,6 +1638,30 @@ CREATE INDEX IF NOT EXISTS IX_GameResultReactions_GameNightGameId ON GameResultR
 CREATE INDEX IF NOT EXISTS IX_GameResultReactions_UserId ON GameResultReactions(UserId);
 ";
             await createShopIndexes.ExecuteNonQueryAsync();
+        }
+
+        // ShopItems.MinWinsRequired (badge ring win requirements)
+        var hasMinWinsRequired = false;
+        await using (var cmd = connection.CreateCommand())
+        {
+            cmd.CommandText = "PRAGMA table_info('ShopItems');";
+            await using var reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                var name = reader.GetString(1);
+                if (string.Equals(name, "MinWinsRequired", StringComparison.OrdinalIgnoreCase))
+                {
+                    hasMinWinsRequired = true;
+                    break;
+                }
+            }
+        }
+
+        if (!hasMinWinsRequired)
+        {
+            await using var alter = connection.CreateCommand();
+            alter.CommandText = "ALTER TABLE ShopItems ADD COLUMN MinWinsRequired INTEGER NOT NULL DEFAULT 0;";
+            await alter.ExecuteNonQueryAsync();
         }
     }
     finally

@@ -86,10 +86,10 @@
         gap: 1rem 0;
     }
 
-    .bgm-attendeeAvatar {
-        width: 32px;
-        height: 32px;
-        font-size: 0.65rem;
+    .bgm-recapAvatar {
+        width: 38px;
+        height: 38px;
+        font-size: 0.7rem;
     }
 
     .bgm-interestingStat {
@@ -131,13 +131,14 @@
     }
 
     .bgm-attendeeAvatars {
-        gap: 5px;
+        gap: 6px;
     }
 
-    .bgm-attendeeAvatar {
-        width: 28px;
-        height: 28px;
-        font-size: 0.6rem;
+    .bgm-recapAvatar {
+        width: 34px;
+        height: 34px;
+        font-size: 0.65rem;
+        border-radius: 10px;
     }
 
     .bgm-interestingStat {
@@ -213,7 +214,7 @@
     line-height: 1.1;
 }
 
-/* Attendee avatars */
+/* Attendee avatars - styled like People section for shop customization */
 .bgm-attendeeSection {
     margin-bottom: 0.25rem;
 }
@@ -221,33 +222,41 @@
 .bgm-attendeeAvatars {
     display: flex;
     flex-wrap: wrap;
-    gap: 6px;
+    gap: 8px;
 }
 
-.bgm-attendeeAvatar {
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
-    background: linear-gradient(135deg, rgba(191, 161, 74, 0.3), rgba(75, 58, 26, 0.2));
-    border: 2px solid rgba(75, 58, 26, 0.15);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 0.7rem;
-    font-weight: 700;
-    color: rgba(34, 49, 28, 0.9);
+.bgm-recapAvatar {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    display: grid;
+    place-items: center;
+    font-weight: 800;
+    font-size: 0.75rem;
+    color: #22311c;
+    background: rgba(191, 161, 74, 0.18);
+    border: 2px solid rgba(75, 58, 26, 0.14);
+    overflow: hidden;
     text-transform: uppercase;
     transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 
-.bgm-attendeeAvatar:hover {
-    transform: scale(1.1);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+.bgm-recapAvatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
 }
 
-.bgm-attendeeAvatar--more {
+.bgm-recapAvatar:hover {
+    transform: scale(1.08);
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.15);
+}
+
+.bgm-recapAvatar--more {
     background: rgba(75, 58, 26, 0.1);
-    font-size: 0.65rem;
+    font-size: 0.7rem;
+    font-weight: 700;
 }
 
 /* Game winners list */

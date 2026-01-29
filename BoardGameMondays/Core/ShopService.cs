@@ -4,6 +4,16 @@ using Microsoft.EntityFrameworkCore;
 
 namespace BoardGameMondays.Core;
 
+public enum PurchaseResult
+{
+    Success,
+    NotFound,
+    AlreadyOwned,
+    InsufficientCoins,
+    InsufficientWins,
+    Failed
+}
+
 public sealed class ShopService
 {
     private readonly IDbContextFactory<ApplicationDbContext> _dbFactory;
@@ -165,9 +175,9 @@ public sealed class ShopService
 
     /// <summary>
     /// Purchases an item, deducting coins from the user.
-    /// Returns null if purchase fails (insufficient coins, item not found, already owned).
+    /// Returns null if purchase fails (insufficient coins, item not found, already owned, insufficient wins).
     /// </summary>
-    public async Task<bool> PurchaseItemAsync(string userId, Guid shopItemId, CancellationToken ct = default)
+    public async Task<PurchaseResult> PurchaseItemAsync(string userId, Guid shopItemId, CancellationToken ct = default)
     {
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
 
@@ -177,7 +187,7 @@ public sealed class ShopService
 
         if (item is null)
         {
-            return false;
+            return PurchaseResult.NotFound;
         }
 
         // Check if user already owns this item
@@ -187,27 +197,54 @@ public sealed class ShopService
 
         if (alreadyOwns)
         {
-            return false;
+            return PurchaseResult.AlreadyOwned;
         }
 
         // Check coin balance
         var coins = await _coinService.GetCoinsAsync(userId, ct);
         if (coins < item.Price)
         {
-            return false;
+            return PurchaseResult.InsufficientCoins;
+        }
+
+        // Check win requirement if item requires wins
+        if (item.MinWinsRequired > 0)
+        {
+            // Get the user's member ID from their claims
+            var memberIdClaim = await db.UserClaims
+                .AsNoTracking()
+                .Where(c => c.UserId == userId && c.ClaimType == "bgm:memberId")
+                .Select(c => c.ClaimValue)
+                .FirstOrDefaultAsync(ct);
+
+            if (string.IsNullOrWhiteSpace(memberIdClaim) || !Guid.TryParse(memberIdClaim, out var memberId))
+            {
+                return PurchaseResult.InsufficientWins;
+            }
+
+            // Count the user's wins
+            var winCount = await db.GameNightGames
+                .AsNoTracking()
+                .Where(g => g.WinnerMemberId == memberId && g.IsPlayed)
+                .CountAsync(ct);
+
+            if (winCount < item.MinWinsRequired)
+            {
+                return PurchaseResult.InsufficientWins;
+            }
         }
 
         // Deduct coins and record purchase in transaction
         var strategy = db.Database.CreateExecutionStrategy();
-        return await strategy.ExecuteAsync(async () =>
+        var success = await strategy.ExecuteAsync(async () =>
         {
             await using var tx = await db.Database.BeginTransactionAsync(ct);
 
             try
             {
                 // Deduct coins using the same db context to participate in transaction
-                var success = await _coinService.TrySpendAsync(db, userId, item.Price, ct);
-                if (!success)
+                var spendSuccess = await _coinService.TrySpendAsync(db, userId, item.Price, ct);
+                if (!spendSuccess)
                 {
                     await tx.RollbackAsync(ct);
                     return false;
@@ -232,6 +269,8 @@ public sealed class ShopService
                 throw;
             }
         });
+
+        return success ? PurchaseResult.Success : PurchaseResult.Failed;
     }
 
     /// <summary>
@@ -335,6 +374,24 @@ public sealed class ShopService
         return result;
     }
 
+    public async Task<string?> GetUserBadgeRingAsync(string userId, CancellationToken ct = default)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        
+        // Get the user's purchased badge ring (if any)
+        var badgeRing = await db.UserPurchases
+            .Where(up => up.UserId == userId)
+            .Join(db.ShopItems,
+                up => up.ShopItemId,
+                si => si.Id,
+                (up, si) => new { si.ItemType, si.Data })
+            .Where(x => x.ItemType == "BadgeRing")
+            .Select(x => x.Data)
+            .FirstOrDefaultAsync(ct);
+            
+        return badgeRing;
+    }
+
     private static ShopItem ToDomain(ShopItemEntity entity)
     {
         var emojis = entity.ItemType == "EmojiPack"
@@ -347,6 +404,8 @@ public sealed class ShopService
             entity.Description,
             entity.Price,
             entity.ItemType,
+            entity.Data,
+            entity.MinWinsRequired,
             entity.MembersOnly,
             true, // Always active for public display
             emojis);
@@ -364,6 +423,8 @@ public sealed class ShopService
             entity.Description,
             entity.Price,
             entity.ItemType,
+            entity.Data,
+            entity.MinWinsRequired,
             entity.MembersOnly,
             entity.IsActive,
             emojis);
@@ -375,6 +436,8 @@ public sealed class ShopService
         string Description,
         int Price,
         string ItemType,
+        string Data,
+        int MinWinsRequired,
         bool MembersOnly,
         bool IsActive,
         IReadOnlyList<string> Emojis);

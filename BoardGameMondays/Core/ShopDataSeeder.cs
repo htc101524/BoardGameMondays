@@ -74,6 +74,55 @@ public static class ShopDataSeeder
                 Data = "😈",
                 MembersOnly = false,
                 IsActive = true
+            },
+            // Badge Rings - require wins to purchase
+            new ShopItemEntity
+            {
+                Id = Guid.NewGuid(),
+                Name = "Bronze Ring",
+                Description = "A bronze ring for your badge. Requires 5 wins.",
+                Price = 250,
+                ItemType = "BadgeRing",
+                Data = "bronze",
+                MembersOnly = false,
+                IsActive = true,
+                MinWinsRequired = 5
+            },
+            new ShopItemEntity
+            {
+                Id = Guid.NewGuid(),
+                Name = "Silver Ring",
+                Description = "A silver ring for your badge. Requires 25 wins.",
+                Price = 500,
+                ItemType = "BadgeRing",
+                Data = "silver",
+                MembersOnly = false,
+                IsActive = true,
+                MinWinsRequired = 25
+            },
+            new ShopItemEntity
+            {
+                Id = Guid.NewGuid(),
+                Name = "Gold Ring",
+                Description = "A gold ring for your badge. Requires 50 wins.",
+                Price = 750,
+                ItemType = "BadgeRing",
+                Data = "gold",
+                MembersOnly = false,
+                IsActive = true,
+                MinWinsRequired = 50
+            },
+            new ShopItemEntity
+            {
+                Id = Guid.NewGuid(),
+                Name = "Platinum Ring",
+                Description = "A platinum ring for your badge. Requires 100 wins.",
+                Price = 1000,
+                ItemType = "BadgeRing",
+                Data = "platinum",
+                MembersOnly = false,
+                IsActive = true,
+                MinWinsRequired = 100
             }
         };
 
