@@ -31,6 +31,9 @@ public sealed class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<GameNightGameVictoryRouteValueEntity> GameNightGameVictoryRouteValues => Set<GameNightGameVictoryRouteValueEntity>();
     public DbSet<BlogPostEntity> BlogPosts => Set<BlogPostEntity>();
     public DbSet<WantToPlayVoteEntity> WantToPlayVotes => Set<WantToPlayVoteEntity>();
+    public DbSet<ShopItemEntity> ShopItems => Set<ShopItemEntity>();
+    public DbSet<UserPurchaseEntity> UserPurchases => Set<UserPurchaseEntity>();
+    public DbSet<GameResultReactionEntity> GameResultReactions => Set<GameResultReactionEntity>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {

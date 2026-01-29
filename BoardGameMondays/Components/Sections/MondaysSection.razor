@@ -8,6 +8,7 @@
 @inject AuthenticationStateProvider AuthStateProvider
 @inject BettingService BettingService
 @inject BgmCoinService CoinService
+@inject ShopService ShopService
 @inject WantToPlayService WantToPlayService
 @inject UserPreferencesService PreferencesService
 @inject IJSRuntime JS
@@ -300,6 +301,58 @@
                                             else if (game.IsPlayed && game.Winner is null)
                                             {
                                                 <span class="badge text-bg-success">Winner: Everyone lost</span>
+                                            }
+
+                                            @if (game.IsPlayed && _gameReactions.TryGetValue(game.Id, out var reactions) && reactions.Any(r => !r.Key.StartsWith("USER_")))
+                                            {
+                                                <div class="mt-2">
+                                                    <div class="text-muted small mb-1">Reactions</div>
+                                                    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                                                        @foreach (var reaction in reactions.Where(r => !r.Key.StartsWith("USER_")).OrderByDescending(r => r.Value))
+                                                        {
+                                                            <div style="cursor: pointer; padding: 4px 8px; border-radius: 4px; background: #f0f0f0; user-select: none;" 
+                                                                 title="@reaction.Value @(reaction.Value == 1 ? "person" : "people")">
+                                                                @reaction.Key <span style="font-size: 0.85em; color: #666;">@reaction.Value</span>
+                                                            </div>
+                                                        }
+                                                    </div>
+                                                </div>
+                                            }
+
+                                            @if (game.IsPlayed && _userEmojis.Count > 0)
+                                            {
+                                                var userHasReactedToNight = _gameReactions.Values.Any(reactionDict => 
+                                                    reactionDict.Any(kvp => kvp.Key.StartsWith($"USER_{_userId}:")));
+                                                var userReactedToThisGame = _gameReactions.TryGetValue(game.Id, out var thisGameReactions) &&
+                                                    thisGameReactions.Any(kvp => kvp.Key.StartsWith($"USER_{_userId}:"));
+                                                var canReact = !userHasReactedToNight || userReactedToThisGame;
+
+                                                <div class="mt-2">
+                                                    @if (userReactedToThisGame)
+                                                    {
+                                                        <div class="text-success small mb-1">✓ You reacted to this game (click to remove):</div>
+                                                    }
+                                                    else if (userHasReactedToNight)
+                                                    {
+                                                        <div class="text-muted small mb-1">You already reacted to another game this night</div>
+                                                    }
+                                                    else
+                                                    {
+                                                        <div class="text-muted small mb-1">React (once per night):</div>
+                                                    }
+                                                    <div style="display: flex; gap: 4px; flex-wrap: wrap;">
+                                                        @foreach (var emoji in _userEmojis)
+                                                        {
+                                                            <button type="button"
+                                                                    class="btn btn-sm"
+                                                                    style="padding: 4px 8px; border: 1px solid #ccc;"
+                                                                    disabled="@(_saving || !canReact)"
+                                                                    @onclick="() => ReactAsync(game.Id, emoji)">
+                                                                @emoji
+                                                            </button>
+                                                        }
+                                                    </div>
+                                                </div>
                                             }
                                         </div>
 
@@ -679,7 +732,7 @@
                                                             ? teamPending 
                                                             : teamActualValue;
                                                         var teamHasChanged = teamCurrentSelection != teamActualValue;
-                                                        var isTeamDropdownDisabled = _saving || !game.IsConfirmed || (game.HasBets && game.IsSettled) || isTeamNoWinnerConfirmed;
+                                                        var isTeamDropdownDisabled = _saving || !game.IsConfirmed || isTeamWinnerConfirmed;
                                                         <select class="form-select form-select-sm" style="max-width: 360px"
                                                                 value="@teamCurrentSelection"
                                                                 disabled="@isTeamDropdownDisabled"
@@ -721,7 +774,7 @@
                                                             ? pending 
                                                             : actualValue;
                                                         var hasChanged = currentSelection != actualValue;
-                                                        var isDropdownDisabled = _saving || !game.IsConfirmed || (game.HasBets && game.IsSettled) || isNoWinnerConfirmed;
+                                                        var isDropdownDisabled = _saving || !game.IsConfirmed || isWinnerConfirmed;
                                                         <select class="form-select form-select-sm" style="max-width: 360px"
                                                                 value="@currentSelection"
                                                                 disabled="@isDropdownDisabled"
@@ -1039,6 +1092,8 @@
     private IReadOnlyDictionary<int, BettingService.UserBet> _myBets = new Dictionary<int, BettingService.UserBet>();
     private readonly Dictionary<int, List<string>> _clientTeams = new();
     private readonly Dictionary<int, string?> _paletteImageUrlByGame = new();
+    private IReadOnlyList<string> _userEmojis = Array.Empty<string>();
+    private Dictionary<int, IReadOnlyDictionary<string, int>> _gameReactions = new();
 
     private readonly Dictionary<Guid, string?> _snackDraftByMemberId = new();
     private readonly Dictionary<Guid, string?> _snackStatusByMemberId = new();
@@ -1335,10 +1390,23 @@
             if (_selectedNight is not null && !string.IsNullOrWhiteSpace(_userId))
             {
                 _myBets = await BettingService.GetUserBetsForNightAsync(_selectedNight.Id, _userId);
+                _userEmojis = await ShopService.GetUserEmojisAsync(_userId);
+                
+                // Load reactions for all games in this night
+                _gameReactions.Clear();
+                foreach (var game in _selectedNight.Games)
+                {
+                    if (game.IsPlayed)
+                    {
+                        var reactions = await ShopService.GetGameReactionsAsync(game.Id);
+                        _gameReactions[game.Id] = reactions;
+                    }
+                }
             }
             else
             {
                 _myBets = new Dictionary<int, BettingService.UserBet>();
+                _userEmojis = Array.Empty<string>();
             }
         }
         finally
@@ -2616,5 +2684,33 @@
 
         _clientTeams[gameNightGameId] = list;
         StateHasChanged();
+    }
+
+    private async Task ReactAsync(int gameNightGameId, string emoji)
+    {
+        if (string.IsNullOrWhiteSpace(_userId))
+        {
+            return;
+        }
+
+        _saving = true;
+        try
+        {
+            var success = await ShopService.AddReactionAsync(gameNightGameId, _userId, emoji);
+            if (success)
+            {
+                // Reload reactions for ALL games on this night to update the UI
+                // This ensures the one-reaction-per-night restriction is reflected immediately
+                foreach (var game in _selectedNight.Games.Where(g => g.IsPlayed))
+                {
+                    var reactions = await ShopService.GetGameReactionsAsync(game.Id);
+                    _gameReactions[game.Id] = reactions;
+                }
+            }
+        }
+        finally
+        {
+            _saving = false;
+        }
     }
 }

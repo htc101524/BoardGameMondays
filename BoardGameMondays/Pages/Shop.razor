@@ -1,0 +1,142 @@
+@page "/shop"
+@using BoardGameMondays.Core
+@using Microsoft.AspNetCore.Components.Authorization
+@inject ShopService ShopService
+@inject BgmCoinService CoinService
+@inject AuthenticationStateProvider AuthStateProvider
+
+<div class="container py-4">
+    <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
+        <div>
+            <h1>Shop</h1>
+            <p class="text-muted">Purchase emoji packs to react to game results</p>
+        </div>
+        <div>
+            <div class="text-end">
+                <div class="fw-semibold">Balance</div>
+                <div class="fs-5">💰 @(_coins?.ToString() ?? "…")</div>
+            </div>
+        </div>
+    </div>
+
+    <AuthorizeView>
+        <NotAuthorized>
+            <div class="alert alert-info">
+                <a href="/login" class="alert-link">Log in</a> to purchase emoji packs.
+            </div>
+        </NotAuthorized>
+        <Authorized>
+            @if (_items is null)
+            {
+                <div class="text-muted">Loading…</div>
+            }
+            else if (_items.Count == 0)
+            {
+                <div class="alert alert-info">No items available at this time.</div>
+            }
+            else
+            {
+                <div class="row g-3">
+                    @foreach (var item in _items)
+                    {
+                        var owned = _ownedItemIds.Contains(item.Id);
+                        var affordable = _coins.HasValue && _coins.Value >= item.Price;
+                        <div class="col-12 col-sm-6 col-md-4 col-lg-3">
+                            <div class="card h-100 @(owned ? "border-success" : "")">
+                                <div class="card-body">
+                                    <h5 class="card-title">@item.Name</h5>
+                                    <p class="card-text text-muted small">@item.Description</p>
+
+                                    @if (item.ItemType == "EmojiPack" && item.Emojis.Count > 0)
+                                    {
+                                        <div class="mb-3 text-center">
+                                            <div style="font-size: 3rem; line-height: 1;">
+                                                @item.Emojis[0]
+                                            </div>
+                                        </div>
+                                    }
+
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div class="fw-semibold">@item.Price 💰</div>
+                                        @if (owned)
+                                        {
+                                            <span class="badge bg-success">Owned</span>
+                                        }
+                                        else
+                                        {
+                                            <button type="button"
+                                                    class="btn btn-sm btn-primary"
+                                                    disabled="@(_saving || !affordable)"
+                                                    title="@(!affordable ? "Not enough coins" : "")"
+                                                    @onclick="() => PurchaseAsync(item.Id)">
+                                                Buy
+                                            </button>
+                                        }
+                                    </div>
+
+                                    @if (!owned && !affordable && _coins.HasValue)
+                                    {
+                                        <div class="text-danger small mt-2">Need @(item.Price - _coins.Value) more coins</div>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        </Authorized>
+    </AuthorizeView>
+</div>
+
+@code {
+    private IReadOnlyList<ShopService.ShopItem>? _items;
+    private HashSet<Guid> _ownedItemIds = new();
+    private int? _coins;
+    private string? _userId;
+    private bool _saving;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var auth = await AuthStateProvider.GetAuthenticationStateAsync();
+        _userId = auth.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+
+        _items = await ShopService.GetAvailableItemsAsync();
+
+        if (_userId is not null)
+        {
+            var purchased = await ShopService.GetUserPurchasedItemsAsync(_userId);
+            _ownedItemIds = purchased.Select(p => p.Id).ToHashSet();
+
+            var coinsResult = await CoinService.GetCoinsAsync(_userId);
+            _coins = coinsResult;
+        }
+    }
+
+    private async Task PurchaseAsync(Guid itemId)
+    {
+        if (_userId is null)
+        {
+            return;
+        }
+
+        _saving = true;
+        try
+        {
+            var success = await ShopService.PurchaseItemAsync(_userId, itemId);
+            if (success)
+            {
+                _ownedItemIds.Add(itemId);
+                var coinsResult = await CoinService.GetCoinsAsync(_userId);
+                _coins = coinsResult;
+            }
+            else
+            {
+                // Purchase failed - could be insufficient funds, already owned, etc.
+            }
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

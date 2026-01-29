@@ -252,6 +252,7 @@ builder.Services.AddScoped<BoardGameMondays.Core.AgreementService>();
 builder.Services.AddScoped<BoardGameMondays.Core.GameNightService>();
 builder.Services.AddScoped<BoardGameMondays.Core.BgmCoinService>();
 builder.Services.AddScoped<BoardGameMondays.Core.BettingService>();
+builder.Services.AddScoped<BoardGameMondays.Core.ShopService>();
 builder.Services.AddScoped<BoardGameMondays.Core.BlogService>();
 builder.Services.AddScoped<BoardGameMondays.Core.WantToPlayService>();
 builder.Services.AddScoped<BoardGameMondays.Core.RankingService>();
@@ -322,6 +323,9 @@ try
             // Dev convenience: create a non-admin user for quickly checking the non-admin UX.
             var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
             await SeedDevNonAdminUserAsync(userManager, db);
+
+            // Seed shop items
+            await ShopDataSeeder.SeedShopItemsAsync(db);
         }
     }
     else
@@ -1495,13 +1499,19 @@ CREATE TABLE IF NOT EXISTS GameNightGameBets (
             await alter.ExecuteNonQueryAsync();
         }
 
+        // Drop any old unique index on GameNightGames (GameNightId, GameId) to allow duplicate games per Monday
+        await using (var dropOldIndex = connection.CreateCommand())
+        {
+            dropOldIndex.CommandText = "DROP INDEX IF EXISTS IX_GameNightGames_Night_Game;";
+            await dropOldIndex.ExecuteNonQueryAsync();
+        }
+
         await using (var createGameNightIndexes = connection.CreateCommand())
         {
             createGameNightIndexes.CommandText = @"
 CREATE UNIQUE INDEX IF NOT EXISTS IX_GameNights_DateKey ON GameNights(DateKey);
 CREATE UNIQUE INDEX IF NOT EXISTS IX_GameNightAttendees_Night_Member ON GameNightAttendees(GameNightId, MemberId);
 CREATE UNIQUE INDEX IF NOT EXISTS IX_GameNightRsvps_Night_Member ON GameNightRsvps(GameNightId, MemberId);
-DROP INDEX IF EXISTS IX_GameNightGames_Night_Game;
 CREATE INDEX IF NOT EXISTS IX_GameNightGames_Night_Game ON GameNightGames(GameNightId, GameId);
 CREATE UNIQUE INDEX IF NOT EXISTS IX_GameNightGamePlayers_NightGame_Member ON GameNightGamePlayers(GameNightGameId, MemberId);
 CREATE UNIQUE INDEX IF NOT EXISTS IX_GameNightGameOdds_NightGame_Member ON GameNightGameOdds(GameNightGameId, MemberId);
@@ -1539,6 +1549,65 @@ CREATE UNIQUE INDEX IF NOT EXISTS IX_BlogPosts_Slug ON BlogPosts(Slug);
 CREATE INDEX IF NOT EXISTS IX_BlogPosts_CreatedOn ON BlogPosts(CreatedOn);
 ";
             await createBlogIndexes.ExecuteNonQueryAsync();
+        }
+
+        // Shop system tables
+        await using (var createShopItems = connection.CreateCommand())
+        {
+            createShopItems.CommandText = @"
+CREATE TABLE IF NOT EXISTS ShopItems (
+    Id TEXT NOT NULL PRIMARY KEY,
+    Name TEXT NOT NULL,
+    Description TEXT NOT NULL,
+    Price INTEGER NOT NULL,
+    ItemType TEXT NOT NULL,
+    Data TEXT NOT NULL,
+    IsActive INTEGER NOT NULL,
+    MembersOnly INTEGER NOT NULL,
+    CreatedOn INTEGER NOT NULL
+);
+";
+            await createShopItems.ExecuteNonQueryAsync();
+        }
+
+        await using (var createUserPurchases = connection.CreateCommand())
+        {
+            createUserPurchases.CommandText = @"
+CREATE TABLE IF NOT EXISTS UserPurchases (
+    Id TEXT NOT NULL PRIMARY KEY,
+    UserId TEXT NOT NULL,
+    ShopItemId TEXT NOT NULL,
+    PurchasedOn INTEGER NOT NULL,
+    FOREIGN KEY (ShopItemId) REFERENCES ShopItems(Id) ON DELETE CASCADE
+);
+";
+            await createUserPurchases.ExecuteNonQueryAsync();
+        }
+
+        await using (var createGameResultReactions = connection.CreateCommand())
+        {
+            createGameResultReactions.CommandText = @"
+CREATE TABLE IF NOT EXISTS GameResultReactions (
+    Id TEXT NOT NULL PRIMARY KEY,
+    GameNightGameId INTEGER NOT NULL,
+    UserId TEXT NOT NULL,
+    Emoji TEXT NOT NULL,
+    CreatedOn INTEGER NOT NULL,
+    FOREIGN KEY (GameNightGameId) REFERENCES GameNightGames(Id) ON DELETE CASCADE
+);
+";
+            await createGameResultReactions.ExecuteNonQueryAsync();
+        }
+
+        await using (var createShopIndexes = connection.CreateCommand())
+        {
+            createShopIndexes.CommandText = @"
+CREATE INDEX IF NOT EXISTS IX_UserPurchases_ShopItemId ON UserPurchases(ShopItemId);
+CREATE INDEX IF NOT EXISTS IX_UserPurchases_UserId ON UserPurchases(UserId);
+CREATE INDEX IF NOT EXISTS IX_GameResultReactions_GameNightGameId ON GameResultReactions(GameNightGameId);
+CREATE INDEX IF NOT EXISTS IX_GameResultReactions_UserId ON GameResultReactions(UserId);
+";
+            await createShopIndexes.ExecuteNonQueryAsync();
         }
     }
     finally

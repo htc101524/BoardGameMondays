@@ -1,0 +1,253 @@
+@page "/admin/shop"
+@using BoardGameMondays.Core
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.JSInterop
+@inject ShopService ShopService
+@inject AuthenticationStateProvider AuthStateProvider
+@inject IJSRuntime JS
+
+<div class="container py-4">
+    <h1>Manage Shop</h1>
+
+    <AuthorizeView Roles="Admin">
+        <Authorized>
+            <div class="mb-4">
+                <button type="button" class="btn btn-primary" @onclick="() => ShowCreateModal()">
+                    + Add Item
+                </button>
+            </div>
+
+            @if (_items is null)
+            {
+                <div class="text-muted">Loading…</div>
+            }
+            else if (_items.Count == 0)
+            {
+                <div class="alert alert-info">No items yet.</div>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Description</th>
+                                <th>Type</th>
+                                <th>Price</th>
+                                <th>Members Only</th>
+                                <th>Active</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var item in _items.OrderBy(i => i.Name))
+                            {
+                                <tr>
+                                    <td>@item.Name</td>
+                                    <td>@item.Description</td>
+                                    <td><span class="badge bg-secondary">@item.ItemType</span></td>
+                                    <td>@item.Price</td>
+                                    <td>@(item.MembersOnly ? "✓" : "—")</td>
+                                    <td>@(item.IsActive ? "✓" : "✗")</td>
+                                    <td>
+                                        <button type="button" class="btn btn-sm btn-outline-primary" @onclick="() => EditItem(item)">Edit</button>
+                                        <button type="button" class="btn btn-sm btn-outline-danger" @onclick="() => DeleteItemAsync(item.Id)">Delete</button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </Authorized>
+        <NotAuthorized>
+            <div class="alert alert-danger">Admin access required.</div>
+        </NotAuthorized>
+    </AuthorizeView>
+</div>
+
+<!-- Create/Edit Modal -->
+@if (_showModal)
+{
+    <div class="modal show d-block" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">@(_editingItem is null ? "Create Item" : "Edit Item")</h5>
+                    <button type="button" class="btn-close" @onclick="() => CloseModal()"></button>
+                </div>
+                <div class="modal-body">
+                    <form>
+                        <div class="mb-3">
+                            <label class="form-label">Name</label>
+                            <input type="text" class="form-control" @bind="_itemForm.Name" />
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Description</label>
+                            <textarea class="form-control" rows="2" @bind="_itemForm.Description"></textarea>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Type</label>
+                            <select class="form-select" @bind="_itemForm.ItemType">
+                                <option value="EmojiPack">Emoji Pack</option>
+                                <option value="BadgeCosmetic">Badge Cosmetic</option>
+                            </select>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Price (coins)</label>
+                            <input type="number" class="form-control" @bind="_itemForm.Price" min="1" />
+                        </div>
+
+                        @if (_itemForm.ItemType == "EmojiPack")
+                        {
+                            <div class="mb-3">
+                                <label class="form-label">Emojis (comma-separated)</label>
+                                <input type="text" class="form-control" @bind="_itemForm.Data" placeholder="👍,❌,🏆,🎉,🎲,🔥" />
+                            </div>
+                        }
+
+                        <div class="mb-3 form-check">
+                            <input type="checkbox" class="form-check-input" @bind="_itemForm.MembersOnly" />
+                            <label class="form-check-label">Members Only</label>
+                        </div>
+
+                        <div class="mb-3 form-check">
+                            <input type="checkbox" class="form-check-input" @bind="_itemForm.IsActive" />
+                            <label class="form-check-label">Active</label>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="() => CloseModal()">Cancel</button>
+                    <button type="button" class="btn btn-primary" disabled="@_saving" @onclick="() => SaveItemAsync()">
+                        @if (_saving)
+                        {
+                            <span>Saving...</span>
+                        }
+                        else
+                        {
+                            <span>Save</span>
+                        }
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private IReadOnlyList<ShopService.ShopItem>? _items;
+    private bool _showModal;
+    private ShopService.ShopItem? _editingItem;
+    private ShopItemFormData _itemForm = new();
+    private bool _saving;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var auth = await AuthStateProvider.GetAuthenticationStateAsync();
+        if (auth.User.IsInRole("Admin"))
+        {
+            _items = await ShopService.GetAllItemsForAdminAsync();
+        }
+    }
+
+    private void ShowCreateModal()
+    {
+        _editingItem = null;
+        _itemForm = new ShopItemFormData();
+        _showModal = true;
+    }
+
+    private void CloseModal()
+    {
+        _showModal = false;
+        _editingItem = null;
+        _itemForm = new();
+    }
+
+    private void EditItem(ShopService.ShopItem item)
+    {
+        _editingItem = item;
+        _itemForm = new ShopItemFormData
+        {
+            Name = item.Name,
+            Description = item.Description,
+            ItemType = item.ItemType,
+            Price = item.Price,
+            MembersOnly = item.MembersOnly,
+            IsActive = item.IsActive,
+            Data = item.ItemType == "EmojiPack" ? string.Join(",", item.Emojis) : ""
+        };
+        _showModal = true;
+    }
+
+    private async Task SaveItemAsync()
+    {
+        _saving = true;
+        try
+        {
+            if (_editingItem is null)
+            {
+                // Create new item
+                await ShopService.CreateItemAsync(
+                    _itemForm.Name,
+                    _itemForm.Description,
+                    _itemForm.Price,
+                    _itemForm.ItemType,
+                    _itemForm.Data,
+                    _itemForm.MembersOnly,
+                    _itemForm.IsActive);
+            }
+            else
+            {
+                // Update existing item
+                await ShopService.UpdateItemAsync(
+                    _editingItem.Id,
+                    _itemForm.Name,
+                    _itemForm.Description,
+                    _itemForm.Price,
+                    _itemForm.Data,
+                    _itemForm.MembersOnly,
+                    _itemForm.IsActive);
+            }
+
+            CloseModal();
+            _items = await ShopService.GetAllItemsForAdminAsync();
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task DeleteItemAsync(Guid itemId)
+    {
+        if (await JS.InvokeAsync<bool>("confirm", "Delete this item? This will only work if no one has purchased it."))
+        {
+            var success = await ShopService.DeleteItemAsync(itemId);
+            if (success)
+            {
+                _items = await ShopService.GetAllItemsForAdminAsync();
+            }
+            else
+            {
+                await JS.InvokeVoidAsync("alert", "Cannot delete item - users have already purchased it.");
+            }
+        }
+    }
+
+    private class ShopItemFormData
+    {
+        public string Name { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
+        public string ItemType { get; set; } = "EmojiPack";
+        public int Price { get; set; } = 100;
+        public bool MembersOnly { get; set; }
+        public bool IsActive { get; set; } = true;
+        public string Data { get; set; } = string.Empty;
+    }
+}
