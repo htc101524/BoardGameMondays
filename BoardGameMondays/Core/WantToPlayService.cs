@@ -1,6 +1,7 @@
 using BoardGameMondays.Data;
 using BoardGameMondays.Data.Entities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace BoardGameMondays.Core;
 
@@ -8,12 +9,14 @@ public sealed class WantToPlayService
 {
     private const int WeeklyLimit = 3;
     private readonly IDbContextFactory<ApplicationDbContext> _dbFactory;
+    private readonly ILogger<WantToPlayService> _logger;
 
     public event Action? Changed;
 
-    public WantToPlayService(IDbContextFactory<ApplicationDbContext> dbFactory)
+    public WantToPlayService(IDbContextFactory<ApplicationDbContext> dbFactory, ILogger<WantToPlayService> logger)
     {
         _dbFactory = dbFactory;
+        _logger = logger;
     }
 
     public async Task<WantToPlayUserStatus> GetUserStatusAsync(string userId, DateOnly today, CancellationToken ct = default)
@@ -143,27 +146,26 @@ public sealed class WantToPlayService
         var gameLookup = games.ToDictionary(g => g.Id, g => g);
 
         // DEBUG: Log mismatches
+        _logger.LogInformation("WantToPlay: Found {GameCount} games for {VoteCount} vote groups", games.Count, topGameIds.Count);
         foreach (var gameId in topGameIds)
         {
             if (!gameLookup.ContainsKey(gameId))
             {
-                Console.WriteLine($"WARNING: Game ID {gameId} in votes but not found in Games table");
+                _logger.LogWarning("WantToPlay: Game ID {GameId} in votes but not found in Games table", gameId);
             }
         }
 
-        return validCounts
-            .OrderByDescending(x => x.Value)
-            .ThenBy(x => gameLookup.TryGetValue(x.Key, out var g) ? g.Name : string.Empty)
-            .Take(take)
-            .Select(x =>
+        // Return only the top games we already selected
+        return topGameIds
+            .Select(gameId =>
             {
-                if (!gameLookup.TryGetValue(x.Key, out var game))
+                if (!gameLookup.TryGetValue(gameId, out var game))
                 {
-                    Console.WriteLine($"WARNING: Returning Unknown for GameId {x.Key} with {x.Value} votes");
-                    return new WantToPlayEntry(x.Key, "Unknown", null, x.Value);
+                    _logger.LogWarning("WantToPlay: Returning Unknown for GameId {GameId} with {VoteCount} votes", gameId, validCounts[gameId]);
+                    return new WantToPlayEntry(gameId, "Unknown", null, validCounts[gameId]);
                 }
 
-                return new WantToPlayEntry(game.Id, game.Name, game.ImageUrl, x.Value);
+                return new WantToPlayEntry(game.Id, game.Name, game.ImageUrl, validCounts[gameId]);
             })
             .ToArray();
     }
