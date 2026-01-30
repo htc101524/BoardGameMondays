@@ -323,9 +323,6 @@ try
             // Dev convenience: create a non-admin user for quickly checking the non-admin UX.
             var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
             await SeedDevNonAdminUserAsync(userManager, db);
-
-            // Seed shop items
-            await ShopDataSeeder.SeedShopItemsAsync(db);
         }
     }
     else
@@ -346,6 +343,9 @@ try
         await EnsureSqlServerShopItemColumnsAsync(db, app.Logger);
         await EnsureSqlServerGameScoreColumnsAsync(db, app.Logger);
     }
+
+    // Seed shop items (badge rings and emoji packs) - runs in both dev and production
+    await ShopDataSeeder.SeedShopItemsAsync(db);
 
     // Ensure identity tables exist before assigning roles.
     await EnsureAdminRoleAssignmentsAsync(scope.ServiceProvider);

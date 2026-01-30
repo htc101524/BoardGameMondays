@@ -128,37 +128,45 @@ public static class ShopDataSeeder
         }
         else
         {
-            // Update existing badge rings with correct prices and win requirements
-            var badgeRings = await db.ShopItems
+            // Ensure badge rings exist (they may be missing if shop items were seeded before rings were added)
+            var existingRings = await db.ShopItems
                 .Where(si => si.ItemType == "BadgeRing")
-                .ToListAsync();
+                .ToDictionaryAsync(r => r.Data);
 
-            var ringUpdates = new Dictionary<string, (int Price, int MinWins)>
+            var ringDefinitions = new[]
             {
-                { "bronze", (200, 5) },
-                { "silver", (500, 15) },
-                { "gold", (750, 30) },
-                { "platinum", (1000, 50) }
+                new { Data = "bronze", Name = "Bronze Ring", Description = "Earn your first badge ring with 5 wins", Price = 200, MinWins = 5 },
+                new { Data = "silver", Name = "Silver Ring", Description = "Level up your badge ring with 15 wins", Price = 500, MinWins = 15 },
+                new { Data = "gold", Name = "Gold Ring", Description = "Become a champion with 30 wins", Price = 750, MinWins = 30 },
+                new { Data = "platinum", Name = "Platinum Ring", Description = "Achieve elite status with 50 wins", Price = 1000, MinWins = 50 }
             };
 
-            foreach (var ring in badgeRings)
+            foreach (var def in ringDefinitions)
             {
-                if (ringUpdates.TryGetValue(ring.Data, out var update))
+                if (existingRings.TryGetValue(def.Data, out var ring))
                 {
-                    ring.Price = update.Price;
-                    ring.MinWinsRequired = update.MinWins;
-                    ring.Description = ring.Data switch
+                    // Update existing ring
+                    ring.Price = def.Price;
+                    ring.MinWinsRequired = def.MinWins;
+                    ring.Description = def.Description;
+                }
+                else
+                {
+                    // Create missing ring
+                    db.ShopItems.Add(new ShopItemEntity
                     {
-                        "bronze" => "Earn your first badge ring with 5 wins",
-                        "silver" => "Level up your badge ring with 15 wins",
-                        "gold" => "Become a champion with 30 wins",
-                        "platinum" => "Achieve elite status with 50 wins",
-                        _ => ring.Description
-                    };
+                        Id = Guid.NewGuid(),
+                        Name = def.Name,
+                        Description = def.Description,
+                        Price = def.Price,
+                        ItemType = "BadgeRing",
+                        Data = def.Data,
+                        MembersOnly = false,
+                        IsActive = true,
+                        MinWinsRequired = def.MinWins
+                    });
                 }
             }
-
-            db.ShopItems.UpdateRange(badgeRings);
         }
 
         await db.SaveChangesAsync();
