@@ -142,6 +142,22 @@ namespace BoardGameMondays.Migrations
                         .HasMaxLength(512)
                         .HasColumnType("nvarchar(512)");
 
+                    b.Property<bool>("AreScoresCountable")
+                        .HasColumnType("bit");
+
+                    b.Property<int?>("HighScore")
+                        .HasColumnType("int");
+
+                    b.Property<Guid?>("HighScoreMemberId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("HighScoreMemberName")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<long?>("HighScoreAchievedOn")
+                        .HasColumnType("bigint");
+
                     b.Property<double?>("Complexity")
                         .HasColumnType("float");
 
@@ -323,8 +339,14 @@ namespace BoardGameMondays.Migrations
                     b.Property<bool>("IsConfirmed")
                         .HasColumnType("bit");
 
+                    b.Property<bool>("IsHighScore")
+                        .HasColumnType("bit");
+
                     b.Property<bool>("IsPlayed")
                         .HasColumnType("bit");
+
+                    b.Property<int?>("Score")
+                        .HasColumnType("int");
 
                     b.Property<Guid?>("WinnerMemberId")
                         .HasColumnType("uniqueidentifier");

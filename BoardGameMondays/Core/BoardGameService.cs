@@ -127,6 +127,7 @@ public sealed class BoardGameService
         double? complexity = null,
         double? boardGameGeekScore = null,
         string? boardGameGeekUrl = null,
+        bool areScoresCountable = false,
         CancellationToken ct = default)
     {
         name = InputGuards.RequireTrimmed(name, maxLength: 120, nameof(name), "Name is required.");
@@ -149,7 +150,8 @@ public sealed class BoardGameService
             FirstPlayRuntimeMinutes = firstPlayRuntimeMinutes,
             Complexity = complexity,
             BoardGameGeekScore = boardGameGeekScore,
-            BoardGameGeekUrl = boardGameGeekUrl
+            BoardGameGeekUrl = boardGameGeekUrl,
+            AreScoresCountable = areScoresCountable
         };
 
         db.Games.Add(entity);
@@ -171,6 +173,7 @@ public sealed class BoardGameService
         double? complexity,
         double? boardGameGeekScore,
         string? boardGameGeekUrl,
+        bool areScoresCountable,
         CancellationToken ct = default)
     {
         name = InputGuards.RequireTrimmed(name, maxLength: 120, nameof(name), "Name is required.");
@@ -197,6 +200,7 @@ public sealed class BoardGameService
         entity.Complexity = complexity;
         entity.BoardGameGeekScore = boardGameGeekScore;
         entity.BoardGameGeekUrl = boardGameGeekUrl;
+        entity.AreScoresCountable = areScoresCountable;
 
         await db.SaveChangesAsync(ct);
         Changed?.Invoke();
@@ -442,6 +446,11 @@ public sealed class BoardGameService
             firstPlayRuntimeMinutes: entity.FirstPlayRuntimeMinutes,
             complexity: entity.Complexity,
             boardGameGeekScore: entity.BoardGameGeekScore,
-            boardGameGeekUrl: entity.BoardGameGeekUrl);
+            boardGameGeekUrl: entity.BoardGameGeekUrl,
+            areScoresCountable: entity.AreScoresCountable,
+            highScore: entity.HighScore,
+            highScoreMemberId: entity.HighScoreMemberId,
+            highScoreMemberName: entity.HighScoreMemberName,
+            highScoreAchievedOn: entity.HighScoreAchievedOn);
     }
 }

@@ -35,6 +35,18 @@ public sealed class BoardGameEntity
     [MaxLength(512)]
     public string? BoardGameGeekUrl { get; set; }
 
+    [Required]
+    public bool AreScoresCountable { get; set; }
+
+    public int? HighScore { get; set; }
+
+    public Guid? HighScoreMemberId { get; set; }
+
+    [MaxLength(128)]
+    public string? HighScoreMemberName { get; set; }
+
+    public DateTimeOffset? HighScoreAchievedOn { get; set; }
+
     public List<ReviewEntity> Reviews { get; set; } = new();
 
     public List<VictoryRouteEntity> VictoryRoutes { get; set; } = new();

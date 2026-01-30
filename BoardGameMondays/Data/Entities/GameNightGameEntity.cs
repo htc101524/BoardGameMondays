@@ -33,6 +33,11 @@ public sealed class GameNightGameEntity
     [MaxLength(64)]
     public string? WinnerTeamName { get; set; }
 
+    public int? Score { get; set; }
+
+    [Required]
+    public bool IsHighScore { get; set; }
+
     public List<GameNightGamePlayerEntity> Players { get; set; } = new();
 
     public List<GameNightGameTeamEntity> Teams { get; set; } = new();

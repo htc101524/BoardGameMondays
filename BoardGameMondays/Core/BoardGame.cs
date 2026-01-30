@@ -17,6 +17,11 @@ public sealed class BoardGame
         double? complexity = null,
         double? boardGameGeekScore = null,
         string? boardGameGeekUrl = null,
+        bool areScoresCountable = false,
+        int? highScore = null,
+        Guid? highScoreMemberId = null,
+        string? highScoreMemberName = null,
+        DateTimeOffset? highScoreAchievedOn = null,
         Guid? id = null)
     {
         Id = id ?? Guid.NewGuid();
@@ -35,6 +40,11 @@ public sealed class BoardGame
         Complexity = complexity;
         BoardGameGeekScore = boardGameGeekScore;
         BoardGameGeekUrl = boardGameGeekUrl;
+        AreScoresCountable = areScoresCountable;
+        HighScore = highScore;
+        HighScoreMemberId = highScoreMemberId;
+        HighScoreMemberName = highScoreMemberName;
+        HighScoreAchievedOn = highScoreAchievedOn;
     }
 
     public Guid Id { get; }
@@ -71,6 +81,16 @@ public sealed class BoardGame
     public double? BoardGameGeekScore { get; }
 
     public string? BoardGameGeekUrl { get; }
+
+    public bool AreScoresCountable { get; }
+
+    public int? HighScore { get; }
+
+    public Guid? HighScoreMemberId { get; }
+
+    public string? HighScoreMemberName { get; }
+
+    public DateTimeOffset? HighScoreAchievedOn { get; }
 }
 
 public sealed record VictoryRoute(Guid Id, string Name, VictoryRouteType Type, bool IsRequired, int SortOrder, IReadOnlyList<VictoryRouteOption> Options);

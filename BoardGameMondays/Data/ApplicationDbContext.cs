@@ -63,6 +63,12 @@ public sealed class ApplicationDbContext : IdentityDbContext<ApplicationUser>
                 toDb => toDb.UtcDateTime.Ticks,
                 fromDb => new DateTimeOffset(new DateTime(fromDb, DateTimeKind.Utc)));
 
+        builder.Entity<BoardGameEntity>()
+            .Property(x => x.HighScoreAchievedOn)
+            .HasConversion(
+                toDb => toDb.HasValue ? toDb.Value.UtcDateTime.Ticks : (long?)null,
+                fromDb => fromDb.HasValue ? new DateTimeOffset(new DateTime(fromDb.Value, DateTimeKind.Utc)) : (DateTimeOffset?)null);
+
         builder.Entity<GameNightAttendeeEntity>()
             .Property(x => x.CreatedOn)
             .HasConversion(

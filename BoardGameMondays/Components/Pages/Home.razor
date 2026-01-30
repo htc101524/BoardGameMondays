@@ -7,6 +7,7 @@
 @using BoardGameMondays.Components.Sections
 @using BoardGameMondays.Components.Sections.Highlights
 @using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.JSInterop
 @using System.Security.Claims
 @inject BoardGameService BoardGameService
 @inject AgreementService AgreementService
@@ -198,7 +199,8 @@
                     thoughtsGame.FirstPlayRuntimeMinutes is not null ||
                     thoughtsGame.Complexity is not null ||
                     thoughtsGame.BoardGameGeekScore is not null ||
-                    !string.IsNullOrWhiteSpace(thoughtsGame.BoardGameGeekUrl)))
+                    !string.IsNullOrWhiteSpace(thoughtsGame.BoardGameGeekUrl) ||
+                    (thoughtsGame.AreScoresCountable && thoughtsGame.HighScore is not null)))
                 {
                     <div class="card bgm-gameStatsCard" aria-label="Game stats">
                         <div class="card-body">
@@ -263,6 +265,30 @@
                                     <div class="col-12 col-sm-6">
                                         <div class="text-muted small">BoardGameGeek</div>
                                         <a class="fw-semibold" href="@thoughtsGame.BoardGameGeekUrl" target="_blank" rel="noopener noreferrer">Open page</a>
+                                    </div>
+                                }
+
+                                @if (thoughtsGame.AreScoresCountable && thoughtsGame.HighScore is not null)
+                                {
+                                    <div class="col-12 col-sm-6">
+                                        <div class="text-muted small">High score</div>
+                                        <div class="fw-semibold">@thoughtsGame.HighScore</div>
+                                    </div>
+                                }
+
+                                @if (thoughtsGame.AreScoresCountable && !string.IsNullOrWhiteSpace(thoughtsGame.HighScoreMemberName))
+                                {
+                                    <div class="col-12 col-sm-6">
+                                        <div class="text-muted small">Set by</div>
+                                        <div class="fw-semibold">@thoughtsGame.HighScoreMemberName</div>
+                                    </div>
+                                }
+
+                                @if (thoughtsGame.AreScoresCountable && thoughtsGame.HighScoreAchievedOn is not null)
+                                {
+                                    <div class="col-12 col-sm-6">
+                                        <div class="text-muted small">High score achieved</div>
+                                        <div class="fw-semibold">@thoughtsGame.HighScoreAchievedOn.Value.ToString("MMM d, yyyy")</div>
                                     </div>
                                 }
                             </div>
@@ -665,7 +691,18 @@
     private async Task GoToMondaysAsync()
     {
         // Scroll to the section first
-        await JS.InvokeVoidAsync("bgm.scrollToIdNextFrame", "mondays", "smooth");
+        try
+        {
+            await JS.InvokeVoidAsync("bgm.scrollToIdNextFrame", "mondays", "smooth");
+        }
+        catch (TaskCanceledException)
+        {
+            return;
+        }
+        catch (JSDisconnectedException)
+        {
+            return;
+        }
         
         // Get the last past Monday from the GameNightService
         var today = DateOnly.FromDateTime(DateTime.Today);

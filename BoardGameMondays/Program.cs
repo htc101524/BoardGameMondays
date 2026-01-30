@@ -344,6 +344,7 @@ try
         await EnsureSqlServerMemberEloColumnsAsync(db, app.Logger);
         await EnsureSqlServerOddsDisplayFormatColumnAsync(db, app.Logger);
         await EnsureSqlServerShopItemColumnsAsync(db, app.Logger);
+        await EnsureSqlServerGameScoreColumnsAsync(db, app.Logger);
     }
 
     // Ensure identity tables exist before assigning roles.
@@ -720,6 +721,65 @@ END;
     }
 }
 
+static async Task EnsureSqlServerGameScoreColumnsAsync(ApplicationDbContext db, ILogger logger)
+{
+    if (!db.Database.IsSqlServer())
+    {
+        return;
+    }
+
+    const string sql = @"
+IF COL_LENGTH(N'dbo.Games', N'AreScoresCountable') IS NULL
+BEGIN
+    ALTER TABLE [dbo].[Games] ADD [AreScoresCountable] bit NOT NULL DEFAULT 0;
+END;
+
+IF COL_LENGTH(N'dbo.Games', N'HighScore') IS NULL
+BEGIN
+    ALTER TABLE [dbo].[Games] ADD [HighScore] int NULL;
+END;
+
+IF COL_LENGTH(N'dbo.Games', N'HighScoreMemberId') IS NULL
+BEGIN
+    ALTER TABLE [dbo].[Games] ADD [HighScoreMemberId] uniqueidentifier NULL;
+END;
+
+IF COL_LENGTH(N'dbo.Games', N'HighScoreMemberName') IS NULL
+BEGIN
+    ALTER TABLE [dbo].[Games] ADD [HighScoreMemberName] nvarchar(128) NULL;
+END;
+
+IF COL_LENGTH(N'dbo.Games', N'HighScoreAchievedOn') IS NULL
+BEGIN
+    ALTER TABLE [dbo].[Games] ADD [HighScoreAchievedOn] bigint NULL;
+END;
+
+IF COL_LENGTH(N'dbo.GameNightGames', N'Score') IS NULL
+BEGIN
+    ALTER TABLE [dbo].[GameNightGames] ADD [Score] int NULL;
+END;
+
+IF COL_LENGTH(N'dbo.GameNightGames', N'IsHighScore') IS NULL
+BEGIN
+    ALTER TABLE [dbo].[GameNightGames] ADD [IsHighScore] bit NOT NULL DEFAULT 0;
+END;
+";
+
+    try
+    {
+        var affected = await db.Database.ExecuteSqlRawAsync(sql);
+        if (affected != 0)
+        {
+            logger.LogWarning("Patched missing score tracking columns in SQL Server schema.");
+        }
+    }
+    catch (Exception ex)
+    {
+        logger.LogCritical(ex, "Failed to ensure score tracking columns exist in SQL Server schema.");
+        throw;
+    }
+}
+
 static async Task EnsureAdminRoleAssignmentsAsync(IServiceProvider services)
 {
     var config = services.GetRequiredService<IConfiguration>();
@@ -994,6 +1054,11 @@ static async Task EnsureSqliteSchemaUpToDateAsync(ApplicationDbContext db)
         var hasComplexity = false;
         var hasBggScore = false;
         var hasBggUrl = false;
+        var hasScoresCountable = false;
+        var hasHighScore = false;
+        var hasHighScoreMemberId = false;
+        var hasHighScoreMemberName = false;
+        var hasHighScoreAchievedOn = false;
         await using (var cmd = connection.CreateCommand())
         {
             cmd.CommandText = "PRAGMA table_info('Games');";
@@ -1008,6 +1073,11 @@ static async Task EnsureSqliteSchemaUpToDateAsync(ApplicationDbContext db)
                 if (string.Equals(name, "Complexity", StringComparison.OrdinalIgnoreCase)) hasComplexity = true;
                 if (string.Equals(name, "BoardGameGeekScore", StringComparison.OrdinalIgnoreCase)) hasBggScore = true;
                 if (string.Equals(name, "BoardGameGeekUrl", StringComparison.OrdinalIgnoreCase)) hasBggUrl = true;
+                if (string.Equals(name, "AreScoresCountable", StringComparison.OrdinalIgnoreCase)) hasScoresCountable = true;
+                if (string.Equals(name, "HighScore", StringComparison.OrdinalIgnoreCase)) hasHighScore = true;
+                if (string.Equals(name, "HighScoreMemberId", StringComparison.OrdinalIgnoreCase)) hasHighScoreMemberId = true;
+                if (string.Equals(name, "HighScoreMemberName", StringComparison.OrdinalIgnoreCase)) hasHighScoreMemberName = true;
+                if (string.Equals(name, "HighScoreAchievedOn", StringComparison.OrdinalIgnoreCase)) hasHighScoreAchievedOn = true;
             }
         }
 
@@ -1057,6 +1127,41 @@ static async Task EnsureSqliteSchemaUpToDateAsync(ApplicationDbContext db)
         {
             await using var alter = connection.CreateCommand();
             alter.CommandText = "ALTER TABLE Games ADD COLUMN BoardGameGeekUrl TEXT NULL;";
+            await alter.ExecuteNonQueryAsync();
+        }
+
+        if (!hasScoresCountable)
+        {
+            await using var alter = connection.CreateCommand();
+            alter.CommandText = "ALTER TABLE Games ADD COLUMN AreScoresCountable INTEGER NOT NULL DEFAULT 0;";
+            await alter.ExecuteNonQueryAsync();
+        }
+
+        if (!hasHighScore)
+        {
+            await using var alter = connection.CreateCommand();
+            alter.CommandText = "ALTER TABLE Games ADD COLUMN HighScore INTEGER NULL;";
+            await alter.ExecuteNonQueryAsync();
+        }
+
+        if (!hasHighScoreMemberId)
+        {
+            await using var alter = connection.CreateCommand();
+            alter.CommandText = "ALTER TABLE Games ADD COLUMN HighScoreMemberId TEXT NULL;";
+            await alter.ExecuteNonQueryAsync();
+        }
+
+        if (!hasHighScoreMemberName)
+        {
+            await using var alter = connection.CreateCommand();
+            alter.CommandText = "ALTER TABLE Games ADD COLUMN HighScoreMemberName TEXT NULL;";
+            await alter.ExecuteNonQueryAsync();
+        }
+
+        if (!hasHighScoreAchievedOn)
+        {
+            await using var alter = connection.CreateCommand();
+            alter.CommandText = "ALTER TABLE Games ADD COLUMN HighScoreAchievedOn INTEGER NULL;";
             await alter.ExecuteNonQueryAsync();
         }
 
@@ -1278,6 +1383,9 @@ CREATE TABLE IF NOT EXISTS GameNightGames (
     IsPlayed INTEGER NOT NULL,
     IsConfirmed INTEGER NOT NULL DEFAULT 0,
     WinnerMemberId TEXT NULL,
+    WinnerTeamName TEXT NULL,
+    Score INTEGER NULL,
+    IsHighScore INTEGER NOT NULL DEFAULT 0,
     CreatedOn INTEGER NOT NULL,
     FOREIGN KEY (GameNightId) REFERENCES GameNights(Id) ON DELETE CASCADE,
     FOREIGN KEY (GameId) REFERENCES Games(Id) ON DELETE CASCADE
@@ -1346,6 +1454,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS IX_GameNightGameVictoryRouteValues_Game_Route 
         var hasIsConfirmed = false;
         var hasWinnerMemberId = false;
         var hasWinnerTeamName = false;
+        var hasScore = false;
+        var hasIsHighScore = false;
         await using (var cmd = connection.CreateCommand())
         {
             cmd.CommandText = "PRAGMA table_info('GameNightGames');";
@@ -1366,6 +1476,16 @@ CREATE UNIQUE INDEX IF NOT EXISTS IX_GameNightGameVictoryRouteValues_Game_Route 
                 if (string.Equals(name, "WinnerTeamName", StringComparison.OrdinalIgnoreCase))
                 {
                     hasWinnerTeamName = true;
+                }
+
+                if (string.Equals(name, "Score", StringComparison.OrdinalIgnoreCase))
+                {
+                    hasScore = true;
+                }
+
+                if (string.Equals(name, "IsHighScore", StringComparison.OrdinalIgnoreCase))
+                {
+                    hasIsHighScore = true;
                 }
             }
         }
@@ -1388,6 +1508,20 @@ CREATE UNIQUE INDEX IF NOT EXISTS IX_GameNightGameVictoryRouteValues_Game_Route 
         {
             await using var alter = connection.CreateCommand();
             alter.CommandText = "ALTER TABLE GameNightGames ADD COLUMN WinnerTeamName TEXT NULL;";
+            await alter.ExecuteNonQueryAsync();
+        }
+
+        if (!hasScore)
+        {
+            await using var alter = connection.CreateCommand();
+            alter.CommandText = "ALTER TABLE GameNightGames ADD COLUMN Score INTEGER NULL;";
+            await alter.ExecuteNonQueryAsync();
+        }
+
+        if (!hasIsHighScore)
+        {
+            await using var alter = connection.CreateCommand();
+            alter.CommandText = "ALTER TABLE GameNightGames ADD COLUMN IsHighScore INTEGER NOT NULL DEFAULT 0;";
             await alter.ExecuteNonQueryAsync();
         }
 

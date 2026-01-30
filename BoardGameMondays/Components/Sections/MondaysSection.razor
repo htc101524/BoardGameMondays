@@ -733,6 +733,9 @@
                                                             : teamActualValue;
                                                         var teamHasChanged = teamCurrentSelection != teamActualValue;
                                                         var isTeamDropdownDisabled = _saving || !game.IsConfirmed || isTeamWinnerConfirmed;
+                                                        var teamScoreRequired = game.AreScoresCountable && !string.IsNullOrEmpty(teamCurrentSelection) && teamCurrentSelection != "NOT_SET";
+                                                        var teamScoreValue = GetScoreInputValue(game.Id, game.Score);
+                                                        var teamScoreValid = !teamScoreRequired || (int.TryParse(teamScoreValue, out var teamScoreParsed) && teamScoreParsed > 0);
                                                         <select class="form-select form-select-sm" style="max-width: 360px"
                                                                 value="@teamCurrentSelection"
                                                                 disabled="@isTeamDropdownDisabled"
@@ -747,9 +750,20 @@
                                                         
                                                         @if (teamHasChanged)
                                                         {
+                                                            @if (teamScoreRequired)
+                                                            {
+                                                                <input type="number"
+                                                                       class="form-control form-control-sm"
+                                                                       style="max-width: 120px"
+                                                                       min="1"
+                                                                       step="1"
+                                                                       value="@teamScoreValue"
+                                                                       disabled="@_saving"
+                                                                       @onchange="e => SetScoreInputValue(game.Id, e.Value?.ToString())" />
+                                                            }
                                                             <button type="button"
                                                                     class="btn btn-sm btn-primary ms-2"
-                                                                    disabled="@_saving"
+                                                                    disabled="@(_saving || (teamScoreRequired && !teamScoreValid))"
                                                                     @onclick="() => ConfirmTeamWinnerSelectionAsync(game.Id)">
                                                                 Confirm Winner
                                                             </button>
@@ -759,6 +773,10 @@
                                                                     @onclick="() => CancelTeamWinnerSelection(game.Id)">
                                                                 Cancel
                                                             </button>
+                                                            @if (teamScoreRequired && !teamScoreValid)
+                                                            {
+                                                                <span class="text-muted">Enter a score</span>
+                                                            }
                                                         }
                                                     }
                                                     else
@@ -775,6 +793,9 @@
                                                             : actualValue;
                                                         var hasChanged = currentSelection != actualValue;
                                                         var isDropdownDisabled = _saving || !game.IsConfirmed || isWinnerConfirmed;
+                                                        var scoreRequired = game.AreScoresCountable && !string.IsNullOrEmpty(currentSelection) && currentSelection != "NOT_SET";
+                                                        var scoreValue = GetScoreInputValue(game.Id, game.Score);
+                                                        var scoreValid = !scoreRequired || (int.TryParse(scoreValue, out var scoreParsed) && scoreParsed > 0);
                                                         <select class="form-select form-select-sm" style="max-width: 360px"
                                                                 value="@currentSelection"
                                                                 disabled="@isDropdownDisabled"
@@ -789,9 +810,20 @@
                                                         
                                                         @if (hasChanged)
                                                         {
+                                                            @if (scoreRequired)
+                                                            {
+                                                                <input type="number"
+                                                                       class="form-control form-control-sm"
+                                                                       style="max-width: 120px"
+                                                                       min="1"
+                                                                       step="1"
+                                                                       value="@scoreValue"
+                                                                       disabled="@_saving"
+                                                                       @onchange="e => SetScoreInputValue(game.Id, e.Value?.ToString())" />
+                                                            }
                                                             <button type="button"
                                                                     class="btn btn-sm btn-primary ms-2"
-                                                                    disabled="@_saving"
+                                                                    disabled="@(_saving || (scoreRequired && !scoreValid))"
                                                                     @onclick="() => ConfirmWinnerSelectionAsync(game.Id)">
                                                                 Confirm Winner
                                                             </button>
@@ -801,6 +833,10 @@
                                                                     @onclick="() => CancelWinnerSelection(game.Id)">
                                                                 Cancel
                                                             </button>
+                                                            @if (scoreRequired && !scoreValid)
+                                                            {
+                                                                <span class="text-muted">Enter a score</span>
+                                                            }
                                                         }
                                                     }
 
@@ -894,6 +930,20 @@
                                                             {
                                                                 <span class="badge text-bg-secondary">No bets</span>
                                                             }
+                                                        }
+                                                    }
+
+                                                    @if (_scoreStatusByGameId.TryGetValue(game.Id, out var scoreStatus) && !string.IsNullOrWhiteSpace(scoreStatus))
+                                                    {
+                                                        <span class="text-muted">@scoreStatus</span>
+                                                    }
+
+                                                    @if (game.AreScoresCountable && game.Score is not null)
+                                                    {
+                                                        <span class="badge text-bg-light">Score: @game.Score</span>
+                                                        @if (game.IsHighScore)
+                                                        {
+                                                            <span class="badge text-bg-warning">High score</span>
                                                         }
                                                     }
                                                 </div>
@@ -1087,6 +1137,8 @@
     private readonly Dictionary<int, string?> _cancelConfirmedGameStatusByGameId = new();
     private readonly Dictionary<int, string?> _pendingWinnerSelectionByGameId = new();
     private readonly Dictionary<int, string?> _pendingTeamWinnerSelectionByGameId = new();
+    private readonly Dictionary<int, string?> _pendingScoreByGameId = new();
+    private readonly Dictionary<int, string?> _scoreStatusByGameId = new();
     private readonly HashSet<int> _teamModeGameIds = new();
     private readonly Dictionary<(int GameNightGameId, string TeamName), string?> _selectedTeamPlayerByKey = new();
     private IReadOnlyDictionary<int, BettingService.UserBet> _myBets = new Dictionary<int, BettingService.UserBet>();
@@ -1852,11 +1904,14 @@
         {
             _pendingWinnerSelectionByGameId[gameNightGameId] = value;
         }
+        _scoreStatusByGameId[gameNightGameId] = null;
     }
 
     private void CancelWinnerSelection(int gameNightGameId)
     {
         _pendingWinnerSelectionByGameId.Remove(gameNightGameId);
+        _pendingScoreByGameId.Remove(gameNightGameId);
+        _scoreStatusByGameId[gameNightGameId] = null;
     }
 
     private void OnTeamWinnerSelectionChanged(int gameNightGameId, string? value)
@@ -1869,11 +1924,36 @@
         {
             _pendingTeamWinnerSelectionByGameId[gameNightGameId] = value;
         }
+        _scoreStatusByGameId[gameNightGameId] = null;
     }
 
     private void CancelTeamWinnerSelection(int gameNightGameId)
     {
         _pendingTeamWinnerSelectionByGameId.Remove(gameNightGameId);
+        _pendingScoreByGameId.Remove(gameNightGameId);
+        _scoreStatusByGameId[gameNightGameId] = null;
+    }
+
+    private string GetScoreInputValue(int gameNightGameId, int? existingScore)
+        => _pendingScoreByGameId.TryGetValue(gameNightGameId, out var value)
+            ? value ?? string.Empty
+            : existingScore?.ToString() ?? string.Empty;
+
+    private void SetScoreInputValue(int gameNightGameId, string? value)
+    {
+        _pendingScoreByGameId[gameNightGameId] = value;
+        _scoreStatusByGameId[gameNightGameId] = null;
+    }
+
+    private bool TryGetPendingScore(int gameNightGameId, out int score)
+    {
+        score = 0;
+        if (!_pendingScoreByGameId.TryGetValue(gameNightGameId, out var raw))
+        {
+            return false;
+        }
+
+        return int.TryParse(raw, out score) && score > 0;
     }
 
     private async Task ConfirmTeamWinnerSelectionAsync(int gameNightGameId)
@@ -1888,6 +1968,19 @@
             return;
         }
 
+        var selectedGame = _selectedNight.Games.FirstOrDefault(g => g.Id == gameNightGameId);
+        var requiresScore = selectedGame?.AreScoresCountable == true && !string.IsNullOrEmpty(value) && value != "NOT_SET";
+        int? score = null;
+        if (requiresScore)
+        {
+            if (!TryGetPendingScore(gameNightGameId, out var parsedScore))
+            {
+                _scoreStatusByGameId[gameNightGameId] = "Enter a valid score.";
+                return;
+            }
+            score = parsedScore;
+        }
+
         // Empty string means "No winner", which is a valid selection
         var teamName = string.IsNullOrEmpty(value) ? null : value;
 
@@ -1896,7 +1989,7 @@
         try
         {
             // Set the team winner first
-            _selectedNight = await GameNightService.SetTeamWinnerAsync(_selectedNight.Id, gameNightGameId, teamName);
+            _selectedNight = await GameNightService.SetTeamWinnerAsync(_selectedNight.Id, gameNightGameId, teamName, score);
             
             // Then resolve bets and update rankings
             if (_selectedNight is not null)
@@ -1912,11 +2005,23 @@
             
             _confirmWinnerPending.Remove(gameNightGameId);
             _pendingTeamWinnerSelectionByGameId.Remove(gameNightGameId);
+            _pendingScoreByGameId.Remove(gameNightGameId);
 
             var updatedGame = _selectedNight?.Games.FirstOrDefault(g => g.Id == gameNightGameId);
             if (updatedGame?.Winner is not null)
             {
                 await OpenVictoryRoutesAsync(updatedGame);
+            }
+
+            if (updatedGame?.AreScoresCountable == true && updatedGame.Score is not null)
+            {
+                _scoreStatusByGameId[gameNightGameId] = updatedGame.IsHighScore
+                    ? "New high score!"
+                    : "Score saved.";
+            }
+            else
+            {
+                _scoreStatusByGameId[gameNightGameId] = null;
             }
             
             // Refresh to reflect IsSettled status
@@ -1940,6 +2045,19 @@
             return;
         }
 
+        var selectedGame = _selectedNight.Games.FirstOrDefault(g => g.Id == gameNightGameId);
+        var requiresScore = selectedGame?.AreScoresCountable == true && !string.IsNullOrEmpty(value) && value != "NOT_SET";
+        int? score = null;
+        if (requiresScore)
+        {
+            if (!TryGetPendingScore(gameNightGameId, out var parsedScore))
+            {
+                _scoreStatusByGameId[gameNightGameId] = "Enter a valid score.";
+                return;
+            }
+            score = parsedScore;
+        }
+
         Guid? winnerId = null;
         if (!string.IsNullOrEmpty(value) && Guid.TryParse(value, out var parsed))
         {
@@ -1951,7 +2069,7 @@
         try
         {
             // Set the winner first
-            _selectedNight = await GameNightService.SetWinnerAsync(_selectedNight.Id, gameNightGameId, winnerId);
+            _selectedNight = await GameNightService.SetWinnerAsync(_selectedNight.Id, gameNightGameId, winnerId, score);
             
             // Then resolve bets and update rankings
             if (_selectedNight is not null)
@@ -1967,11 +2085,23 @@
             
             _confirmWinnerPending.Remove(gameNightGameId);
             _pendingWinnerSelectionByGameId.Remove(gameNightGameId);
+            _pendingScoreByGameId.Remove(gameNightGameId);
 
             var updatedGame = _selectedNight?.Games.FirstOrDefault(g => g.Id == gameNightGameId);
             if (updatedGame?.Winner is not null)
             {
                 await OpenVictoryRoutesAsync(updatedGame);
+            }
+
+            if (updatedGame?.AreScoresCountable == true && updatedGame.Score is not null)
+            {
+                _scoreStatusByGameId[gameNightGameId] = updatedGame.IsHighScore
+                    ? "New high score!"
+                    : "Score saved.";
+            }
+            else
+            {
+                _scoreStatusByGameId[gameNightGameId] = null;
             }
             
             // Refresh to reflect IsSettled status
@@ -2689,6 +2819,11 @@
     private async Task ReactAsync(int gameNightGameId, string emoji)
     {
         if (string.IsNullOrWhiteSpace(_userId))
+        {
+            return;
+        }
+
+        if (_selectedNight is null)
         {
             return;
         }

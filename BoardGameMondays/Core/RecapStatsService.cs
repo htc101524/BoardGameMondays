@@ -61,6 +61,10 @@ public sealed class RecapStatsService
         var comebackStats = await GetComebackStatsAsync(db, dateKey, allDateKeys, ct);
         stats.AddRange(comebackStats);
 
+        // Stat 6: New high score
+        var highScoreStats = await GetHighScoreStatsAsync(db, dateKey, ct);
+        stats.AddRange(highScoreStats);
+
         if (stats.Count == 0)
         {
             return null;
@@ -510,6 +514,45 @@ public sealed class RecapStatsService
         return stats;
     }
 
+    private async Task<List<InterestingStat>> GetHighScoreStatsAsync(
+        ApplicationDbContext db,
+        int currentDateKey,
+        CancellationToken ct)
+    {
+        var stats = new List<InterestingStat>();
+
+        var highScores = await db.GameNightGames
+            .AsNoTracking()
+            .Include(g => g.GameNight)
+            .Include(g => g.Game)
+            .Include(g => g.WinnerMember)
+            .Where(g => g.GameNight.DateKey == currentDateKey && g.IsHighScore && g.Score != null)
+            .Select(g => new
+            {
+                g.Score,
+                GameName = g.Game.Name,
+                WinnerName = g.WinnerMember != null ? g.WinnerMember.Name : g.WinnerTeamName
+            })
+            .ToListAsync(ct);
+
+        foreach (var entry in highScores)
+        {
+            if (string.IsNullOrWhiteSpace(entry.WinnerName))
+            {
+                continue;
+            }
+
+            stats.Add(new InterestingStat(
+                StatType.HighScore,
+                entry.WinnerName,
+                $"🏅 {entry.WinnerName} set a new high score in {entry.GameName} with {entry.Score}!",
+                entry.Score ?? 0
+            ));
+        }
+
+        return stats;
+    }
+
     private static string ToOrdinal(int value)
     {
         if (value % 100 is 11 or 12 or 13)
@@ -534,6 +577,7 @@ public sealed class RecapStatsService
         LosingStreak,
         AttendanceStreak,
         FirstTimeAttendance,
-        Comeback
+        Comeback,
+        HighScore
     }
 }

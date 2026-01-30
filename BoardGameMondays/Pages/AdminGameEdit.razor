@@ -124,6 +124,11 @@ else
             </div>
         </div>
 
+        <div class="mb-3 form-check">
+            <input class="form-check-input" type="checkbox" @bind="_model.AreScoresCountable" />
+            <label class="form-check-label">Scores count toward high score</label>
+        </div>
+
         <button type="submit" class="btn btn-primary">Save</button>
         <a class="btn btn-link" href="/admin">Back</a>
 
@@ -342,7 +347,8 @@ else
             FirstPlayRuntimeMinutes = _game.FirstPlayRuntimeMinutes,
             Complexity = _game.Complexity,
             BoardGameGeekScore = _game.BoardGameGeekScore,
-            BoardGameGeekUrl = _game.BoardGameGeekUrl
+            BoardGameGeekUrl = _game.BoardGameGeekUrl,
+            AreScoresCountable = _game.AreScoresCountable
         };
 
         var existing = (!string.IsNullOrWhiteSpace(_currentReviewerName))
@@ -367,7 +373,8 @@ else
             firstPlayRuntimeMinutes: _model.FirstPlayRuntimeMinutes,
             complexity: _model.Complexity,
             boardGameGeekScore: _model.BoardGameGeekScore,
-            boardGameGeekUrl: _model.BoardGameGeekUrl);
+            boardGameGeekUrl: _model.BoardGameGeekUrl,
+            areScoresCountable: _model.AreScoresCountable);
 
         _game = updated;
         _saveStatus = updated is null ? "Game not found." : "Saved.";
@@ -586,6 +593,7 @@ else
         public double? Complexity { get; set; }
         public double? BoardGameGeekScore { get; set; }
         public string? BoardGameGeekUrl { get; set; }
+        public bool AreScoresCountable { get; set; }
     }
 
     private sealed class AddReviewModel

@@ -593,10 +593,11 @@ public sealed class GameNightService
         return await GetByIdAsync(gameNightId, ct);
     }
 
-    public async Task<GameNight?> SetWinnerAsync(Guid gameNightId, int gameNightGameId, Guid? winnerMemberId, CancellationToken ct = default)
+    public async Task<GameNight?> SetWinnerAsync(Guid gameNightId, int gameNightGameId, Guid? winnerMemberId, int? score, CancellationToken ct = default)
     {
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
         var game = await db.GameNightGames
+            .Include(g => g.Game)
             .FirstOrDefaultAsync(g => g.Id == gameNightGameId && g.GameNightId == gameNightId, ct);
 
         if (game is null)
@@ -618,6 +619,8 @@ public sealed class GameNightService
             game.WinnerMemberId = null;
             game.WinnerTeamName = null;
             game.IsPlayed = true; // Mark as played even with no winner (e.g., co-op games)
+            game.Score = null;
+            game.IsHighScore = false;
             await db.SaveChangesAsync(ct);
             return await GetByIdAsync(gameNightId, ct);
         }
@@ -634,6 +637,40 @@ public sealed class GameNightService
         game.WinnerMemberId = winnerMemberId;
         game.WinnerTeamName = null;
         game.IsPlayed = true; // Mark game as played when winner is set
+
+        if (game.Game.AreScoresCountable)
+        {
+            game.Score = score;
+
+            if (score.HasValue)
+            {
+                var currentHigh = game.Game.HighScore;
+                var isNewHigh = !currentHigh.HasValue || score.Value > currentHigh.Value;
+                game.IsHighScore = isNewHigh;
+
+                if (isNewHigh)
+                {
+                    game.Game.HighScore = score.Value;
+                    game.Game.HighScoreMemberId = winnerMemberId;
+                    game.Game.HighScoreAchievedOn = DateTimeOffset.UtcNow;
+
+                    // Capture the member name for display
+                    var winner = await db.Members
+                        .AsNoTracking()
+                        .FirstOrDefaultAsync(m => m.Id == winnerMemberId.Value, ct);
+                    game.Game.HighScoreMemberName = winner?.Name ?? "Unknown";
+                }
+            }
+            else
+            {
+                game.IsHighScore = false;
+            }
+        }
+        else
+        {
+            game.Score = null;
+            game.IsHighScore = false;
+        }
         await db.SaveChangesAsync(ct);
         return await GetByIdAsync(gameNightId, ct);
     }
@@ -669,10 +706,11 @@ public sealed class GameNightService
         return await GetByIdAsync(gameNightId, ct);
     }
 
-    public async Task<GameNight?> SetTeamWinnerAsync(Guid gameNightId, int gameNightGameId, string? teamName, CancellationToken ct = default)
+    public async Task<GameNight?> SetTeamWinnerAsync(Guid gameNightId, int gameNightGameId, string? teamName, int? score, CancellationToken ct = default)
     {
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
         var game = await db.GameNightGames
+            .Include(g => g.Game)
             .FirstOrDefaultAsync(g => g.Id == gameNightGameId && g.GameNightId == gameNightId, ct);
 
         if (game is null)
@@ -694,6 +732,8 @@ public sealed class GameNightService
             game.WinnerTeamName = null;
             game.WinnerMemberId = null;
             game.IsPlayed = true; // Mark as played even with no winner (e.g., co-op games)
+            game.Score = null;
+            game.IsHighScore = false;
             await db.SaveChangesAsync(ct);
             return await GetByIdAsync(gameNightId, ct);
         }
@@ -710,6 +750,35 @@ public sealed class GameNightService
         game.WinnerTeamName = teamName;
         game.WinnerMemberId = null;
         game.IsPlayed = true; // Mark game as played when team winner is set
+
+        if (game.Game.AreScoresCountable)
+        {
+            game.Score = score;
+
+            if (score.HasValue)
+            {
+                var currentHigh = game.Game.HighScore;
+                var isNewHigh = !currentHigh.HasValue || score.Value > currentHigh.Value;
+                game.IsHighScore = isNewHigh;
+
+                if (isNewHigh)
+                {
+                    game.Game.HighScore = score.Value;
+                    game.Game.HighScoreMemberId = null;
+                    game.Game.HighScoreAchievedOn = DateTimeOffset.UtcNow;
+                    game.Game.HighScoreMemberName = teamName; // Store team name for team victories
+                }
+            }
+            else
+            {
+                game.IsHighScore = false;
+            }
+        }
+        else
+        {
+            game.Score = null;
+            game.IsHighScore = false;
+        }
 
         await db.SaveChangesAsync(ct);
         return await GetByIdAsync(gameNightId, ct);
@@ -962,7 +1031,22 @@ public sealed class GameNightService
                 // "Settled" is about betting resolution. Games with no bets should still allow winner editing.
                 var isSettled = hasBets && g.Bets.All(b => b.IsResolved);
 
-                return new GameNightGame(g.Id, g.GameId, g.Game.Name, g.IsPlayed, g.IsConfirmed, hasBets, isSettled, players, odds, teams, winner);
+                return new GameNightGame(
+                    g.Id,
+                    g.GameId,
+                    g.Game.Name,
+                    g.IsPlayed,
+                    g.IsConfirmed,
+                    hasBets,
+                    isSettled,
+                    g.Game.AreScoresCountable,
+                    g.Score,
+                    g.IsHighScore,
+                    g.Game.HighScore,
+                    players,
+                    odds,
+                    teams,
+                    winner);
             })
             .ToArray();
 
@@ -986,7 +1070,7 @@ public sealed class GameNightService
 
     public sealed record GameNightRsvp(Guid MemberId, string MemberName, bool IsAttending);
 
-    public sealed record GameNightGame(int Id, Guid GameId, string GameName, bool IsPlayed, bool IsConfirmed, bool HasBets, bool IsSettled, IReadOnlyList<GameNightGamePlayer> Players, IReadOnlyList<GameNightGameOdds> Odds, IReadOnlyList<GameNightGameTeam> Teams, GameNightWinner? Winner);
+    public sealed record GameNightGame(int Id, Guid GameId, string GameName, bool IsPlayed, bool IsConfirmed, bool HasBets, bool IsSettled, bool AreScoresCountable, int? Score, bool IsHighScore, int? CurrentHighScore, IReadOnlyList<GameNightGamePlayer> Players, IReadOnlyList<GameNightGameOdds> Odds, IReadOnlyList<GameNightGameTeam> Teams, GameNightWinner? Winner);
 
     public sealed record GameNightGamePlayer(Guid MemberId, string MemberName, string? TeamName);
 
