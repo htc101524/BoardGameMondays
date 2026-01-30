@@ -39,12 +39,15 @@ public sealed class BgmMemberDirectoryService
             entry.AbsoluteExpirationRelativeToNow = DefaultCacheDuration;
             
             using var db = _dbFactory.CreateDbContext();
-            return db.Members
+            var result = db.Members
                 .AsNoTracking()
                 .Where(m => m.IsBgmMember)
                 .OrderBy(m => m.Name)
                 .Select(m => (BgmMember)new PersistedBgmMember(m.Name, m.Email, m.Summary, m.AvatarUrl))
                 .ToArray();
+            
+            entry.Size = result.Length + 1;
+            return (IReadOnlyList<BgmMember>)result;
         }) ?? [];
     }
 
@@ -53,7 +56,9 @@ public sealed class BgmMemberDirectoryService
         return _cache.GetOrCreate(AdminsCacheKey, entry =>
         {
             entry.AbsoluteExpirationRelativeToNow = DefaultCacheDuration;
-            return GetAdminsInternal();
+            var result = GetAdminsInternal();
+            entry.Size = result.Count + 1;
+            return result;
         }) ?? [];
     }
 

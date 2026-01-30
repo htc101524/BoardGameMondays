@@ -34,6 +34,7 @@ public sealed class BoardGameService
         return await _cache.GetOrCreateAsync(LatestReviewedCacheKey, async entry =>
         {
             entry.AbsoluteExpirationRelativeToNow = ShortCacheDuration;
+            entry.Size = 1;
             
             // SQLite can't translate Max(DateTimeOffset). Instead, find the newest review and take its game.
             await using var db = await _dbFactory.CreateDbContextAsync(ct);
@@ -94,7 +95,11 @@ public sealed class BoardGameService
 
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
         var result = (await db.FeaturedState.AsNoTracking().FirstOrDefaultAsync(ct))?.FeaturedGameId;
-        _cache.Set(FeaturedIdCacheKey, result, DefaultCacheDuration);
+        _cache.Set(FeaturedIdCacheKey, result, new MemoryCacheEntryOptions
+        {
+            AbsoluteExpirationRelativeToNow = DefaultCacheDuration,
+            Size = 1
+        });
         return result;
     }
 
@@ -114,7 +119,9 @@ public sealed class BoardGameService
                 .OrderBy(g => g.Name)
                 .ToListAsync(ct);
 
-            return (IReadOnlyList<BoardGame>)games.Select(ToDomain).ToArray();
+            var result = (IReadOnlyList<BoardGame>)games.Select(ToDomain).ToArray();
+            entry.Size = result.Count + 1; // Size based on item count
+            return result;
         }) ?? [];
     }
 
@@ -124,6 +131,7 @@ public sealed class BoardGameService
         return await _cache.GetOrCreateAsync(cacheKey, async entry =>
         {
             entry.AbsoluteExpirationRelativeToNow = DefaultCacheDuration;
+            entry.Size = 1;
             return await GetByIdInternalAsync(id, ct);
         });
     }
@@ -161,7 +169,9 @@ public sealed class BoardGameService
                 .OrderBy(g => g.Name)
                 .ToListAsync(ct);
 
-            return (IReadOnlyList<BoardGame>)games.Select(ToDomain).ToArray();
+            var result = (IReadOnlyList<BoardGame>)games.Select(ToDomain).ToArray();
+            entry.Size = result.Count + 1;
+            return result;
         }) ?? [];
     }
 

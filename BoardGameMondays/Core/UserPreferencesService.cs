@@ -54,7 +54,11 @@ public sealed class UserPreferencesService
             .FirstOrDefaultAsync(u => u.Id == userId, ct);
 
         var result = user?.OddsDisplayFormat ?? OddsDisplayFormat.Fraction;
-        _cache.Set(cacheKey, result, CacheDuration);
+        _cache.Set(cacheKey, result, new MemoryCacheEntryOptions
+        {
+            AbsoluteExpirationRelativeToNow = CacheDuration,
+            Size = 1 // Single enum value
+        });
         return result;
     }
 

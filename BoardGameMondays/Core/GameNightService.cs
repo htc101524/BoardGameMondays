@@ -419,7 +419,7 @@ public sealed class GameNightService
                 .OrderBy(r => r.SortOrder)
                 .ToListAsync(ct);
 
-            return (IReadOnlyList<VictoryRouteTemplate>)routes
+            var result = (IReadOnlyList<VictoryRouteTemplate>)routes
                 .Select(r => new VictoryRouteTemplate(
                     r.Id,
                     r.GameId,
@@ -432,6 +432,9 @@ public sealed class GameNightService
                         .Select(o => new VictoryRouteTemplateOption(o.Id, o.VictoryRouteId, o.Value, o.SortOrder))
                         .ToArray()))
                 .ToArray();
+            
+            entry.Size = result.Count + 1;
+            return result;
         }) ?? [];
     }
 
@@ -873,12 +876,15 @@ public sealed class GameNightService
             entry.AbsoluteExpirationRelativeToNow = MembersCacheDuration;
             
             await using var db = await _dbFactory.CreateDbContextAsync(ct);
-            return await db.Members
+            var result = await db.Members
                 .AsNoTracking()
                 .Where(m => m.IsBgmMember)
                 .OrderBy(m => m.Name)
                 .Select(m => new MemberOption(m.Id, m.Name))
                 .ToListAsync(ct);
+            
+            entry.Size = result.Count + 1;
+            return (IReadOnlyList<MemberOption>)result;
         }) ?? [];
     }
 
@@ -1013,7 +1019,9 @@ public sealed class GameNightService
                 .Take(take)
                 .ToListAsync(ct);
 
-            return (IReadOnlyList<DateOnly>)keys.Select(FromDateKey).OrderBy(d => d).ToArray();
+            var result = (IReadOnlyList<DateOnly>)keys.Select(FromDateKey).OrderBy(d => d).ToArray();
+            entry.Size = result.Count + 1;
+            return result;
         }) ?? [];
     }
 
