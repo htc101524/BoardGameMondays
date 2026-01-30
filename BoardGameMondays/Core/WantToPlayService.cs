@@ -132,13 +132,24 @@ public sealed class WantToPlayService
             .ToList();
 
         // Fetch game details for only the top games
-        var games = await db.Games
+        // Note: Direct Contains() with GUIDs can fail with SQLite, so fetch all and filter in-memory
+        var allGames = await db.Games
             .AsNoTracking()
-            .Where(g => topGameIds.Contains(g.Id))
             .Select(g => new { g.Id, g.Name, g.ImageUrl })
             .ToListAsync(ct);
+        
+        var games = allGames.Where(g => topGameIds.Contains(g.Id)).ToList();
 
         var gameLookup = games.ToDictionary(g => g.Id, g => g);
+
+        // DEBUG: Log mismatches
+        foreach (var gameId in topGameIds)
+        {
+            if (!gameLookup.ContainsKey(gameId))
+            {
+                Console.WriteLine($"WARNING: Game ID {gameId} in votes but not found in Games table");
+            }
+        }
 
         return validCounts
             .OrderByDescending(x => x.Value)
@@ -148,6 +159,7 @@ public sealed class WantToPlayService
             {
                 if (!gameLookup.TryGetValue(x.Key, out var game))
                 {
+                    Console.WriteLine($"WARNING: Returning Unknown for GameId {x.Key} with {x.Value} votes");
                     return new WantToPlayEntry(x.Key, "Unknown", null, x.Value);
                 }
 
