@@ -82,14 +82,16 @@ public sealed class WantToPlayService
             .Select(g => new { GameId = g.Key, LastPlayedDateKey = g.Max(x => x.GameNight.DateKey) })
             .ToDictionaryAsync(x => x.GameId, x => x.LastPlayedDateKey, ct);
 
-        // Get votes with game info in a single query, filtering out votes older than last play
+        // Get votes for existing games only, filtering out votes older than last play
+        // (Join ensures votes for deleted games are excluded)
         var voteCounts = await db.WantToPlayVotes
             .AsNoTracking()
-            .GroupBy(v => v.GameId)
+            .Join(db.Games, v => v.GameId, g => g.Id, (v, g) => new { v, g })
+            .GroupBy(x => x.v.GameId)
             .Select(g => new
             {
                 GameId = g.Key,
-                Votes = g.Select(v => new { v.CreatedOn }).ToList()
+                Votes = g.Select(x => new { x.v.CreatedOn }).ToList()
             })
             .ToListAsync(ct);
 
