@@ -1,6 +1,7 @@
 using BoardGameMondays.Data;
 using BoardGameMondays.Data.Entities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace BoardGameMondays.Core;
 
@@ -8,11 +9,26 @@ public sealed class GameNightService
 {
     private readonly IDbContextFactory<ApplicationDbContext> _dbFactory;
     private readonly OddsService _oddsService;
+    private readonly IMemoryCache _cache;
 
-    public GameNightService(IDbContextFactory<ApplicationDbContext> dbFactory, OddsService oddsService)
+    // Cache keys
+    private const string AllMembersCacheKey = "GameNight:AllMembers";
+    private const string VictoryRoutesCacheKeyPrefix = "GameNight:VictoryRoutes:";
+    private const string RecentDatesCacheKeyPrefix = "GameNight:RecentDates:";
+
+    // Cache durations
+    private static readonly TimeSpan MembersCacheDuration = TimeSpan.FromMinutes(10);
+    private static readonly TimeSpan VictoryRoutesCacheDuration = TimeSpan.FromMinutes(10);
+    private static readonly TimeSpan RecentDatesCacheDuration = TimeSpan.FromMinutes(5);
+
+    public GameNightService(
+        IDbContextFactory<ApplicationDbContext> dbFactory,
+        OddsService oddsService,
+        IMemoryCache cache)
     {
         _dbFactory = dbFactory;
         _oddsService = oddsService;
+        _cache = cache;
     }
 
     private static IQueryable<GameNightEntity> WithDetails(IQueryable<GameNightEntity> query)
@@ -389,28 +405,34 @@ public sealed class GameNightService
 
     public async Task<IReadOnlyList<VictoryRouteTemplate>> GetVictoryRoutesForGameAsync(Guid gameId, CancellationToken ct = default)
     {
-        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        var cacheKey = $"{VictoryRoutesCacheKeyPrefix}{gameId}";
+        return await _cache.GetOrCreateAsync(cacheKey, async entry =>
+        {
+            entry.AbsoluteExpirationRelativeToNow = VictoryRoutesCacheDuration;
+            
+            await using var db = await _dbFactory.CreateDbContextAsync(ct);
 
-        var routes = await db.VictoryRoutes
-            .AsNoTracking()
-            .Include(r => r.Options)
-            .Where(r => r.GameId == gameId)
-            .OrderBy(r => r.SortOrder)
-            .ToListAsync(ct);
+            var routes = await db.VictoryRoutes
+                .AsNoTracking()
+                .Include(r => r.Options)
+                .Where(r => r.GameId == gameId)
+                .OrderBy(r => r.SortOrder)
+                .ToListAsync(ct);
 
-        return routes
-            .Select(r => new VictoryRouteTemplate(
-                r.Id,
-                r.GameId,
-                r.Name,
-                (VictoryRouteType)r.Type,
-                r.IsRequired,
-                r.SortOrder,
-                r.Options
-                    .OrderBy(o => o.SortOrder)
-                    .Select(o => new VictoryRouteTemplateOption(o.Id, o.VictoryRouteId, o.Value, o.SortOrder))
-                    .ToArray()))
-            .ToArray();
+            return (IReadOnlyList<VictoryRouteTemplate>)routes
+                .Select(r => new VictoryRouteTemplate(
+                    r.Id,
+                    r.GameId,
+                    r.Name,
+                    (VictoryRouteType)r.Type,
+                    r.IsRequired,
+                    r.SortOrder,
+                    r.Options
+                        .OrderBy(o => o.SortOrder)
+                        .Select(o => new VictoryRouteTemplateOption(o.Id, o.VictoryRouteId, o.Value, o.SortOrder))
+                        .ToArray()))
+                .ToArray();
+        }) ?? [];
     }
 
     public async Task<IReadOnlyList<VictoryRouteValue>> GetVictoryRouteValuesAsync(int gameNightGameId, CancellationToken ct = default)
@@ -846,13 +868,18 @@ public sealed class GameNightService
 
     public async Task<IReadOnlyList<MemberOption>> GetAllMembersAsync(CancellationToken ct = default)
     {
-        await using var db = await _dbFactory.CreateDbContextAsync(ct);
-        return await db.Members
-            .AsNoTracking()
-            .Where(m => m.IsBgmMember)
-            .OrderBy(m => m.Name)
-            .Select(m => new MemberOption(m.Id, m.Name))
-            .ToListAsync(ct);
+        return await _cache.GetOrCreateAsync(AllMembersCacheKey, async entry =>
+        {
+            entry.AbsoluteExpirationRelativeToNow = MembersCacheDuration;
+            
+            await using var db = await _dbFactory.CreateDbContextAsync(ct);
+            return await db.Members
+                .AsNoTracking()
+                .Where(m => m.IsBgmMember)
+                .OrderBy(m => m.Name)
+                .Select(m => new MemberOption(m.Id, m.Name))
+                .ToListAsync(ct);
+        }) ?? [];
     }
 
     public async Task<GameNight?> ConfirmGameAsync(Guid gameNightId, int gameNightGameId, CancellationToken ct = default)
@@ -969,19 +996,25 @@ public sealed class GameNightService
             return Array.Empty<DateOnly>();
         }
 
-        var beforeKey = ToDateKey(beforeDate);
+        var cacheKey = $"{RecentDatesCacheKeyPrefix}{beforeDate:yyyyMMdd}:{take}";
+        return await _cache.GetOrCreateAsync(cacheKey, async entry =>
+        {
+            entry.AbsoluteExpirationRelativeToNow = RecentDatesCacheDuration;
+            
+            var beforeKey = ToDateKey(beforeDate);
 
-        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+            await using var db = await _dbFactory.CreateDbContextAsync(ct);
 
-        var keys = await db.GameNights
-            .AsNoTracking()
-            .Where(n => n.DateKey < beforeKey)
-            .OrderByDescending(n => n.DateKey)
-            .Select(n => n.DateKey)
-            .Take(take)
-            .ToListAsync(ct);
+            var keys = await db.GameNights
+                .AsNoTracking()
+                .Where(n => n.DateKey < beforeKey)
+                .OrderByDescending(n => n.DateKey)
+                .Select(n => n.DateKey)
+                .Take(take)
+                .ToListAsync(ct);
 
-        return keys.Select(FromDateKey).OrderBy(d => d).ToArray();
+            return (IReadOnlyList<DateOnly>)keys.Select(FromDateKey).OrderBy(d => d).ToArray();
+        }) ?? [];
     }
 
     private static GameNight ToDomain(GameNightEntity entity)

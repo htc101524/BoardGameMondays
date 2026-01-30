@@ -1,6 +1,7 @@
 using BoardGameMondays.Data;
 using BoardGameMondays.Data.Entities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 
 namespace BoardGameMondays.Core;
@@ -12,25 +13,51 @@ public sealed class BgmMemberDirectoryService
 {
     private readonly IDbContextFactory<ApplicationDbContext> _dbFactory;
     private readonly IConfiguration _configuration;
+    private readonly IMemoryCache _cache;
 
-    public BgmMemberDirectoryService(IDbContextFactory<ApplicationDbContext> dbFactory, IConfiguration configuration)
+    // Cache keys
+    private const string AllMembersCacheKey = "Members:All";
+    private const string AdminsCacheKey = "Members:Admins";
+
+    // Members rarely change - cache for longer
+    private static readonly TimeSpan DefaultCacheDuration = TimeSpan.FromMinutes(15);
+
+    public BgmMemberDirectoryService(
+        IDbContextFactory<ApplicationDbContext> dbFactory,
+        IConfiguration configuration,
+        IMemoryCache cache)
     {
         _dbFactory = dbFactory;
         _configuration = configuration;
+        _cache = cache;
     }
 
     public IReadOnlyList<BgmMember> GetAll()
     {
-        using var db = _dbFactory.CreateDbContext();
-        return db.Members
-            .AsNoTracking()
-            .Where(m => m.IsBgmMember)
-            .OrderBy(m => m.Name)
-            .Select(m => (BgmMember)new PersistedBgmMember(m.Name, m.Email, m.Summary, m.AvatarUrl))
-            .ToArray();
+        return _cache.GetOrCreate(AllMembersCacheKey, entry =>
+        {
+            entry.AbsoluteExpirationRelativeToNow = DefaultCacheDuration;
+            
+            using var db = _dbFactory.CreateDbContext();
+            return db.Members
+                .AsNoTracking()
+                .Where(m => m.IsBgmMember)
+                .OrderBy(m => m.Name)
+                .Select(m => (BgmMember)new PersistedBgmMember(m.Name, m.Email, m.Summary, m.AvatarUrl))
+                .ToArray();
+        }) ?? [];
     }
 
     public IReadOnlyList<BgmMember> GetAdmins()
+    {
+        return _cache.GetOrCreate(AdminsCacheKey, entry =>
+        {
+            entry.AbsoluteExpirationRelativeToNow = DefaultCacheDuration;
+            return GetAdminsInternal();
+        }) ?? [];
+    }
+
+    private IReadOnlyList<BgmMember> GetAdminsInternal()
     {
         using var db = _dbFactory.CreateDbContext();
 
@@ -158,6 +185,7 @@ public sealed class BgmMemberDirectoryService
 
         db.Members.Add(created);
         db.SaveChanges();
+        InvalidateCache();
         return created.Id;
     }
 
@@ -181,6 +209,7 @@ public sealed class BgmMemberDirectoryService
 
         db.Members.Add(created);
         db.SaveChanges();
+        InvalidateCache();
         return new PersistedBgmMember(created.Name, created.Email, created.Summary, created.AvatarUrl);
     }
 
@@ -215,5 +244,15 @@ public sealed class BgmMemberDirectoryService
         }
 
         db.SaveChanges();
+        InvalidateCache();
+    }
+
+    /// <summary>
+    /// Invalidates all member caches. Called automatically after write operations.
+    /// </summary>
+    private void InvalidateCache()
+    {
+        _cache.Remove(AllMembersCacheKey);
+        _cache.Remove(AdminsCacheKey);
     }
 }

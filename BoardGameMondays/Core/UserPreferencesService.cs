@@ -1,6 +1,7 @@
 using BoardGameMondays.Data;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace BoardGameMondays.Core;
 
@@ -11,13 +12,22 @@ public sealed class UserPreferencesService
 {
     private readonly IDbContextFactory<ApplicationDbContext> _dbFactory;
     private readonly UserManager<ApplicationUser> _userManager;
+    private readonly IMemoryCache _cache;
+
+    // Cache key prefix
+    private const string OddsFormatCacheKeyPrefix = "UserPrefs:OddsFormat:";
+
+    // User preferences can be cached longer since they rarely change
+    private static readonly TimeSpan CacheDuration = TimeSpan.FromMinutes(30);
 
     public UserPreferencesService(
         IDbContextFactory<ApplicationDbContext> dbFactory,
-        UserManager<ApplicationUser> userManager)
+        UserManager<ApplicationUser> userManager,
+        IMemoryCache cache)
     {
         _dbFactory = dbFactory;
         _userManager = userManager;
+        _cache = cache;
     }
 
     /// <summary>
@@ -30,12 +40,22 @@ public sealed class UserPreferencesService
             return OddsDisplayFormat.Fraction;
         }
 
+        var cacheKey = $"{OddsFormatCacheKeyPrefix}{userId}";
+        
+        // Use TryGetValue pattern for value types
+        if (_cache.TryGetValue(cacheKey, out OddsDisplayFormat cached))
+        {
+            return cached;
+        }
+
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
         var user = await db.Users
             .AsNoTracking()
             .FirstOrDefaultAsync(u => u.Id == userId, ct);
 
-        return user?.OddsDisplayFormat ?? OddsDisplayFormat.Fraction;
+        var result = user?.OddsDisplayFormat ?? OddsDisplayFormat.Fraction;
+        _cache.Set(cacheKey, result, CacheDuration);
+        return result;
     }
 
     /// <summary>
@@ -58,6 +78,10 @@ public sealed class UserPreferencesService
 
         user.OddsDisplayFormat = format;
         await db.SaveChangesAsync(ct);
+        
+        // Invalidate the cache for this user
+        _cache.Remove($"{OddsFormatCacheKeyPrefix}{userId}");
+        
         return true;
     }
 }

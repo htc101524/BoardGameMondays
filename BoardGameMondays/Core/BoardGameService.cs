@@ -1,31 +1,50 @@
 using BoardGameMondays.Data;
 using BoardGameMondays.Data.Entities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace BoardGameMondays.Core;
 
 public sealed class BoardGameService
 {
     private readonly IDbContextFactory<ApplicationDbContext> _dbFactory;
+    private readonly IMemoryCache _cache;
+
+    // Cache keys
+    private const string AllGamesCacheKey = "BoardGames:All";
+    private const string FeaturedIdCacheKey = "BoardGames:FeaturedId";
+    private const string LatestReviewedCacheKey = "BoardGames:LatestReviewed";
+    private const string GameCacheKeyPrefix = "BoardGames:Id:";
+    private const string GamesByStatusCacheKeyPrefix = "BoardGames:Status:";
+
+    // Cache durations - tune based on your traffic patterns
+    private static readonly TimeSpan DefaultCacheDuration = TimeSpan.FromMinutes(5);
+    private static readonly TimeSpan ShortCacheDuration = TimeSpan.FromMinutes(2);
 
     public event Action? Changed;
 
-    public BoardGameService(IDbContextFactory<ApplicationDbContext> dbFactory)
+    public BoardGameService(IDbContextFactory<ApplicationDbContext> dbFactory, IMemoryCache cache)
     {
         _dbFactory = dbFactory;
+        _cache = cache;
     }
 
     public async Task<BoardGame?> GetLatestReviewedAsync(CancellationToken ct = default)
     {
-        // SQLite can't translate Max(DateTimeOffset). Instead, find the newest review and take its game.
-        await using var db = await _dbFactory.CreateDbContextAsync(ct);
-        var latestGameId = await db.Reviews
-            .AsNoTracking()
-            .OrderByDescending(r => r.CreatedOn)
-            .Select(r => (Guid?)r.GameId)
-            .FirstOrDefaultAsync(ct);
+        return await _cache.GetOrCreateAsync(LatestReviewedCacheKey, async entry =>
+        {
+            entry.AbsoluteExpirationRelativeToNow = ShortCacheDuration;
+            
+            // SQLite can't translate Max(DateTimeOffset). Instead, find the newest review and take its game.
+            await using var db = await _dbFactory.CreateDbContextAsync(ct);
+            var latestGameId = await db.Reviews
+                .AsNoTracking()
+                .OrderByDescending(r => r.CreatedOn)
+                .Select(r => (Guid?)r.GameId)
+                .FirstOrDefaultAsync(ct);
 
-        return latestGameId is null ? null : await GetByIdAsync(latestGameId.Value, ct);
+            return latestGameId is null ? null : await GetByIdInternalAsync(latestGameId.Value, ct);
+        });
     }
 
     public async Task<BoardGame?> GetFeaturedOrLatestReviewedAsync(CancellationToken ct = default)
@@ -61,31 +80,56 @@ public sealed class BoardGameService
         }
 
         await db.SaveChangesAsync(ct);
+        InvalidateCache();
         Changed?.Invoke();
     }
 
     public async Task<Guid?> GetFeaturedGameIdAsync(CancellationToken ct = default)
     {
+        // Use TryGetValue pattern for nullable types
+        if (_cache.TryGetValue(FeaturedIdCacheKey, out Guid? cached))
+        {
+            return cached;
+        }
+
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
-        return (await db.FeaturedState.AsNoTracking().FirstOrDefaultAsync(ct))?.FeaturedGameId;
+        var result = (await db.FeaturedState.AsNoTracking().FirstOrDefaultAsync(ct))?.FeaturedGameId;
+        _cache.Set(FeaturedIdCacheKey, result, DefaultCacheDuration);
+        return result;
     }
 
     public async Task<IReadOnlyList<BoardGame>> GetAllAsync(CancellationToken ct = default)
     {
-        await using var db = await _dbFactory.CreateDbContextAsync(ct);
-        var games = await db.Games
-            .AsNoTracking()
-            .Include(g => g.VictoryRoutes)
-            .ThenInclude(r => r.Options)
-            .Include(g => g.Reviews)
-            .ThenInclude(r => r.Reviewer)
-            .OrderBy(g => g.Name)
-            .ToListAsync(ct);
+        return await _cache.GetOrCreateAsync(AllGamesCacheKey, async entry =>
+        {
+            entry.AbsoluteExpirationRelativeToNow = DefaultCacheDuration;
+            
+            await using var db = await _dbFactory.CreateDbContextAsync(ct);
+            var games = await db.Games
+                .AsNoTracking()
+                .Include(g => g.VictoryRoutes)
+                .ThenInclude(r => r.Options)
+                .Include(g => g.Reviews)
+                .ThenInclude(r => r.Reviewer)
+                .OrderBy(g => g.Name)
+                .ToListAsync(ct);
 
-        return games.Select(ToDomain).ToArray();
+            return (IReadOnlyList<BoardGame>)games.Select(ToDomain).ToArray();
+        }) ?? [];
     }
 
     public async Task<BoardGame?> GetByIdAsync(Guid id, CancellationToken ct = default)
+    {
+        var cacheKey = $"{GameCacheKeyPrefix}{id}";
+        return await _cache.GetOrCreateAsync(cacheKey, async entry =>
+        {
+            entry.AbsoluteExpirationRelativeToNow = DefaultCacheDuration;
+            return await GetByIdInternalAsync(id, ct);
+        });
+    }
+
+    // Internal method without caching - used by other cached methods to avoid double-caching
+    private async Task<BoardGame?> GetByIdInternalAsync(Guid id, CancellationToken ct = default)
     {
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
         var game = await db.Games
@@ -101,18 +145,24 @@ public sealed class BoardGameService
 
     public async Task<IReadOnlyList<BoardGame>> GetByStatusAsync(GameStatus status, CancellationToken ct = default)
     {
-        await using var db = await _dbFactory.CreateDbContextAsync(ct);
-        var games = await db.Games
-            .AsNoTracking()
-            .Include(g => g.VictoryRoutes)
-            .ThenInclude(r => r.Options)
-            .Include(g => g.Reviews)
-            .ThenInclude(r => r.Reviewer)
-            .Where(g => g.Status == (int)status)
-            .OrderBy(g => g.Name)
-            .ToListAsync(ct);
+        var cacheKey = $"{GamesByStatusCacheKeyPrefix}{(int)status}";
+        return await _cache.GetOrCreateAsync(cacheKey, async entry =>
+        {
+            entry.AbsoluteExpirationRelativeToNow = DefaultCacheDuration;
+            
+            await using var db = await _dbFactory.CreateDbContextAsync(ct);
+            var games = await db.Games
+                .AsNoTracking()
+                .Include(g => g.VictoryRoutes)
+                .ThenInclude(r => r.Options)
+                .Include(g => g.Reviews)
+                .ThenInclude(r => r.Reviewer)
+                .Where(g => g.Status == (int)status)
+                .OrderBy(g => g.Name)
+                .ToListAsync(ct);
 
-        return games.Select(ToDomain).ToArray();
+            return (IReadOnlyList<BoardGame>)games.Select(ToDomain).ToArray();
+        }) ?? [];
     }
 
     public async Task<BoardGame> AddGameAsync(
@@ -156,6 +206,7 @@ public sealed class BoardGameService
 
         db.Games.Add(entity);
         await db.SaveChangesAsync(ct);
+        InvalidateCache();
         Changed?.Invoke();
         return ToDomain(entity);
     }
@@ -203,6 +254,8 @@ public sealed class BoardGameService
         entity.AreScoresCountable = areScoresCountable;
 
         await db.SaveChangesAsync(ct);
+        InvalidateCache();
+        _cache.Remove($"{GameCacheKeyPrefix}{id}"); // Also invalidate this specific game
         Changed?.Invoke();
 
         return await GetByIdAsync(id, ct);
@@ -253,6 +306,8 @@ public sealed class BoardGameService
             existing.CreatedOn = DateTimeOffset.UtcNow;
         }
         await db.SaveChangesAsync(ct);
+        InvalidateCache();
+        _cache.Remove($"{GameCacheKeyPrefix}{gameId}");
         Changed?.Invoke();
 
         return await GetByIdAsync(gameId, ct);
@@ -287,6 +342,8 @@ public sealed class BoardGameService
         });
 
         await db.SaveChangesAsync(ct);
+        InvalidateCache();
+        _cache.Remove($"{GameCacheKeyPrefix}{gameId}");
         Changed?.Invoke();
         return await GetByIdAsync(gameId, ct);
     }
@@ -305,6 +362,8 @@ public sealed class BoardGameService
 
         db.VictoryRoutes.Remove(route);
         await db.SaveChangesAsync(ct);
+        InvalidateCache();
+        _cache.Remove($"{GameCacheKeyPrefix}{gameId}");
         Changed?.Invoke();
         return await GetByIdAsync(gameId, ct);
     }
@@ -336,6 +395,8 @@ public sealed class BoardGameService
         });
 
         await db.SaveChangesAsync(ct);
+        InvalidateCache();
+        _cache.Remove($"{GameCacheKeyPrefix}{gameId}");
         Changed?.Invoke();
         return await GetByIdAsync(gameId, ct);
     }
@@ -355,6 +416,8 @@ public sealed class BoardGameService
 
         db.VictoryRouteOptions.Remove(option);
         await db.SaveChangesAsync(ct);
+        InvalidateCache();
+        _cache.Remove($"{GameCacheKeyPrefix}{gameId}");
         Changed?.Invoke();
         return await GetByIdAsync(gameId, ct);
     }
@@ -377,6 +440,7 @@ public sealed class BoardGameService
             .Select(r => (int?)r.TimesPlayed)
             .FirstOrDefaultAsync(ct);
 
+        InvalidateCache();
         Changed?.Invoke();
         return newValue;
     }
@@ -452,5 +516,24 @@ public sealed class BoardGameService
             highScoreMemberId: entity.HighScoreMemberId,
             highScoreMemberName: entity.HighScoreMemberName,
             highScoreAchievedOn: entity.HighScoreAchievedOn);
+    }
+
+    /// <summary>
+    /// Invalidates all board game caches. Called automatically after write operations.
+    /// </summary>
+    private void InvalidateCache()
+    {
+        _cache.Remove(AllGamesCacheKey);
+        _cache.Remove(FeaturedIdCacheKey);
+        _cache.Remove(LatestReviewedCacheKey);
+        
+        // Remove status-specific caches
+        foreach (var status in Enum.GetValues<GameStatus>())
+        {
+            _cache.Remove($"{GamesByStatusCacheKeyPrefix}{(int)status}");
+        }
+        
+        // Note: Individual game caches (GameCacheKeyPrefix) will expire naturally.
+        // For immediate invalidation, we'd need to track cached IDs.
     }
 }
