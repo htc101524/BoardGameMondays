@@ -35,7 +35,13 @@ public sealed class BgmCoinService
         }
 
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
-        return await TrySpendAsync(db, userId, amount, ct);
+        var success = await TrySpendAsync(db, userId, amount, ct);
+        if (success)
+        {
+            await db.SaveChangesAsync(ct);
+        }
+
+        return success;
     }
 
     public async Task<bool> TrySpendAsync(ApplicationDbContext db, string userId, int amount, CancellationToken ct = default)
@@ -67,7 +73,13 @@ public sealed class BgmCoinService
         }
 
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
-        return await TryAddAsync(db, userId, amount, ct);
+        var success = await TryAddAsync(db, userId, amount, ct);
+        if (success)
+        {
+            await db.SaveChangesAsync(ct);
+        }
+
+        return success;
     }
 
     public async Task<bool> TryAddAsync(ApplicationDbContext db, string userId, int amount, CancellationToken ct = default)

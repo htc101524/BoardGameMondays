@@ -1626,6 +1626,11 @@
             _selectedNight = updated;
             _amAttending = attending;
             _declinedMemberIds = _selectedNight?.Rsvps.Where(r => !r.IsAttending).Select(r => r.MemberId).ToHashSet() ?? new();
+            _status = null;
+        }
+        catch (InvalidOperationException ex)
+        {
+            _status = ex.Message;
         }
         finally
         {

@@ -39,6 +39,10 @@
             {
                 <div class="text-muted mt-3">Your account isn't linked to a BGM member yet.</div>
             }
+            else if (!_isMember)
+            {
+                <div class="text-muted mt-3">You can't RSVP without member status. Contact one of the other members to get involved.</div>
+            }
             else
             {
                 <div class="mt-3">
@@ -79,6 +83,7 @@
     private bool _saving;
     private bool _isAuthenticated;
     private Guid? _memberId;
+    private bool _isMember;
     private bool _amAttending;
     private string? _status;
     private string _returnUrl = "/rsvp";
@@ -92,6 +97,11 @@
         var user = auth.User;
         _isAuthenticated = user.Identity?.IsAuthenticated == true;
         _memberId = TryGetMemberId(user);
+
+        if (_memberId is { } memberId)
+        {
+            _isMember = await GameNightService.IsBgmMemberAsync(memberId);
+        }
 
         _night = await GameNightService.GetByDateAsync(_date);
         if (_night is not null && _memberId is { } me)
@@ -124,7 +134,7 @@
 
     private async Task SetAttendingAsync(bool attending)
     {
-        if (_night is null || _memberId is null)
+        if (_night is null || _memberId is null || !_isMember)
         {
             return;
         }
@@ -137,6 +147,10 @@
             _night = updated ?? _night;
             _amAttending = _night.Attendees.Any(a => a.MemberId == _memberId.Value);
             _status = attending ? "You're in." : "You're out.";
+        }
+        catch (InvalidOperationException ex)
+        {
+            _status = ex.Message;
         }
         catch
         {

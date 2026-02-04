@@ -78,17 +78,11 @@ void ConfigureDbContextOptions(DbContextOptionsBuilder options)
         throw new InvalidOperationException("Missing connection string 'DefaultConnection'.");
     }
 
+    DatabaseConnectionStringClassifier.EnsureNotSqliteInProduction(builder.Environment, connectionString);
+
     // Treat the connection string as SQLite only when it clearly points at a local SQLite file.
     // SQL Server connection strings often also contain "Data Source=", so don't use that as a signal.
-    var cs = connectionString.Trim();
-    var isSqlite = cs.Contains(":memory:", StringComparison.OrdinalIgnoreCase)
-        || cs.Contains("Filename=", StringComparison.OrdinalIgnoreCase)
-        || cs.EndsWith(".db", StringComparison.OrdinalIgnoreCase)
-        || cs.EndsWith(".sqlite", StringComparison.OrdinalIgnoreCase)
-        || cs.EndsWith(".sqlite3", StringComparison.OrdinalIgnoreCase)
-        || cs.Contains(".db;", StringComparison.OrdinalIgnoreCase)
-        || cs.Contains(".sqlite;", StringComparison.OrdinalIgnoreCase)
-        || cs.Contains(".sqlite3;", StringComparison.OrdinalIgnoreCase);
+    var isSqlite = DatabaseConnectionStringClassifier.IsSqlite(connectionString);
 
     if (isSqlite)
     {

@@ -161,10 +161,17 @@ public sealed class GameNightService
         }
 
         // Verify the member actually exists to prevent invalid RSVPs
-        var memberExists = await db.Members.AsNoTracking().AnyAsync(m => m.Id == memberId, ct);
-        if (!memberExists)
+        var member = await db.Members
+            .AsNoTracking()
+            .FirstOrDefaultAsync(m => m.Id == memberId, ct);
+        if (member is null)
         {
             return null;
+        }
+
+        if (!member.IsBgmMember)
+        {
+            throw new InvalidOperationException("You can't RSVP without member status. Contact one of the other members to get involved.");
         }
 
         var now = DateTimeOffset.UtcNow;
@@ -215,6 +222,14 @@ public sealed class GameNightService
 
         await db.SaveChangesAsync(ct);
         return await GetByIdAsync(gameNightId, ct);
+    }
+
+    public async Task<bool> IsBgmMemberAsync(Guid memberId, CancellationToken ct = default)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        return await db.Members
+            .AsNoTracking()
+            .AnyAsync(m => m.Id == memberId && m.IsBgmMember, ct);
     }
 
     /// <summary>
