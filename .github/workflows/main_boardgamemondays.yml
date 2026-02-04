@@ -30,6 +30,9 @@ jobs:
       - name: Build
         run: dotnet build BoardGameMondays.sln -c Release --no-restore
 
+      - name: Test
+        run: dotnet test BoardGameMondays.sln -c Release --no-build
+
       - name: dotnet publish
         run: dotnet publish BoardGameMondays/BoardGameMondays.csproj -c Release -o publish --no-build --no-restore
 
