@@ -138,3 +138,109 @@
         font-size: 1.8rem;
     }
 }
+
+/* Markdown content styling */
+.bgm-markdown {
+    line-height: 1.6;
+}
+
+.bgm-markdown p {
+    margin-bottom: 1em;
+}
+
+.bgm-markdown p:last-child {
+    margin-bottom: 0;
+}
+
+.bgm-markdown strong {
+    font-weight: 700;
+}
+
+.bgm-markdown em {
+    font-style: italic;
+}
+
+.bgm-markdown a {
+    color: var(--bs-link-color);
+    text-decoration: underline;
+}
+
+.bgm-markdown a:hover {
+    color: var(--bs-link-hover-color);
+}
+
+.bgm-markdown img {
+    max-width: 100%;
+    height: auto;
+    border-radius: var(--bs-border-radius);
+    margin: 0.5em 0;
+}
+
+.bgm-markdown ul,
+.bgm-markdown ol {
+    margin-bottom: 1em;
+    padding-left: 1.5em;
+}
+
+.bgm-markdown li {
+    margin-bottom: 0.25em;
+}
+
+.bgm-markdown blockquote {
+    border-left: 4px solid var(--bs-border-color);
+    padding-left: 1em;
+    margin: 1em 0;
+    color: var(--bs-secondary-color);
+    font-style: italic;
+}
+
+.bgm-markdown code {
+    background: var(--bs-tertiary-bg);
+    padding: 0.15em 0.4em;
+    border-radius: var(--bs-border-radius-sm);
+    font-size: 0.9em;
+}
+
+.bgm-markdown pre {
+    background: var(--bs-tertiary-bg);
+    padding: 1em;
+    border-radius: var(--bs-border-radius);
+    overflow-x: auto;
+    margin: 1em 0;
+}
+
+.bgm-markdown pre code {
+    background: none;
+    padding: 0;
+}
+
+.bgm-markdown h1,
+.bgm-markdown h2,
+.bgm-markdown h3,
+.bgm-markdown h4,
+.bgm-markdown h5,
+.bgm-markdown h6 {
+    margin-top: 1.5em;
+    margin-bottom: 0.5em;
+    font-weight: 700;
+    line-height: 1.3;
+}
+
+.bgm-markdown h1:first-child,
+.bgm-markdown h2:first-child,
+.bgm-markdown h3:first-child {
+    margin-top: 0;
+}
+
+.bgm-markdown hr {
+    border: none;
+    border-top: 1px solid var(--bs-border-color);
+    margin: 1.5em 0;
+}
+
+/* Override column layout for markdown content */
+@media (min-width: 992px) {
+    .bgm-newspaper__body.bgm-markdown {
+        column-count: 1;
+    }
+}

@@ -59,6 +59,70 @@ public sealed class BlogService
         return new BlogPost(entity.Id, entity.Title, entity.Slug, entity.Body, entity.CreatedOn);
     }
 
+    public async Task<BlogPost?> GetByIdAsync(Guid id, CancellationToken ct = default)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        var entity = await db.BlogPosts
+            .AsNoTracking()
+            .FirstOrDefaultAsync(p => p.Id == id, ct);
+
+        return entity is null ? null : new BlogPost(entity.Id, entity.Title, entity.Slug, entity.Body, entity.CreatedOn);
+    }
+
+    public async Task<BlogPost?> GetBySlugAsync(string slug, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(slug))
+        {
+            return null;
+        }
+
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        var entity = await db.BlogPosts
+            .AsNoTracking()
+            .FirstOrDefaultAsync(p => p.Slug == slug, ct);
+
+        return entity is null ? null : new BlogPost(entity.Id, entity.Title, entity.Slug, entity.Body, entity.CreatedOn);
+    }
+
+    public async Task<BlogPost?> UpdateAsync(Guid id, string title, string body, CancellationToken ct = default)
+    {
+        title = InputGuards.RequireTrimmed(title, maxLength: 120, nameof(title), "Title is required.");
+        body = InputGuards.RequireTrimmed(body, maxLength: 20_000, nameof(body), "Body is required.");
+
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        var entity = await db.BlogPosts.FirstOrDefaultAsync(p => p.Id == id, ct);
+
+        if (entity is null)
+        {
+            return null;
+        }
+
+        entity.Title = title;
+        entity.Body = body;
+
+        await db.SaveChangesAsync(ct);
+        Changed?.Invoke();
+
+        return new BlogPost(entity.Id, entity.Title, entity.Slug, entity.Body, entity.CreatedOn);
+    }
+
+    public async Task<bool> DeleteAsync(Guid id, CancellationToken ct = default)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        var entity = await db.BlogPosts.FirstOrDefaultAsync(p => p.Id == id, ct);
+
+        if (entity is null)
+        {
+            return false;
+        }
+
+        db.BlogPosts.Remove(entity);
+        await db.SaveChangesAsync(ct);
+        Changed?.Invoke();
+
+        return true;
+    }
+
     private static async Task<string> EnsureUniqueSlugAsync(ApplicationDbContext db, string slugBase, CancellationToken ct)
     {
         var slug = slugBase;

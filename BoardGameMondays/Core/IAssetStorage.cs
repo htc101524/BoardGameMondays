@@ -10,4 +10,6 @@ public interface IAssetStorage
     Task<string> SaveAvatarAsync(Guid memberId, Stream content, string extension, CancellationToken ct = default);
 
     Task<string> SaveGameImageAsync(Stream content, string extension, CancellationToken ct = default);
+
+    Task<string> SaveBlogImageAsync(Stream content, string extension, CancellationToken ct = default);
 }

@@ -67,4 +67,18 @@ public sealed class LocalAssetStorage : IAssetStorage
 
         return $"/images/games/{fileName}";
     }
+
+    public async Task<string> SaveBlogImageAsync(Stream content, string extension, CancellationToken ct = default)
+    {
+        var fileName = $"{Guid.NewGuid():N}{extension.ToLowerInvariant()}";
+        var absolutePath = Path.Combine(ResolveAssetsRoot(), "uploads", "blog", fileName);
+        Directory.CreateDirectory(Path.GetDirectoryName(absolutePath)!);
+
+        await using (var outStream = File.Create(absolutePath))
+        {
+            await content.CopyToAsync(outStream, ct);
+        }
+
+        return $"/uploads/blog/{fileName}";
+    }
 }

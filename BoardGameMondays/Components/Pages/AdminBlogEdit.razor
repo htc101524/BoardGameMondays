@@ -1,0 +1,207 @@
+@page "/admin/blog/{PostId:guid}"
+@using BoardGameMondays.Core
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Forms
+@attribute [Authorize(Roles = "Admin")]
+@inject BlogService BlogService
+@inject IAssetStorage AssetStorage
+@inject NavigationManager Navigation
+
+<PageTitle>Edit Blog Post - Board Game Mondays</PageTitle>
+
+<div class="container py-4" style="max-width: 900px;">
+    <nav class="mb-4">
+        <a href="/blog" class="text-decoration-none">← Back to blog</a>
+    </nav>
+
+    <h1>Edit Blog Post</h1>
+
+    @if (_loading)
+    {
+        <div class="text-muted">Loading…</div>
+    }
+    else if (_post is null)
+    {
+        <div class="alert alert-warning">
+            <strong>Post not found.</strong>
+            <a href="/blog" class="alert-link ms-2">← Back to blog</a>
+        </div>
+    }
+    else
+    {
+        <div class="card">
+            <div class="card-body">
+                <div class="text-muted small mb-3">
+                    Supports Markdown: **bold**, *italic*, [links](url), ![images](url), and more.
+                </div>
+
+                <div class="d-grid gap-3">
+                    <div>
+                        <label class="form-label">Title</label>
+                        <input class="form-control" @bind="_title" />
+                    </div>
+
+                    <div>
+                        <label class="form-label">Body (Markdown)</label>
+                        <textarea @ref="_textareaRef" class="form-control font-monospace" rows="16" @bind="_body"></textarea>
+                    </div>
+
+                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                        <button type="button" class="btn btn-primary" disabled="@_saving" @onclick="SaveAsync">
+                            @(_saving ? "Saving…" : "Save changes")
+                        </button>
+                        <label class="btn btn-outline-secondary mb-0">
+                            <InputFile OnChange="UploadImageAsync" accept="image/*" style="display:none" />
+                            📷 Upload image
+                        </label>
+                        <button type="button" class="btn btn-outline-danger" @onclick="DeleteAsync">Delete</button>
+                        @if (!string.IsNullOrWhiteSpace(_status))
+                        {
+                            <span class="@(_statusIsError ? "text-danger" : "text-success")">@_status</span>
+                        }
+                    </div>
+                </div>
+
+                @if (!string.IsNullOrWhiteSpace(_body))
+                {
+                    <div class="mt-4">
+                        <div class="fw-semibold mb-2">Preview</div>
+                        <div class="border rounded p-3 bgm-markdown">
+                            @MarkdownRenderer.ToMarkupString(_body)
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public Guid PostId { get; set; }
+
+    private BlogService.BlogPost? _post;
+    private bool _loading = true;
+    private bool _saving;
+    private string? _status;
+    private bool _statusIsError;
+
+    private string _title = string.Empty;
+    private string _body = string.Empty;
+    private ElementReference _textareaRef;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+        try
+        {
+            _post = await BlogService.GetByIdAsync(PostId);
+            if (_post is not null)
+            {
+                _title = _post.Title;
+                _body = _post.Body ?? string.Empty;
+            }
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        _status = null;
+        _statusIsError = false;
+
+        var title = _title.Trim();
+        var body = _body.Trim();
+
+        if (string.IsNullOrWhiteSpace(title) || string.IsNullOrWhiteSpace(body))
+        {
+            _status = "Title and body are required.";
+            _statusIsError = true;
+            return;
+        }
+
+        _saving = true;
+        try
+        {
+            await BlogService.UpdateAsync(PostId, title, body);
+            _status = "Saved.";
+            
+            // Refresh post to get updated slug
+            _post = await BlogService.GetByIdAsync(PostId);
+            if (_post is not null)
+            {
+                _title = _post.Title;
+                _body = _post.Body ?? string.Empty;
+            }
+        }
+        catch
+        {
+            _status = "Failed to save.";
+            _statusIsError = true;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task DeleteAsync()
+    {
+        _status = null;
+        _statusIsError = false;
+
+        try
+        {
+            await BlogService.DeleteAsync(PostId);
+            Navigation.NavigateTo("/blog");
+        }
+        catch
+        {
+            _status = "Failed to delete.";
+            _statusIsError = true;
+        }
+    }
+
+    private async Task UploadImageAsync(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+        if (file is null) return;
+
+        var maxSize = 5 * 1024 * 1024; // 5 MB
+        if (file.Size > maxSize)
+        {
+            _status = "Image too large (max 5 MB).";
+            _statusIsError = true;
+            return;
+        }
+
+        _status = "Uploading…";
+        _statusIsError = false;
+        StateHasChanged();
+
+        try
+        {
+            await using var stream = file.OpenReadStream(maxAllowedSize: maxSize);
+            var extension = Path.GetExtension(file.Name).TrimStart('.');
+            if (string.IsNullOrWhiteSpace(extension)) extension = "png";
+
+            var url = await AssetStorage.SaveBlogImageAsync(stream, extension);
+            
+            // Insert markdown image at end
+            var imageMarkdown = $"![{file.Name}]({url})";
+            _body = string.IsNullOrWhiteSpace(_body) 
+                ? imageMarkdown 
+                : _body + "\n\n" + imageMarkdown;
+
+            _status = "Image uploaded.";
+        }
+        catch
+        {
+            _status = "Failed to upload image.";
+            _statusIsError = true;
+        }
+    }
+}

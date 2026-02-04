@@ -38,6 +38,13 @@ public sealed class AzureBlobAssetStorage : IAssetStorage
         return await UploadAsync(blobPath, content, extension, ct);
     }
 
+    public async Task<string> SaveBlogImageAsync(Stream content, string extension, CancellationToken ct = default)
+    {
+        var fileName = $"{Guid.NewGuid():N}{extension.ToLowerInvariant()}";
+        var blobPath = $"blog/{fileName}";
+        return await UploadAsync(blobPath, content, extension, ct);
+    }
+
     private async Task<string> UploadAsync(string blobPath, Stream content, string extension, CancellationToken ct)
     {
         var container = _client.GetBlobContainerClient(_options.ContainerName);

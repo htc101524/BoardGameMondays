@@ -1,0 +1,84 @@
+@page "/blog"
+@using BoardGameMondays.Core
+@inject BlogService BlogService
+
+<PageTitle>Blog - Board Game Mondays</PageTitle>
+
+<div class="container py-4">
+    <div class="d-flex justify-content-between align-items-end flex-wrap gap-2 mb-4">
+        <div>
+            <h1 class="mb-0">Blog</h1>
+            <div class="text-muted">Articles about mechanics, design, and theory</div>
+        </div>
+        <a href="/#blog" class="btn btn-outline-secondary">← Back to home</a>
+    </div>
+
+    @if (_loading)
+    {
+        <div class="text-muted">Loading…</div>
+    }
+    else if (_posts.Count == 0)
+    {
+        <div class="text-muted">No posts yet.</div>
+    }
+    else
+    {
+        <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
+            @foreach (var post in _posts)
+            {
+                <div class="col">
+                    <article class="card h-100">
+                        <div class="card-body d-flex flex-column">
+                            <h5 class="card-title">
+                                <a href="/blog/@post.Slug" class="text-decoration-none">@post.Title</a>
+                            </h5>
+                            <p class="card-text text-muted small">
+                                @post.CreatedOn.LocalDateTime.ToString("d MMMM yyyy")
+                            </p>
+                            <p class="card-text flex-grow-1">
+                                @GetExcerpt(post.Body, 150)
+                            </p>
+                            <a href="/blog/@post.Slug" class="btn btn-sm btn-outline-primary mt-auto align-self-start">
+                                Read more
+                            </a>
+                        </div>
+                    </article>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private readonly List<BlogService.BlogPost> _posts = new();
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _loading = true;
+        try
+        {
+            _posts.Clear();
+            _posts.AddRange(await BlogService.GetLatestAsync(take: 50));
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private static string GetExcerpt(string? body, int maxLength)
+    {
+        if (string.IsNullOrWhiteSpace(body)) return string.Empty;
+
+        // Strip markdown formatting for excerpt
+        var text = System.Text.RegularExpressions.Regex.Replace(body, @"\[([^\]]+)\]\([^\)]+\)", "$1"); // Links
+        text = System.Text.RegularExpressions.Regex.Replace(text, @"!\[([^\]]*)\]\([^\)]+\)", ""); // Images
+        text = System.Text.RegularExpressions.Regex.Replace(text, @"[*_#`>]+", ""); // Formatting
+        text = text.Replace("\r", " ").Replace("\n", " ");
+        text = System.Text.RegularExpressions.Regex.Replace(text, @"\s+", " ").Trim();
+
+        if (text.Length <= maxLength) return text;
+        return text.Substring(0, maxLength).TrimEnd() + "…";
+    }
+}

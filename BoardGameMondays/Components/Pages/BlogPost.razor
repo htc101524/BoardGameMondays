@@ -1,0 +1,87 @@
+@page "/blog/{Slug}"
+@using BoardGameMondays.Core
+@using Microsoft.AspNetCore.Components.Authorization
+@inject BlogService BlogService
+@inject NavigationManager Navigation
+@inject AuthenticationStateProvider AuthStateProvider
+@inject IHttpContextAccessor HttpContextAccessor
+
+<PageTitle>@(_post?.Title ?? "Blog") - Board Game Mondays</PageTitle>
+
+<div class="container py-4" style="max-width: 800px;">
+    @if (_loading)
+    {
+        <div class="text-muted">Loading…</div>
+    }
+    else if (_post is null)
+    {
+        <div class="alert alert-warning">
+            <strong>Post not found.</strong>
+            <a href="/blog" class="alert-link ms-2">← Back to blog</a>
+        </div>
+    }
+    else
+    {
+        <nav class="mb-4">
+            <a href="/blog" class="text-decoration-none">← All posts</a>
+        </nav>
+
+        <article class="bgm-newspaper">
+            <header class="bgm-newspaper__header">
+                <div class="bgm-newspaper__mast">Board Game Mondays</div>
+                <div class="bgm-newspaper__rule"></div>
+                <h1 class="bgm-newspaper__title mb-3">@_post.Title</h1>
+                <div class="bgm-newspaper__byline text-muted mb-4">
+                    @_post.CreatedOn.LocalDateTime.ToString("d MMMM yyyy")
+                </div>
+            </header>
+
+            <div class="bgm-newspaper__body bgm-markdown">
+                @MarkdownRenderer.ToMarkupString(_post.Body)
+            </div>
+
+            @if (_isAdmin)
+            {
+                <footer class="mt-4 pt-3 border-top">
+                    <a href="/admin/blog/@_post.Id" class="btn btn-outline-secondary">Edit post</a>
+                </footer>
+            }
+        </article>
+
+        <nav class="mt-5 pt-4 border-top">
+            <a href="/blog" class="text-decoration-none">← Back to all posts</a>
+        </nav>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public string Slug { get; set; } = string.Empty;
+
+    private BlogService.BlogPost? _post;
+    private bool _loading = true;
+    private bool _isAdmin;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var auth = await AuthStateProvider.GetAuthenticationStateAsync();
+        var viewAsNonAdmin = string.Equals(
+            HttpContextAccessor.HttpContext?.Request.Cookies["bgm_viewAsNonAdmin"],
+            "1",
+            StringComparison.Ordinal);
+        _isAdmin = auth.User.Identity?.IsAuthenticated == true && auth.User.IsInRole("Admin") && !viewAsNonAdmin;
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+        try
+        {
+            _post = await BlogService.GetBySlugAsync(Slug);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}
