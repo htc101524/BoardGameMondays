@@ -615,6 +615,28 @@
     }
 }
 
+/* Medium screens: show short version */
+@media (min-width: 481px) and (max-width: 700px) {
+    .bgm-coins__label--full {
+        display: none;
+    }
+    
+    .bgm-coins__label--short {
+        display: inline;
+    }
+}
+
+/* Larger screens: show full version */
+@media (min-width: 701px) {
+    .bgm-coins__label--full {
+        display: inline;
+    }
+    
+    .bgm-coins__label--short {
+        display: none;
+    }
+}
+
 /* Desktop layout: show inline nav and hide full-screen popup */
 @media (min-width: 1024px) {
     :root {
