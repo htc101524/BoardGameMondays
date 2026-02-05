@@ -30,7 +30,7 @@ jobs:
         run: dotnet test BoardGameMondays.sln -c Release --no-build
 
       - name: dotnet publish
-        run: dotnet publish -c Release -o ${{env.DOTNET_ROOT}}/myapp
+        run: dotnet publish BoardGameMondays/BoardGameMondays.csproj -c Release -o ${{env.DOTNET_ROOT}}/myapp
 
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
@@ -50,6 +50,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: .net-app
+          path: publish
       
       - name: Login to Azure
         uses: azure/login@v2
@@ -64,5 +65,5 @@ jobs:
         with:
           app-name: 'BoardGameMondays2'
           slot-name: 'Production'
-          package: .
+          package: publish
           
