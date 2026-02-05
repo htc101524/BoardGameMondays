@@ -8,6 +8,16 @@
     <div class="home-section__inner bgm-leaderboardPage">
         <h1>BGM Coin Leaderboard</h1>
 
+        <div class="mb-3">
+            <div class="fw-semibold">
+                Site net:
+                <span class="@(GetHouseNet() >= 0 ? "text-success" : "text-danger")">
+                    @FormatSigned(GetHouseNet())
+                </span>
+            </div>
+            <div class="text-muted small">@GetPeriodLabel()</div>
+        </div>
+
         <div class="bgm-leaderboardControls">
             <div class="bgm-leaderboardToggle" role="tablist" aria-label="Time period">
                 <button type="button"
@@ -136,6 +146,9 @@
     private IReadOnlyList<BoardGameMondays.Core.BgmCoinService.FullLeaderboardItem> _items = Array.Empty<BoardGameMondays.Core.BgmCoinService.FullLeaderboardItem>();
     private IReadOnlyDictionary<string, int> _monthGains = new Dictionary<string, int>();
     private IReadOnlyDictionary<string, int> _quarterGains = new Dictionary<string, int>();
+    private int _houseNet;
+    private int _houseNetMonth;
+    private int _houseNetQuarter;
 
     protected override async Task OnInitializedAsync()
     {
@@ -149,6 +162,9 @@
 
             _monthGains = await CoinService.GetCoinsGainedSinceAsync(startOfMonth);
             _quarterGains = await CoinService.GetCoinsGainedSinceAsync(startOfQuarter);
+            _houseNet = await CoinService.GetHouseNetSinceAsync(null);
+            _houseNetMonth = await CoinService.GetHouseNetSinceAsync(startOfMonth);
+            _houseNetQuarter = await CoinService.GetHouseNetSinceAsync(startOfQuarter);
         }
         finally
         {
@@ -169,5 +185,30 @@
             Period.Quarter => _quarterGains.TryGetValue(item.UserId, out var q) ? q : 0,
             _ => item.Coins
         };
+    }
+
+    private string GetPeriodLabel()
+    {
+        return _period switch
+        {
+            Period.Month => "This month",
+            Period.Quarter => "This quarter",
+            _ => "All time"
+        };
+    }
+
+    private int GetHouseNet()
+    {
+        return _period switch
+        {
+            Period.Month => _houseNetMonth,
+            Period.Quarter => _houseNetQuarter,
+            _ => _houseNet
+        };
+    }
+
+    private static string FormatSigned(int value)
+    {
+        return value >= 0 ? $"+{value}" : value.ToString();
     }
 }

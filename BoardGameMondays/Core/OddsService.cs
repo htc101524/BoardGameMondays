@@ -50,6 +50,8 @@ public sealed class OddsService
     /// </summary>
     private const double MinImpliedProbability = 1.20;
     private const double MaxImpliedProbability = 1.30;
+    private const double HouseMarginAdjustmentCap = 0.03;
+    private const int HouseNetAdjustmentScale = 5000;
 
     /// <summary>
     /// Standard appealing betting fractions (as decimal odds x100), sorted.
@@ -124,6 +126,7 @@ public sealed class OddsService
 
         var playerIds = game.Players.Select(p => p.MemberId).ToList();
         var ratings = await _rankingService.GetRatingsAsync(playerIds, ct);
+        var targetMargin = await GetTargetMarginAsync(db, ct);
 
         // Determine game type
         var gameType = DetermineGameType(game.Players);
@@ -136,16 +139,16 @@ public sealed class OddsService
                     .Where(p => !string.IsNullOrWhiteSpace(p.TeamName))
                     .GroupBy(p => p.TeamName!)
                     .ToList();
-                oddsMap = CalculateTeamOdds(teams, ratings);
+                oddsMap = CalculateTeamOdds(teams, ratings, targetMargin);
                 break;
 
             case GameType.CoOp:
-                oddsMap = CalculateCoOpOdds(game.Players, ratings);
+                oddsMap = CalculateCoOpOdds(game.Players, ratings, targetMargin);
                 break;
 
             case GameType.Individual:
             default:
-                oddsMap = CalculateIndividualOdds(playerIds, ratings);
+                oddsMap = CalculateIndividualOdds(playerIds, ratings, targetMargin);
                 break;
         }
 
@@ -342,11 +345,15 @@ public sealed class OddsService
         // Check if adjusted odds give us 120-130% implied probability
         // If not, scale all odds up or down slightly
         var totalImpliedProb = newOddsByOutcome.Values.Sum(odds => OddsToImpliedProbability(odds));
-        
-        if (totalImpliedProb < MinImpliedProbability || totalImpliedProb > MaxImpliedProbability)
+        if (totalImpliedProb <= 0)
         {
-            var scaleFactor = (MinImpliedProbability + MaxImpliedProbability) / 2.0 / totalImpliedProb;
-            
+            return;
+        }
+
+        var targetMargin = await GetTargetMarginAsync(db, ct);
+        var scaleFactor = targetMargin / totalImpliedProb;
+        if (totalImpliedProb < MinImpliedProbability || totalImpliedProb > MaxImpliedProbability || Math.Abs(scaleFactor - 1.0) > 0.001)
+        {
             foreach (var outcome in newOddsByOutcome.Keys.ToList())
             {
                 var scaled = (int)(newOddsByOutcome[outcome] / scaleFactor);
@@ -417,26 +424,27 @@ public sealed class OddsService
     /// </summary>
     private Dictionary<Guid, int> CalculateCoOpOdds(
         IReadOnlyList<GameNightGamePlayerEntity> players,
-        IReadOnlyDictionary<Guid, int> ratings)
+        IReadOnlyDictionary<Guid, int> ratings,
+        double targetMargin)
     {
         // Calculate average rating for the team
         var averageRating = players.Average(p => ratings.GetValueOrDefault(p.MemberId, RankingService.DefaultRating));
-        
+
         // For co-op, we assume the team is playing against a standard opponent
         // Calculate win probability using ELO: team's rating vs average (1600)
         var standardRating = RankingService.DefaultRating;
         var winProbability = 1.0 / (1.0 + Math.Pow(10, (standardRating - averageRating) / 400.0));
-        
-        var odds = ProbabilityToOdds(winProbability);
+
+        var odds = ProbabilityToOdds(winProbability, targetMargin);
         odds = ApplyRandomness(odds);
-        
+
         // Apply same odds to all team members
         var result = new Dictionary<Guid, int>();
         foreach (var player in players)
         {
             result[player.MemberId] = odds;
         }
-        
+
         return result;
     }
 
@@ -445,7 +453,8 @@ public sealed class OddsService
     /// </summary>
     private Dictionary<Guid, int> CalculateIndividualOdds(
         IReadOnlyList<Guid> playerIds,
-        IReadOnlyDictionary<Guid, int> ratings)
+        IReadOnlyDictionary<Guid, int> ratings,
+        double targetMargin)
     {
         // Calculate win probabilities based on ratings
         var probabilities = CalculateWinProbabilities(playerIds, id => ratings.GetValueOrDefault(id, RankingService.DefaultRating));
@@ -453,7 +462,7 @@ public sealed class OddsService
         var result = new Dictionary<Guid, int>();
         foreach (var (playerId, probability) in probabilities)
         {
-            var odds = ProbabilityToOdds(probability);
+            var odds = ProbabilityToOdds(probability, targetMargin);
             odds = ApplyRandomness(odds);
             result[playerId] = odds;
         }
@@ -467,7 +476,8 @@ public sealed class OddsService
     /// </summary>
     private Dictionary<Guid, int> CalculateTeamOdds(
         IReadOnlyList<IGrouping<string, GameNightGamePlayerEntity>> teams,
-        IReadOnlyDictionary<Guid, int> ratings)
+        IReadOnlyDictionary<Guid, int> ratings,
+        double targetMargin)
     {
         // Calculate average rating per team
         var teamRatings = teams.Select(t => new
@@ -486,7 +496,7 @@ public sealed class OddsService
         foreach (var team in teamRatings)
         {
             var probability = teamProbabilities.First(p => p.Key.TeamName == team.TeamName).Value;
-            var odds = ProbabilityToOdds(probability);
+            var odds = ProbabilityToOdds(probability, targetMargin);
             odds = ApplyRandomness(odds);
 
             // Apply same odds to all team members
@@ -559,7 +569,7 @@ public sealed class OddsService
     /// Maintains 120-130% implied probability (house margin).
     /// Snaps to nearest appealing betting fraction.
     /// </summary>
-    private static int ProbabilityToOdds(double probability)
+    private static int ProbabilityToOdds(double probability, double targetMargin)
     {
         if (probability <= 0)
         {
@@ -572,9 +582,7 @@ public sealed class OddsService
         }
 
         // Fair decimal odds = 1 / probability
-        // Apply target margin: aim for middle of 120-130% range (125%)
         var fairOdds = 1.0 / probability;
-        var targetMargin = (MinImpliedProbability + MaxImpliedProbability) / 2.0;
         var marginalOdds = fairOdds / targetMargin;
 
         var oddsTimes100 = (int)(marginalOdds * 100);
@@ -582,6 +590,26 @@ public sealed class OddsService
         
         // Snap to nearest appealing fraction
         return SnapToAppealingOdds(oddsTimes100);
+    }
+
+    private async Task<double> GetTargetMarginAsync(ApplicationDbContext db, CancellationToken ct)
+    {
+        var houseNet = await db.GameNightGameBets
+            .AsNoTracking()
+            .Where(b => b.IsResolved)
+            .Select(b => b.Amount - b.Payout)
+            .DefaultIfEmpty(0)
+            .SumAsync(ct);
+
+        return GetTargetMarginFromHouseNet(houseNet);
+    }
+
+    private static double GetTargetMarginFromHouseNet(int houseNet)
+    {
+        var baseMargin = (MinImpliedProbability + MaxImpliedProbability) / 2.0;
+        var normalized = Math.Clamp(houseNet / (double)HouseNetAdjustmentScale, -1.0, 1.0);
+        var adjusted = baseMargin + (-normalized * HouseMarginAdjustmentCap);
+        return Math.Clamp(adjusted, MinImpliedProbability, MaxImpliedProbability);
     }
 
     /// <summary>

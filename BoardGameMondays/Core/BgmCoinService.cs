@@ -341,6 +341,25 @@ public sealed class BgmCoinService
             StringComparer.Ordinal);
     }
 
+    public async Task<int> GetHouseNetSinceAsync(DateTimeOffset? since, CancellationToken ct = default)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+
+        var query = db.GameNightGameBets
+            .AsNoTracking()
+            .Where(b => b.IsResolved);
+
+        if (since.HasValue)
+        {
+            query = query.Where(b => b.ResolvedOn >= since.Value);
+        }
+
+        return await query
+            .Select(b => b.Amount - b.Payout)
+            .DefaultIfEmpty(0)
+            .SumAsync(ct);
+    }
+
     public sealed record CoinLeaderboardItem(string UserId, string DisplayName, int Coins);
     public sealed record FullLeaderboardItem(string UserId, string DisplayName, int Coins, bool IsBgmMember);
 

@@ -21,6 +21,9 @@ public enum OddsDisplayFormat
 /// </summary>
 public static class OddsFormatter
 {
+    private const int MaxFractionDenominator = 20;
+    private const int MaxFractionNumerator = 99;
+    private const int MaxLongshotNumerator = 100;
     /// <summary>
     /// Formats odds based on the specified display format.
     /// </summary>
@@ -75,11 +78,8 @@ public static class OddsFormatter
             return "1/1";
         }
 
-        var numerator = oddsTimes100 - 100;
-        var denominator = 100;
-        var gcd = Gcd(numerator, denominator);
-        numerator /= gcd;
-        denominator /= gcd;
+        var fractionalOdds = (oddsTimes100 - 100) / 100.0;
+        var (numerator, denominator) = ApproximateFraction(fractionalOdds);
         return $"{numerator}/{denominator}";
     }
 
@@ -132,5 +132,49 @@ public static class OddsFormatter
             b = t;
         }
         return a == 0 ? 1 : a;
+    }
+
+    private static (int Numerator, int Denominator) ApproximateFraction(double value)
+    {
+        if (value <= 0)
+        {
+            return (1, 1);
+        }
+
+        if (value >= MaxFractionNumerator)
+        {
+            var rounded = (int)Math.Round(value);
+            var capped = Math.Min(Math.Max(1, rounded), MaxLongshotNumerator);
+            return (capped, 1);
+        }
+
+        var bestNumerator = 1;
+        var bestDenominator = 1;
+        var bestError = double.MaxValue;
+
+        for (var denominator = 1; denominator <= MaxFractionDenominator; denominator++)
+        {
+            var numerator = (int)Math.Round(value * denominator);
+            if (numerator < 1)
+            {
+                numerator = 1;
+            }
+
+            if (numerator > MaxFractionNumerator && denominator != 1)
+            {
+                continue;
+            }
+
+            var error = Math.Abs(value - (double)numerator / denominator);
+            if (error < bestError - 1e-9 || (Math.Abs(error - bestError) < 1e-9 && denominator < bestDenominator))
+            {
+                bestNumerator = numerator;
+                bestDenominator = denominator;
+                bestError = error;
+            }
+        }
+
+        var gcd = Gcd(bestNumerator, bestDenominator);
+        return (bestNumerator / gcd, bestDenominator / gcd);
     }
 }
