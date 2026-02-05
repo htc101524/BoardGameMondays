@@ -9,7 +9,7 @@ namespace BoardGameMondays.Core;
 /// </summary>
 public sealed class ConsentService
 {
-    private readonly ApplicationDbContext _db;
+    private readonly IDbContextFactory<ApplicationDbContext> _dbFactory;
 
     /// <summary>
     /// Current version of the privacy policy. Increment when policy changes.
@@ -26,9 +26,9 @@ public sealed class ConsentService
     /// </summary>
     public const string CookiePolicyVersion = "1.0";
 
-    public ConsentService(ApplicationDbContext db)
+    public ConsentService(IDbContextFactory<ApplicationDbContext> dbFactory)
     {
-        _db = db;
+        _dbFactory = dbFactory;
     }
 
     /// <summary>
@@ -44,6 +44,8 @@ public sealed class ConsentService
         string? userAgent,
         CancellationToken ct = default)
     {
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        
         var consent = new UserConsentEntity
         {
             Id = Guid.NewGuid(),
@@ -57,8 +59,8 @@ public sealed class ConsentService
             UserAgent = userAgent?.Length > 512 ? userAgent[..512] : userAgent
         };
 
-        _db.UserConsents.Add(consent);
-        await _db.SaveChangesAsync(ct);
+        db.UserConsents.Add(consent);
+        await db.SaveChangesAsync(ct);
     }
 
     /// <summary>
@@ -101,7 +103,8 @@ public sealed class ConsentService
         string consentType,
         CancellationToken ct = default)
     {
-        return await _db.UserConsents
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        return await db.UserConsents
             .Where(c => c.UserId == userId && c.ConsentType == consentType)
             .OrderByDescending(c => c.ConsentedOn)
             .FirstOrDefaultAsync(ct);
@@ -127,7 +130,8 @@ public sealed class ConsentService
         string userId,
         CancellationToken ct = default)
     {
-        return await _db.UserConsents
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        return await db.UserConsents
             .Where(c => c.UserId == userId)
             .OrderByDescending(c => c.ConsentedOn)
             .ToListAsync(ct);
@@ -141,7 +145,8 @@ public sealed class ConsentService
         string userId,
         CancellationToken ct = default)
     {
-        var anonymousConsents = await _db.UserConsents
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        var anonymousConsents = await db.UserConsents
             .Where(c => c.AnonymousId == anonymousId && c.UserId == null)
             .ToListAsync(ct);
 
@@ -150,6 +155,6 @@ public sealed class ConsentService
             consent.UserId = userId;
         }
 
-        await _db.SaveChangesAsync(ct);
+        await db.SaveChangesAsync(ct);
     }
 }
