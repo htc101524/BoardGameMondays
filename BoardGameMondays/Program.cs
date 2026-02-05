@@ -241,6 +241,7 @@ builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddScoped<BoardGameMondays.Core.BgmMemberService>();
 builder.Services.AddScoped<BoardGameMondays.Core.BgmMemberDirectoryService>();
 builder.Services.AddScoped<BoardGameMondays.Core.BoardGameService>();
+builder.Services.AddScoped<BoardGameMondays.Core.GameRecommendationService>();
 builder.Services.AddScoped<BoardGameMondays.Core.TicketService>();
 builder.Services.AddScoped<BoardGameMondays.Core.AgreementService>();
 builder.Services.AddScoped<BoardGameMondays.Core.GameNightService>();

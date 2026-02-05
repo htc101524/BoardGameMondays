@@ -124,4 +124,52 @@ public static class TestData
         db.SaveChanges();
         return bet;
     }
+
+    public static ReviewEntity AddReview(ApplicationDbContext db, BoardGameEntity game, MemberEntity reviewer, double rating = 4.0, string description = "Great game!")
+    {
+        var review = new ReviewEntity
+        {
+            Id = Guid.NewGuid(),
+            GameId = game.Id,
+            ReviewerId = reviewer.Id,
+            Rating = rating,
+            TimesPlayed = 1,
+            Description = description,
+            CreatedOn = DateTimeOffset.UtcNow
+        };
+
+        db.Reviews.Add(review);
+        db.SaveChanges();
+        return review;
+    }
+
+    public static ReviewAgreementEntity AddReviewAgreement(ApplicationDbContext db, ReviewEntity review, string userId, int score = 4)
+    {
+        var agreement = new ReviewAgreementEntity
+        {
+            ReviewId = review.Id,
+            UserId = userId,
+            Score = score,
+            CreatedOn = DateTimeOffset.UtcNow
+        };
+
+        db.ReviewAgreements.Add(agreement);
+        db.SaveChanges();
+        return agreement;
+    }
+
+    public static void LinkMemberToUser(ApplicationDbContext db, MemberEntity member, ApplicationUser user)
+    {
+        const string MemberIdClaimType = "bgm:memberId";
+        
+        var claim = new Microsoft.AspNetCore.Identity.IdentityUserClaim<string>
+        {
+            UserId = user.Id,
+            ClaimType = MemberIdClaimType,
+            ClaimValue = member.Id.ToString()
+        };
+
+        db.UserClaims.Add(claim);
+        db.SaveChanges();
+    }
 }
