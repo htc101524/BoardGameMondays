@@ -1129,6 +1129,30 @@ static async Task EnsureSqliteSchemaUpToDateAsync(ApplicationDbContext db)
             await alter.ExecuteNonQueryAsync();
         }
 
+        // Members.LastMondayCoinsClaimedDateKey
+        var hasLastMondayCoinsClaimedDateKey = false;
+        await using (var cmd = connection.CreateCommand())
+        {
+            cmd.CommandText = "PRAGMA table_info('Members');";
+            await using var reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                var name = reader.GetString(1);
+                if (string.Equals(name, "LastMondayCoinsClaimedDateKey", StringComparison.OrdinalIgnoreCase))
+                {
+                    hasLastMondayCoinsClaimedDateKey = true;
+                    break;
+                }
+            }
+        }
+
+        if (!hasLastMondayCoinsClaimedDateKey)
+        {
+            await using var alter = connection.CreateCommand();
+            alter.CommandText = "ALTER TABLE Members ADD COLUMN LastMondayCoinsClaimedDateKey INTEGER NULL;";
+            await alter.ExecuteNonQueryAsync();
+        }
+
         // Reviews.TimesPlayed
         var hasTimesPlayed = false;
         await using (var cmd = connection.CreateCommand())
