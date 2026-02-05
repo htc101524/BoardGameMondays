@@ -104,4 +104,24 @@ public static class TestData
         db.SaveChanges();
         return entity;
     }
+
+    public static GameNightGameBetEntity AddBet(ApplicationDbContext db, GameNightGameEntity game, string userId, MemberEntity winner, int amount, int oddsTimes100, bool isResolved = false, int? payout = null, DateTimeOffset? resolvedOn = null)
+    {
+        var bet = new GameNightGameBetEntity
+        {
+            GameNightGameId = game.Id,
+            UserId = userId,
+            PredictedWinnerMemberId = winner.Id,
+            Amount = amount,
+            OddsTimes100 = oddsTimes100,
+            IsResolved = isResolved,
+            Payout = payout ?? 0,
+            ResolvedOn = resolvedOn,
+            CreatedOn = DateTimeOffset.UtcNow
+        };
+
+        db.GameNightGameBets.Add(bet);
+        db.SaveChanges();
+        return bet;
+    }
 }

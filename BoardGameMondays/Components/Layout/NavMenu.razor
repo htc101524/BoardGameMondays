@@ -47,24 +47,23 @@
 
             @* Desktop-only nav items *@
             <div class="bgm-header__desktopActions">
-                <a class="bgm-header__actionLink" href="/#games">Games</a>
-                <a class="bgm-header__actionLink" href="/#mondays">Mondays</a>
-                <a class="bgm-header__actionLink" href="/#blog">Blog</a>
-                <a class="bgm-header__actionLink" href="/#people">People</a>
+                <div class="bgm-header__dropdown">
+                    <button type="button" class="bgm-header__actionLink bgm-header__dropdownToggle" @onclick="ToggleDropdown" aria-haspopup="true" aria-expanded="@_dropdownOpen">
+                        Home
+                        <span class="bgm-header__dropdownChevron @(_dropdownOpen ? "is-open" : "")">▼</span>
+                    </button>
+                    <div class="bgm-header__dropdownMenu @(_dropdownOpen ? "is-open" : "")">
+                        <a class="bgm-header__dropdownItem" href="/#games" @onclick="CloseDropdownAfterClick">Games</a>
+                        <a class="bgm-header__dropdownItem" href="/#mondays" @onclick="CloseDropdownAfterClick">Mondays</a>
+                        <a class="bgm-header__dropdownItem" href="/#people" @onclick="CloseDropdownAfterClick">People</a>
+                    </div>
+                </div>
+                <a class="bgm-header__actionLink" href="/blog">Blog</a>
                 
                 @if (_userId is not null)
                 {
                     <a class="bgm-header__actionLink" href="/account/email">Account</a>
-                    @if (_userIsRealAdmin)
-                    {
-                        <div class="bgm-header__toggleWrap">
-                            <label class="bgm-header__toggleLabel">
-                                <input type="checkbox" checked="@_viewAsNonAdmin" @onchange="OnViewAsNonAdminChanged" />
-                                <span>Non-admin</span>
-                            </label>
-                        </div>
-                    }
-                    @if (_userIsAdmin && !_viewAsNonAdmin)
+                    @if (_userIsAdmin)
                     {
                         <a class="bgm-header__actionLink bgm-header__actionLink--admin" href="/admin">Admin</a>
                     }
@@ -79,11 +78,6 @@
                     <span class="text-muted small ms-2">Log in to bet on who you think will win.</span>
                 }
             </div>
-
-            @if (_userIsRealAdmin && _viewAsNonAdmin)
-            {
-                <div class="bgm-viewIndicator">Viewing as non-admin</div>
-            }
         </div>
     </div>
 </header>
@@ -188,27 +182,22 @@
 
 <aside id="bgm-popup" class="bgm-popup @(_menuOpen ? "is-open" : "")" role="dialog" aria-modal="true">
     <nav class="bgm-popup__nav" aria-label="Menu">
-        <a class="bgm-popup__link" href="/#games" @onclick="CloseMenu">Games</a>
-        <a class="bgm-popup__link" href="/#mondays" @onclick="CloseMenu">Mondays</a>
-        <a class="bgm-popup__link" href="/#blog" @onclick="CloseMenu">Blog</a>
-        <a class="bgm-popup__link" href="/#people" @onclick="CloseMenu">People</a>
+        <div class="bgm-popup__parent">
+            <a class="bgm-popup__link" href="/" @onclick="OnBrandClickMobile" @onclick:preventDefault>Home</a>
+            <div class="bgm-popup__children">
+                <a class="bgm-popup__link bgm-popup__link--child" href="/#games" @onclick="CloseMenu">Games</a>
+                <a class="bgm-popup__link bgm-popup__link--child" href="/#mondays" @onclick="CloseMenu">Mondays</a>
+                <a class="bgm-popup__link bgm-popup__link--child" href="/#people" @onclick="CloseMenu">People</a>
+            </div>
+        </div>
+        <a class="bgm-popup__link" href="/blog" @onclick="CloseMenu">Blog</a>
         <a class="bgm-popup__link bgm-popup__link--donate" href="https://buymeacoffee.com/henrytcarter" target="_blank" rel="noopener noreferrer" @onclick="CloseMenu">Buy us a coffee</a>
 
         @if (_userId is not null)
         {
             <a class="bgm-popup__link" href="/account/email" @onclick="CloseMenu">Account</a>
-            @if (_userIsRealAdmin)
-            {
-                <div class="bgm-popup__link bgm-popup__toggleRow" aria-label="Admin view mode">
-                      <div class="form-check form-switch m-0">
-                         <input class="form-check-input" type="checkbox" role="switch" id="bgm-viewAsNonAdmin"
-                             checked="@_viewAsNonAdmin" @onchange="OnViewAsNonAdminChanged">
-                         <label class="form-check-label" for="bgm-viewAsNonAdmin">View as non-admin</label>
-                         </div>
-                </div>
-            }
 
-            @if (_userIsAdmin && !_viewAsNonAdmin)
+            @if (_userIsAdmin)
             {
                 <a class="bgm-popup__link" href="/admin" @onclick="CloseMenu">Admin</a>
             }
@@ -228,9 +217,8 @@
 </aside>
 
 @code {
-    private const string ViewAsNonAdminCookie = "bgm_viewAsNonAdmin";
-
     private bool _menuOpen;
+    private bool _dropdownOpen;
     private string? _userId;
     private string? _userName;
     private int? _coins;
@@ -238,14 +226,11 @@
     private bool _pendingMondayCoinsLoading;
     private bool _claimingMondayCoins;
     private bool _userIsAdmin;
-    private bool _userIsRealAdmin;
-    private bool _viewAsNonAdmin;
     private bool _betsOpen;
     private bool _betsLoading;
     private IReadOnlyList<BoardGameMondays.Core.BettingService.UserBetHistory> _betHistory = Array.Empty<BoardGameMondays.Core.BettingService.UserBetHistory>();
     private OddsDisplayFormat _oddsFormat = OddsDisplayFormat.Fraction;
     
-    private bool _isInteractive;
     private bool _disposed;
 
     protected override async Task OnInitializedAsync()
@@ -259,7 +244,6 @@
     {
         if (firstRender)
         {
-            _isInteractive = true;
             await RefreshCoinsAsync();
         }
     }
@@ -341,37 +325,6 @@
         _userId = user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
         _userName = user.Identity?.Name;
         _userIsAdmin = user.IsInRole("Admin");
-        _userIsRealAdmin = _userIsAdmin || user.HasClaim(c => c.Type == "bgm:realAdmin" && c.Value == "1");
-
-        if (_userIsRealAdmin)
-        {
-            // During prerender, JS interop is unavailable. Prefer server-side cookie access when possible.
-            var serverCookie = HttpContextAccessor.HttpContext?.Request.Cookies[ViewAsNonAdminCookie];
-            if (!string.IsNullOrWhiteSpace(serverCookie))
-            {
-                _viewAsNonAdmin = string.Equals(serverCookie, "1", StringComparison.Ordinal);
-            }
-            else if (_isInteractive)
-            {
-                try
-                {
-                    var cookie = await JS.InvokeAsync<string?>("bgm.getCookie", ViewAsNonAdminCookie);
-                    _viewAsNonAdmin = string.Equals(cookie, "1", StringComparison.Ordinal);
-                }
-                catch
-                {
-                    _viewAsNonAdmin = false;
-                }
-            }
-            else
-            {
-                _viewAsNonAdmin = false;
-            }
-        }
-        else
-        {
-            _viewAsNonAdmin = false;
-        }
 
         if (string.IsNullOrWhiteSpace(_userId))
         {
@@ -427,41 +380,27 @@
         }
     }
 
-    private async Task OnViewAsNonAdminChanged(ChangeEventArgs e)
-    {
-        if (!_userIsRealAdmin)
-        {
-            return;
-        }
-
-        var enabled = e.Value is bool b
-            ? b
-            : string.Equals(e.Value?.ToString(), "true", StringComparison.OrdinalIgnoreCase)
-              || string.Equals(e.Value?.ToString(), "on", StringComparison.OrdinalIgnoreCase)
-              || string.Equals(e.Value?.ToString(), "1", StringComparison.OrdinalIgnoreCase);
-
-        _viewAsNonAdmin = enabled;
-
-
-        try
-        {
-            await JS.InvokeVoidAsync("bgm.setViewAsNonAdmin", enabled);
-        }
-        catch
-        {
-            // If cookies are blocked, fail safe: don't change view mode.
-            _viewAsNonAdmin = false;
-            return;
-        }
-
-        CloseMenu();
-        Navigation.NavigateTo(Navigation.Uri, forceLoad: true);
-    }
-
     private void ToggleMenu() => _menuOpen = !_menuOpen;
     private void CloseMenu() => _menuOpen = false;
 
+    private void OpenDropdown() => _dropdownOpen = true;
+    private void CloseDropdown() => _dropdownOpen = false;
+    private void ToggleDropdown() => _dropdownOpen = !_dropdownOpen;
+    private void CloseDropdownAfterClick()
+    {
+        _dropdownOpen = false;
+        StateHasChanged();
+    }
+
     private async Task OnBrandClick()
+    {
+        CloseMenu();
+        CloseDropdown();
+        Navigation.NavigateTo("/#latest");
+        await JS.InvokeVoidAsync("bgm.scrollToTopNextFrame", "smooth");
+    }
+
+    private async Task OnBrandClickMobile()
     {
         CloseMenu();
         Navigation.NavigateTo("/#latest");

@@ -74,11 +74,7 @@
     protected override async Task OnInitializedAsync()
     {
         var auth = await AuthStateProvider.GetAuthenticationStateAsync();
-        var viewAsNonAdmin = string.Equals(
-            HttpContextAccessor.HttpContext?.Request.Cookies["bgm_viewAsNonAdmin"],
-            "1",
-            StringComparison.Ordinal);
-        _isAdmin = auth.User.Identity?.IsAuthenticated == true && auth.User.IsInRole("Admin") && !viewAsNonAdmin;
+        _isAdmin = auth.User.Identity?.IsAuthenticated == true && auth.User.IsInRole("Admin");
     }
 
     protected override async Task OnParametersSetAsync()

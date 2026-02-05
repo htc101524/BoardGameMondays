@@ -356,7 +356,6 @@ public sealed class BgmCoinService
 
         return await query
             .Select(b => b.Amount - b.Payout)
-            .DefaultIfEmpty(0)
             .SumAsync(ct);
     }
 

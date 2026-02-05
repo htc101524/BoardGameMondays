@@ -1,6 +1,5 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 
@@ -9,19 +8,14 @@ namespace BoardGameMondays.Core
     public sealed class AdminRoleClaimsTransformation : IClaimsTransformation
     {
         private const string AdminRole = "Admin";
-        private const string RealAdminClaimType = "bgm:realAdmin";
-        private const string RealAdminClaimValue = "1";
-        private const string ViewAsNonAdminCookie = "bgm_viewAsNonAdmin";
 
         private readonly IConfiguration _configuration;
         private readonly IHostEnvironment _environment;
-        private readonly IHttpContextAccessor _httpContextAccessor;
 
-        public AdminRoleClaimsTransformation(IConfiguration configuration, IHostEnvironment environment, IHttpContextAccessor httpContextAccessor)
+        public AdminRoleClaimsTransformation(IConfiguration configuration, IHostEnvironment environment)
         {
             _configuration = configuration;
             _environment = environment;
-            _httpContextAccessor = httpContextAccessor;
         }
 
         public Task<ClaimsPrincipal> TransformAsync(ClaimsPrincipal principal)
@@ -53,18 +47,6 @@ namespace BoardGameMondays.Core
                 if (isConfiguredAdmin && !isAdmin)
                 {
                     AddAdminRoleClaim(principal);
-                    isAdmin = true;
-                }
-
-                if (isAdmin || isConfiguredAdmin)
-                {
-                    EnsureRealAdminClaim(principal);
-
-                    // If the user wants to view as non-admin, remove the Admin role
-                    if (ShouldViewAsNonAdmin())
-                    {
-                        RemoveAdminRoleClaims(principal);
-                    }
                 }
 
                 return Task.FromResult(principal);
@@ -81,42 +63,7 @@ namespace BoardGameMondays.Core
                 AddAdminRoleClaim(principal);
             }
 
-            // Tag real admins so the UI can show the toggle even when impersonating.
-            EnsureRealAdminClaim(principal);
-
-            // If the user wants to view as non-admin, remove the Admin role
-            if (ShouldViewAsNonAdmin())
-            {
-                RemoveAdminRoleClaims(principal);
-            }
-
             return Task.FromResult(principal);
-        }
-
-        private bool ShouldViewAsNonAdmin()
-        {
-            var ctx = _httpContextAccessor.HttpContext;
-            if (ctx is null)
-            {
-                return false;
-            }
-
-            return ctx.Request.Cookies.TryGetValue(ViewAsNonAdminCookie, out var v)
-                   && string.Equals(v, "1", StringComparison.Ordinal);
-        }
-
-        private static void EnsureRealAdminClaim(ClaimsPrincipal principal)
-        {
-            var identity = principal.Identities.OfType<ClaimsIdentity>().FirstOrDefault(i => i.IsAuthenticated);
-            if (identity is null)
-            {
-                return;
-            }
-
-            if (!identity.HasClaim(RealAdminClaimType, RealAdminClaimValue))
-            {
-                identity.AddClaim(new Claim(RealAdminClaimType, RealAdminClaimValue));
-            }
         }
 
         private static void RemoveAdminRoleClaims(ClaimsPrincipal principal)
