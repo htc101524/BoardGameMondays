@@ -2396,6 +2396,64 @@ app.MapPost("/account/avatar", async (
 .RequireAuthorization(new Microsoft.AspNetCore.Authorization.AuthorizeAttribute { Roles = "Admin" })
 .RequireRateLimiting("account");
 
+// ============================================================================
+// IMAGE MIGRATION ENDPOINT
+// One-time admin endpoint to migrate images from local storage to Azure Blob.
+// Usage: POST /api/migrate-images with JSON body: { "localAssetsFolder": "C:/path/to/downloaded/assets" }
+// ============================================================================
+app.MapPost("/api/migrate-images", async (
+    [FromBody] MigrateImagesRequest request,
+    ApplicationDbContext db,
+    IOptions<StorageOptions> storageOptions,
+    ILogger<Program> logger,
+    ClaimsPrincipal user) =>
+{
+    if (!user.IsInRole("Admin"))
+    {
+        return Results.Forbid();
+    }
+
+    var blobOptions = storageOptions.Value.AzureBlob;
+    if (string.IsNullOrWhiteSpace(blobOptions.ConnectionString))
+    {
+        return Results.BadRequest(new { error = "Azure Blob Storage connection string is not configured. Set Storage:AzureBlob:ConnectionString." });
+    }
+
+    if (string.IsNullOrWhiteSpace(request.LocalAssetsFolder) || !Directory.Exists(request.LocalAssetsFolder))
+    {
+        return Results.BadRequest(new { error = $"Local assets folder not found: {request.LocalAssetsFolder}" });
+    }
+
+    try
+    {
+        var tool = new BoardGameMondays.Tools.ImageMigrationTool(
+            db,
+            blobOptions.ConnectionString,
+            blobOptions.ContainerName,
+            blobOptions.BaseUrl);
+
+        logger.LogInformation("Starting image migration from {Folder}", request.LocalAssetsFolder);
+        var result = await tool.MigrateFromLocalFolderAsync(request.LocalAssetsFolder);
+        logger.LogInformation("Image migration completed: {Success}/{Total} files migrated successfully",
+            result.SuccessCount, result.TotalFiles);
+
+        return Results.Ok(new
+        {
+            totalFiles = result.TotalFiles,
+            successCount = result.SuccessCount,
+            avatars = result.AvatarResults,
+            gameImages = result.GameImageResults,
+            blogImages = result.BlogImageResults
+        });
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Image migration failed");
+        return Results.Problem($"Migration failed: {ex.Message}");
+    }
+})
+.RequireAuthorization();
+
 // For social crawlers (WhatsApp/Facebook/Slack/etc) request to `/rsvp` return a small
 // HTML document with Open Graph meta tags so link previews show a proper image/title.
 app.Use(async (context, next) =>
@@ -2524,6 +2582,8 @@ internal static class BgmClaimTypes
     public const string DisplayName = "bgm:displayName";
     public const string MemberId = "bgm:memberId";
 }
+
+internal record MigrateImagesRequest(string LocalAssetsFolder);
 
 internal static class ReturnUrlHelpers
 {
