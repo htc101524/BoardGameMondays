@@ -6,7 +6,32 @@
 @inject RecapStatsService StatsService
 @inject IDbContextFactory<ApplicationDbContext> DbFactory
 @inject ShopService ShopService
-@if (_night is null)
+@if (_isLoading)
+{
+    <div class="bgm-recapFrame" aria-label="Last Monday recap">
+        <div class="card bgm-recapCard">
+            <div class="card-body">
+                <div class="bgm-mondayRecapTitle">LAST MONDAY RECAP</div>
+                <div class="d-flex align-items-center gap-2 text-muted mt-2">
+                    <div class="spinner-border spinner-border-sm" role="status" aria-label="Loading"></div>
+                    <div>Loading recap...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+else if (_loadFailed)
+{
+    <div class="bgm-recapFrame" aria-label="Last Monday recap">
+        <div class="card bgm-recapCard">
+            <div class="card-body">
+                <div class="bgm-mondayRecapTitle">LAST MONDAY RECAP</div>
+                <div class="text-muted mt-2">Couldn't load the recap yet.</div>
+            </div>
+        </div>
+    </div>
+}
+else if (_night is null)
 {
     <div class="bgm-recapFrame" aria-label="Last Monday recap">
         <div class="card bgm-recapCard">
@@ -149,25 +174,38 @@ else
     private RecapStatsService.InterestingStat? _interestingStat;
     private Dictionary<Guid, string?> _memberAvatars = new();
     private Dictionary<Guid, string> _badgeRings = new();
+    private bool _isLoading = true;
+    private bool _loadFailed;
 
     protected override async Task OnInitializedAsync()
     {
-        var today = DateOnly.FromDateTime(DateTime.Today);
-        var mondayOnOrBeforeToday = GetMondayOnOrBefore(today);
-        var nextMonday = today.DayOfWeek == DayOfWeek.Monday
-            ? mondayOnOrBeforeToday
-            : mondayOnOrBeforeToday.AddDays(7);
-
-        var latestDates = await GameNightService.GetRecentPastGameNightDatesAsync(nextMonday, take: 1);
-        if (latestDates.Count > 0)
+        try
         {
-            _night = await GameNightService.GetByDateAsync(latestDates[0]);
-            if (_night is not null)
+            var today = DateOnly.FromDateTime(DateTime.Today);
+            var mondayOnOrBeforeToday = GetMondayOnOrBefore(today);
+            var nextMonday = today.DayOfWeek == DayOfWeek.Monday
+                ? mondayOnOrBeforeToday
+                : mondayOnOrBeforeToday.AddDays(7);
+
+            var latestDates = await GameNightService.GetRecentPastGameNightDatesAsync(nextMonday, take: 1);
+            if (latestDates.Count > 0)
             {
-                _net = await BettingService.GetNightNetResultsAsync(_night.Id);
-                _interestingStat = await StatsService.GetInterestingStatAsync(_night.Date);
-                await LoadMemberAvatarsAsync();
+                _night = await GameNightService.GetByDateAsync(latestDates[0]);
+                if (_night is not null)
+                {
+                    _net = await BettingService.GetNightNetResultsAsync(_night.Id);
+                    _interestingStat = await StatsService.GetInterestingStatAsync(_night.Date);
+                    await LoadMemberAvatarsAsync();
+                }
             }
+        }
+        catch
+        {
+            _loadFailed = true;
+        }
+        finally
+        {
+            _isLoading = false;
         }
     }
 
