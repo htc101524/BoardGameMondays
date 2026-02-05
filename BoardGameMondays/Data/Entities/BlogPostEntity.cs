@@ -22,5 +22,7 @@ public sealed class BlogPostEntity
     [Required]
     public DateTimeOffset CreatedOn { get; set; }
 
+    public bool IsAdminOnly { get; set; }
+
     public string? CreatedByUserId { get; set; }
 }

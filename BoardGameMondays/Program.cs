@@ -338,6 +338,7 @@ try
         await EnsureSqlServerOddsDisplayFormatColumnAsync(db, app.Logger);
         await EnsureSqlServerShopItemColumnsAsync(db, app.Logger);
         await EnsureSqlServerGameScoreColumnsAsync(db, app.Logger);
+        await EnsureSqlServerBlogPostColumnsAsync(db, app.Logger);
         await EnsureSqlServerGdprTablesAsync(db, app.Logger);
     }
 
@@ -777,6 +778,35 @@ END;
     }
 }
 
+static async Task EnsureSqlServerBlogPostColumnsAsync(ApplicationDbContext db, ILogger logger)
+{
+    if (!db.Database.IsSqlServer())
+    {
+        return;
+    }
+
+    const string sql = @"
+IF COL_LENGTH(N'dbo.BlogPosts', N'IsAdminOnly') IS NULL
+BEGIN
+    ALTER TABLE [dbo].[BlogPosts] ADD [IsAdminOnly] bit NOT NULL DEFAULT 0;
+END;
+";
+
+    try
+    {
+        var affected = await db.Database.ExecuteSqlRawAsync(sql);
+        if (affected != 0)
+        {
+            logger.LogWarning("Ensured IsAdminOnly column exists in BlogPosts table.");
+        }
+    }
+    catch (Exception ex)
+    {
+        logger.LogCritical(ex, "Failed to ensure IsAdminOnly column exists in BlogPosts table.");
+        throw;
+    }
+}
+
 static async Task EnsureSqlServerGdprTablesAsync(ApplicationDbContext db, ILogger logger)
 {
     if (!db.Database.IsSqlServer())
@@ -996,6 +1026,30 @@ static async Task EnsureSqliteSchemaUpToDateAsync(ApplicationDbContext db)
         {
             await using var alter = connection.CreateCommand();
             alter.CommandText = "ALTER TABLE Members ADD COLUMN IsBgmMember INTEGER NOT NULL DEFAULT 1;";
+            await alter.ExecuteNonQueryAsync();
+        }
+
+        // BlogPosts.IsAdminOnly
+        var hasIsAdminOnly = false;
+        await using (var cmd = connection.CreateCommand())
+        {
+            cmd.CommandText = "PRAGMA table_info('BlogPosts');";
+            await using var reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                var name = reader.GetString(1);
+                if (string.Equals(name, "IsAdminOnly", StringComparison.OrdinalIgnoreCase))
+                {
+                    hasIsAdminOnly = true;
+                    break;
+                }
+            }
+        }
+
+        if (!hasIsAdminOnly)
+        {
+            await using var alter = connection.CreateCommand();
+            alter.CommandText = "ALTER TABLE BlogPosts ADD COLUMN IsAdminOnly INTEGER NOT NULL DEFAULT 0;";
             await alter.ExecuteNonQueryAsync();
         }
 
@@ -1753,6 +1807,7 @@ CREATE TABLE IF NOT EXISTS BlogPosts (
     Slug TEXT NOT NULL,
     Body TEXT NOT NULL,
     CreatedOn INTEGER NOT NULL,
+    IsAdminOnly INTEGER NOT NULL DEFAULT 0,
     CreatedByUserId TEXT NULL
 );
 ";

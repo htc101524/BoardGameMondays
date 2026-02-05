@@ -493,7 +493,7 @@
             richest?.UserId));
 
         // 3. Latest Blog Post
-        var posts = await BlogService.GetLatestAsync(take: 1);
+        var posts = await BlogService.GetLatestAsync(take: 1, includeAdminOnly: false);
         highlights.Add(new LatestBlogPostHighlight(posts.FirstOrDefault()));
 
         _highlights = highlights;

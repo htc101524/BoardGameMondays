@@ -46,6 +46,11 @@
                         <textarea @ref="_textareaRef" class="form-control font-monospace" rows="16" @bind="_body"></textarea>
                     </div>
 
+                    <label class="form-check">
+                        <input type="checkbox" class="form-check-input" @bind="_isAdminOnly" />
+                        <span class="form-check-label">Admin only</span>
+                    </label>
+
                     <div class="d-flex align-items-center gap-2 flex-wrap">
                         <button type="button" class="btn btn-primary" disabled="@_saving" @onclick="SaveAsync">
                             @(_saving ? "Saving…" : "Save changes")
@@ -88,6 +93,7 @@
 
     private string _title = string.Empty;
     private string _body = string.Empty;
+    private bool _isAdminOnly;
     private ElementReference _textareaRef;
 
     protected override async Task OnParametersSetAsync()
@@ -95,11 +101,12 @@
         _loading = true;
         try
         {
-            _post = await BlogService.GetByIdAsync(PostId);
+            _post = await BlogService.GetByIdAsync(PostId, includeAdminOnly: true);
             if (_post is not null)
             {
                 _title = _post.Title;
                 _body = _post.Body ?? string.Empty;
+                _isAdminOnly = _post.IsAdminOnly;
             }
         }
         finally
@@ -126,15 +133,16 @@
         _saving = true;
         try
         {
-            await BlogService.UpdateAsync(PostId, title, body);
+            await BlogService.UpdateAsync(PostId, title, body, _isAdminOnly);
             _status = "Saved.";
             
             // Refresh post to get updated slug
-            _post = await BlogService.GetByIdAsync(PostId);
+            _post = await BlogService.GetByIdAsync(PostId, includeAdminOnly: true);
             if (_post is not null)
             {
                 _title = _post.Title;
                 _body = _post.Body ?? string.Empty;
+                _isAdminOnly = _post.IsAdminOnly;
             }
         }
         catch

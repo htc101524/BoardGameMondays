@@ -16,7 +16,7 @@ public sealed class BlogService
 
     public event Action? Changed;
 
-    public async Task<IReadOnlyList<BlogPost>> GetLatestAsync(int take = 10, CancellationToken ct = default)
+    public async Task<IReadOnlyList<BlogPost>> GetLatestAsync(int take = 10, bool includeAdminOnly = false, CancellationToken ct = default)
     {
         if (take <= 0)
         {
@@ -24,15 +24,20 @@ public sealed class BlogService
         }
 
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
-        return await db.BlogPosts
-            .AsNoTracking()
+        var query = db.BlogPosts.AsNoTracking();
+        if (!includeAdminOnly)
+        {
+            query = query.Where(p => !p.IsAdminOnly);
+        }
+
+        return await query
             .OrderByDescending(p => p.CreatedOn)
             .Take(take)
-            .Select(p => new BlogPost(p.Id, p.Title, p.Slug, p.Body, p.CreatedOn))
+            .Select(p => new BlogPost(p.Id, p.Title, p.Slug, p.Body, p.CreatedOn, p.IsAdminOnly))
             .ToListAsync(ct);
     }
 
-    public async Task<BlogPost> AddAsync(string title, string body, string? createdByUserId, CancellationToken ct = default)
+    public async Task<BlogPost> AddAsync(string title, string body, bool isAdminOnly, string? createdByUserId, CancellationToken ct = default)
     {
         title = InputGuards.RequireTrimmed(title, maxLength: 120, nameof(title), "Title is required.");
         body = InputGuards.RequireTrimmed(body, maxLength: 20_000, nameof(body), "Body is required.");
@@ -48,6 +53,7 @@ public sealed class BlogService
             Slug = slug,
             Body = body,
             CreatedOn = DateTimeOffset.UtcNow,
+            IsAdminOnly = isAdminOnly,
             CreatedByUserId = createdByUserId
         };
 
@@ -56,20 +62,25 @@ public sealed class BlogService
 
         Changed?.Invoke();
 
-        return new BlogPost(entity.Id, entity.Title, entity.Slug, entity.Body, entity.CreatedOn);
+        return new BlogPost(entity.Id, entity.Title, entity.Slug, entity.Body, entity.CreatedOn, entity.IsAdminOnly);
     }
 
-    public async Task<BlogPost?> GetByIdAsync(Guid id, CancellationToken ct = default)
+    public async Task<BlogPost?> GetByIdAsync(Guid id, bool includeAdminOnly = false, CancellationToken ct = default)
     {
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
-        var entity = await db.BlogPosts
-            .AsNoTracking()
+        var query = db.BlogPosts.AsNoTracking();
+        if (!includeAdminOnly)
+        {
+            query = query.Where(p => !p.IsAdminOnly);
+        }
+
+        var entity = await query
             .FirstOrDefaultAsync(p => p.Id == id, ct);
 
-        return entity is null ? null : new BlogPost(entity.Id, entity.Title, entity.Slug, entity.Body, entity.CreatedOn);
+        return entity is null ? null : new BlogPost(entity.Id, entity.Title, entity.Slug, entity.Body, entity.CreatedOn, entity.IsAdminOnly);
     }
 
-    public async Task<BlogPost?> GetBySlugAsync(string slug, CancellationToken ct = default)
+    public async Task<BlogPost?> GetBySlugAsync(string slug, bool includeAdminOnly = false, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(slug))
         {
@@ -77,14 +88,19 @@ public sealed class BlogService
         }
 
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
-        var entity = await db.BlogPosts
-            .AsNoTracking()
+        var query = db.BlogPosts.AsNoTracking();
+        if (!includeAdminOnly)
+        {
+            query = query.Where(p => !p.IsAdminOnly);
+        }
+
+        var entity = await query
             .FirstOrDefaultAsync(p => p.Slug == slug, ct);
 
-        return entity is null ? null : new BlogPost(entity.Id, entity.Title, entity.Slug, entity.Body, entity.CreatedOn);
+        return entity is null ? null : new BlogPost(entity.Id, entity.Title, entity.Slug, entity.Body, entity.CreatedOn, entity.IsAdminOnly);
     }
 
-    public async Task<BlogPost?> UpdateAsync(Guid id, string title, string body, CancellationToken ct = default)
+    public async Task<BlogPost?> UpdateAsync(Guid id, string title, string body, bool isAdminOnly, CancellationToken ct = default)
     {
         title = InputGuards.RequireTrimmed(title, maxLength: 120, nameof(title), "Title is required.");
         body = InputGuards.RequireTrimmed(body, maxLength: 20_000, nameof(body), "Body is required.");
@@ -99,11 +115,12 @@ public sealed class BlogService
 
         entity.Title = title;
         entity.Body = body;
+        entity.IsAdminOnly = isAdminOnly;
 
         await db.SaveChangesAsync(ct);
         Changed?.Invoke();
 
-        return new BlogPost(entity.Id, entity.Title, entity.Slug, entity.Body, entity.CreatedOn);
+        return new BlogPost(entity.Id, entity.Title, entity.Slug, entity.Body, entity.CreatedOn, entity.IsAdminOnly);
     }
 
     public async Task<bool> DeleteAsync(Guid id, CancellationToken ct = default)
@@ -169,5 +186,5 @@ public sealed class BlogService
         return string.IsNullOrWhiteSpace(slug) ? "post" : slug;
     }
 
-    public sealed record BlogPost(Guid Id, string Title, string Slug, string Body, DateTimeOffset CreatedOn);
+    public sealed record BlogPost(Guid Id, string Title, string Slug, string Body, DateTimeOffset CreatedOn, bool IsAdminOnly);
 }

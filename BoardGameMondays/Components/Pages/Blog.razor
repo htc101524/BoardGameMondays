@@ -1,6 +1,10 @@
 @page "/blog"
 @using BoardGameMondays.Core
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Http
 @inject BlogService BlogService
+@inject AuthenticationStateProvider AuthStateProvider
+@inject IHttpContextAccessor HttpContextAccessor
 
 <PageTitle>Blog - Board Game Mondays</PageTitle>
 
@@ -35,6 +39,10 @@
                             <h5 class="card-title">
                                 <a href="/blog/@post.Slug" class="text-decoration-none">@post.Title</a>
                             </h5>
+                            @if (_isAdmin && post.IsAdminOnly)
+                            {
+                                <span class="badge text-bg-warning align-self-start mb-2">Admin only</span>
+                            }
                             <p class="card-text text-muted small">
                                 @post.CreatedOn.LocalDateTime.ToString("d MMMM yyyy")
                             </p>
@@ -55,14 +63,22 @@
 @code {
     private readonly List<BlogService.BlogPost> _posts = new();
     private bool _loading = true;
+    private bool _isAdmin;
 
     protected override async Task OnInitializedAsync()
     {
+        var auth = await AuthStateProvider.GetAuthenticationStateAsync();
+        var viewAsNonAdmin = string.Equals(
+            HttpContextAccessor.HttpContext?.Request.Cookies["bgm_viewAsNonAdmin"],
+            "1",
+            StringComparison.Ordinal);
+        _isAdmin = auth.User.Identity?.IsAuthenticated == true && auth.User.IsInRole("Admin") && !viewAsNonAdmin;
+
         _loading = true;
         try
         {
             _posts.Clear();
-            _posts.AddRange(await BlogService.GetLatestAsync(take: 50));
+            _posts.AddRange(await BlogService.GetLatestAsync(take: 50, includeAdminOnly: _isAdmin));
         }
         finally
         {

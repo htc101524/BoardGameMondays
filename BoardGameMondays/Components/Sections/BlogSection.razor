@@ -52,6 +52,12 @@ else
                             <div class="bgm-newspaper__mast">Board Game Mondays</div>
                             <div class="bgm-newspaper__rule"></div>
                             <a href="/blog/@post.Slug" class="bgm-newspaper__title">@post.Title</a>
+                            @if (_isAdmin && post.IsAdminOnly)
+                            {
+                                <div class="mt-2">
+                                    <span class="badge text-bg-warning">Admin only</span>
+                                </div>
+                            }
                             <div class="bgm-newspaper__byline text-muted">@post.CreatedOn.LocalDateTime.ToString("d MMMM yyyy")</div>
                         </header>
 
@@ -103,6 +109,10 @@ else
                             <textarea @ref="_textareaRef" class="form-control font-monospace" rows="12" placeholder="Write your post in Markdown…" @bind="_newBody"></textarea>
 
                             <div class="d-flex align-items-center gap-2 flex-wrap">
+                                <label class="form-check">
+                                    <input type="checkbox" class="form-check-input" @bind="_newIsAdminOnly" />
+                                    <span class="form-check-label">Admin only</span>
+                                </label>
                                 <button type="button" class="btn btn-primary" disabled="@_saving" @onclick="AddAsync">Publish</button>
                                 <label class="btn btn-outline-secondary mb-0">
                                     <InputFile OnChange="UploadImageAsync" accept="image/*" style="display:none" />
@@ -143,6 +153,7 @@ else
 
     private string _newTitle = string.Empty;
     private string _newBody = string.Empty;
+    private bool _newIsAdminOnly;
     private ElementReference _blogSectionRef;
     private ElementReference _textareaRef;
 
@@ -169,7 +180,7 @@ else
         try
         {
             _posts.Clear();
-            _posts.AddRange(await BlogService.GetLatestAsync(take: 12));
+            _posts.AddRange(await BlogService.GetLatestAsync(take: 12, includeAdminOnly: _isAdmin));
             _pageIndex = 0;
         }
         finally
@@ -281,9 +292,10 @@ else
             var auth = await AuthStateProvider.GetAuthenticationStateAsync();
             var userId = auth.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
 
-            await BlogService.AddAsync(title, body, userId);
+            await BlogService.AddAsync(title, body, _newIsAdminOnly, userId);
             _newTitle = string.Empty;
             _newBody = string.Empty;
+            _newIsAdminOnly = false;
             _status = "Published.";
 
             await RefreshAsync();

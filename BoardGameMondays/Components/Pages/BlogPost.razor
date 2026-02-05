@@ -34,6 +34,12 @@
                 <div class="bgm-newspaper__mast">Board Game Mondays</div>
                 <div class="bgm-newspaper__rule"></div>
                 <h1 class="bgm-newspaper__title mb-3">@_post.Title</h1>
+                @if (_isAdmin && _post.IsAdminOnly)
+                {
+                    <div class="mb-3">
+                        <span class="badge text-bg-warning">Admin only</span>
+                    </div>
+                }
                 <div class="bgm-newspaper__byline text-muted mb-4">
                     @_post.CreatedOn.LocalDateTime.ToString("d MMMM yyyy")
                 </div>
@@ -80,7 +86,7 @@
         _loading = true;
         try
         {
-            _post = await BlogService.GetBySlugAsync(Slug);
+            _post = await BlogService.GetBySlugAsync(Slug, includeAdminOnly: _isAdmin);
         }
         finally
         {
