@@ -56,6 +56,48 @@
                 }
             </div>
         </div>
+
+        <div class="card mt-4" id="account-profile">
+            <div class="card-header">
+                <h5 class="mb-0">Profile</h5>
+            </div>
+            <div class="card-body">
+                <form method="post" action="/account/display-name" data-enhance="false">
+                    <AntiforgeryToken />
+                    <div class="mb-3">
+                        <label class="form-label" for="account-displayname">Display name</label>
+                        <input id="account-displayname" name="DisplayName" class="form-control" value="@_displayName" autocomplete="name" />
+                        <div class="form-text">Shown on your profile and leaderboards.</div>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary">Save name</button>
+
+                    @if (!string.IsNullOrWhiteSpace(_displayNameMessage))
+                    {
+                        <div class="alert @_displayNameMessageCss mt-3" role="alert">@_displayNameMessage</div>
+                    }
+                </form>
+
+                <hr />
+
+                <form method="post" action="/account/avatar" enctype="multipart/form-data" data-enhance="false">
+                    <AntiforgeryToken />
+                    <div class="mb-3">
+                        <label class="form-label" for="account-avatar">Profile photo</label>
+                        <div class="d-flex gap-2 align-items-center flex-wrap">
+                            <input id="account-avatar" class="form-control" style="max-width: 420px" type="file" name="avatar" accept="image/*" required />
+                            <button type="submit" class="btn btn-outline-primary">Upload</button>
+                        </div>
+                        <div class="form-text">Supported formats: JPG, PNG, WEBP, GIF. Max size: 10MB.</div>
+                    </div>
+
+                    @if (!string.IsNullOrWhiteSpace(_avatarMessage))
+                    {
+                        <div class="alert mt-2 @_avatarMessageCss" role="alert">@_avatarMessage</div>
+                    }
+                </form>
+            </div>
+        </div>
     </div>
 
     <div class="col-lg-6 mb-4">
@@ -124,6 +166,11 @@
     private string? _message;
     private string _messageCss = "alert-success";
     private bool _isConfirmed;
+    private string? _displayName;
+    private string? _displayNameMessage;
+    private string _displayNameMessageCss = "alert-success";
+    private string? _avatarMessage;
+    private string _avatarMessageCss = "alert-info";
 
     private OddsDisplayFormat _oddsFormat = OddsDisplayFormat.Fraction;
     private bool _savingPreferences;
@@ -138,6 +185,18 @@
         _email = user?.Email ?? string.Empty;
         _isConfirmed = user is not null && await UserManager.IsEmailConfirmedAsync(user);
         _oddsFormat = user?.OddsDisplayFormat ?? OddsDisplayFormat.Fraction;
+
+        if (user is null)
+        {
+            _displayName = string.Empty;
+            return;
+        }
+
+        var claims = await UserManager.GetClaimsAsync(user);
+        _displayName = claims.FirstOrDefault(c => c.Type == BgmClaimTypes.DisplayName)?.Value?.Trim()
+            ?? user.UserName
+            ?? string.Empty;
+
     }
 
     protected override void OnParametersSet()
@@ -168,6 +227,38 @@
         else
         {
             _message = null;
+        }
+
+        if (query.TryGetValue("displayNameError", out var displayNameError) && !string.IsNullOrWhiteSpace(displayNameError))
+        {
+            _displayNameMessage = displayNameError.ToString();
+            _displayNameMessageCss = "alert-danger";
+        }
+        else if (query.TryGetValue("displayNameUpdated", out var displayNameUpdated) && displayNameUpdated.ToString() == "1")
+        {
+            _displayNameMessage = "Display name updated.";
+            _displayNameMessageCss = "alert-success";
+        }
+        else
+        {
+            _displayNameMessage = null;
+            _displayNameMessageCss = "alert-success";
+        }
+
+        if (query.TryGetValue("avatarError", out var avatarError) && !string.IsNullOrWhiteSpace(avatarError))
+        {
+            _avatarMessage = avatarError.ToString();
+            _avatarMessageCss = "alert-danger";
+        }
+        else if (query.TryGetValue("avatarUpdated", out var avatarUpdated) && avatarUpdated.ToString() == "1")
+        {
+            _avatarMessage = "Avatar updated.";
+            _avatarMessageCss = "alert-success";
+        }
+        else
+        {
+            _avatarMessage = null;
+            _avatarMessageCss = "alert-info";
         }
     }
 

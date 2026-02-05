@@ -600,6 +600,9 @@ namespace BoardGameMondays.Migrations
                     b.Property<bool>("IsBgmMember")
                         .HasColumnType("INTEGER");
 
+                    b.Property<int?>("LastMondayCoinsClaimedDateKey")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(128)

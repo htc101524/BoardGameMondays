@@ -255,7 +255,7 @@ public sealed class BgmMemberDirectoryService
     /// <summary>
     /// Invalidates all member caches. Called automatically after write operations.
     /// </summary>
-    private void InvalidateCache()
+    public void InvalidateCache()
     {
         _cache.Remove(AllMembersCacheKey);
         _cache.Remove(AdminsCacheKey);

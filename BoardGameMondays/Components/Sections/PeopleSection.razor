@@ -1,14 +1,7 @@
 @using BoardGameMondays.Core
 @using BoardGameMondays.Data
-@using Microsoft.AspNetCore.Components.Authorization
-@using Microsoft.AspNetCore.Components.Forms
-@using Microsoft.AspNetCore.Components.Web
-@using Microsoft.AspNetCore.WebUtilities
 @using Microsoft.EntityFrameworkCore
-@inject NavigationManager Navigation
 @inject IDbContextFactory<ApplicationDbContext> DbFactory
-@inject AuthenticationStateProvider AuthStateProvider
-@inject IHttpContextAccessor HttpContextAccessor
 @inject IConfiguration Configuration
 @inject ShopService ShopService
 
@@ -17,23 +10,6 @@
 
     <div class="home-section__inner">
         <h1>People</h1>
-
-        @if (_isAdmin)
-        {
-            <form class="mb-3" method="post" action="/account/avatar" enctype="multipart/form-data">
-                <AntiforgeryToken />
-                <label class="form-label" for="avatar-file">Your avatar</label>
-                <div class="d-flex gap-2 align-items-center flex-wrap">
-                    <input id="avatar-file" class="form-control" style="max-width: 420px" type="file" name="avatar" accept="image/*" required />
-                    <button type="submit" class="btn btn-outline-primary">Upload</button>
-                </div>
-                <div class="form-text">Supported formats: JPG, PNG, WEBP, GIF. Max size: 10MB.</div>
-                @if (!string.IsNullOrWhiteSpace(_avatarMessage))
-                {
-                    <div class="alert mt-2 @_avatarMessageCss" role="alert">@_avatarMessage</div>
-                }
-            </form>
-        }
 
         <div class="text-muted small mb-2">Click on a BGM Member to view their stats</div>
 
@@ -78,21 +54,11 @@
 </section>
 
 @code {
-    private string? _avatarMessage;
-    private string _avatarMessageCss = "alert-info";
     private IReadOnlyList<MemberCard> _members = Array.Empty<MemberCard>();
     private Dictionary<Guid, string> _badgeRings = new();
-    private bool _isAdmin;
 
     protected override async Task OnInitializedAsync()
     {
-        var auth = await AuthStateProvider.GetAuthenticationStateAsync();
-        var viewAsNonAdmin = string.Equals(
-            HttpContextAccessor.HttpContext?.Request.Cookies["bgm_viewAsNonAdmin"],
-            "1",
-            StringComparison.Ordinal);
-        _isAdmin = auth.User.Identity?.IsAuthenticated == true && auth.User.IsInRole("Admin") && !viewAsNonAdmin;
-
         await using var db = await DbFactory.CreateDbContextAsync();
         
         // Get admin user IDs to ensure only actual admins show up in People
@@ -190,28 +156,6 @@
         }
 
         return adminUserIds;
-    }
-
-    protected override void OnParametersSet()
-    {
-        var uri = Navigation.ToAbsoluteUri(Navigation.Uri);
-        var query = QueryHelpers.ParseQuery(uri.Query);
-
-        if (query.TryGetValue("avatarError", out var error) && !string.IsNullOrWhiteSpace(error))
-        {
-            _avatarMessage = error.ToString();
-            _avatarMessageCss = "alert-danger";
-        }
-        else if (query.TryGetValue("avatarUpdated", out var updated) && updated == "1")
-        {
-            _avatarMessage = "Avatar updated.";
-            _avatarMessageCss = "alert-success";
-        }
-        else
-        {
-            _avatarMessage = null;
-            _avatarMessageCss = "alert-info";
-        }
     }
 
     private sealed record MemberCard(Guid Id, string Name, string? Tagline, string? FunFact, string? AvatarUrl);

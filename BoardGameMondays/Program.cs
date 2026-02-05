@@ -1942,7 +1942,7 @@ app.Use(async (context, next) =>
             && string.Equals(context.Request.Path, "/account/avatar", StringComparison.OrdinalIgnoreCase))
         {
             context.Response.Clear();
-            context.Response.Redirect($"/?avatarError={Uri.EscapeDataString("Image must be 10MB or smaller.")}#people");
+            context.Response.Redirect($"/account?avatarError={Uri.EscapeDataString("Image must be 10MB or smaller.")}#account-profile");
             return;
         }
 
@@ -2394,6 +2394,94 @@ app.MapPost("/account/email", async (
     return Results.Redirect("/account/email?updated=1&confirm=1");
 }).RequireAuthorization();
 
+app.MapPost("/account/display-name", async (
+    [FromForm] UpdateDisplayNameRequest request,
+    HttpContext http,
+    UserManager<ApplicationUser> userManager,
+    SignInManager<ApplicationUser> signInManager,
+    ApplicationDbContext db,
+    BoardGameMondays.Core.BgmMemberDirectoryService members) =>
+{
+    var displayName = request.DisplayName?.Trim();
+    if (string.IsNullOrWhiteSpace(displayName))
+    {
+        return Results.Redirect($"/account?displayNameError={Uri.EscapeDataString("Name is required.")}#account-profile");
+    }
+
+    if (displayName.Length > 80)
+    {
+        return Results.Redirect($"/account?displayNameError={Uri.EscapeDataString("Name is too long.")}#account-profile");
+    }
+
+    var currentUser = await userManager.GetUserAsync(http.User);
+    if (currentUser is null)
+    {
+        return Results.Redirect("/login");
+    }
+
+    var claims = await userManager.GetClaimsAsync(currentUser);
+    var existingDisplayName = claims.FirstOrDefault(c => c.Type == BgmClaimTypes.DisplayName)?.Value?.Trim();
+
+    MemberEntity? member = null;
+    var memberIdClaim = claims.FirstOrDefault(c => c.Type == BgmClaimTypes.MemberId)?.Value;
+    if (Guid.TryParse(memberIdClaim, out var memberId))
+    {
+        member = await db.Members.FirstOrDefaultAsync(m => m.Id == memberId);
+    }
+
+    if (member is null && !string.IsNullOrWhiteSpace(existingDisplayName))
+    {
+        member = await db.Members.FirstOrDefaultAsync(m => m.Name.ToLower() == existingDisplayName.ToLower());
+    }
+
+    var nameMatch = await db.Members
+        .AsNoTracking()
+        .FirstOrDefaultAsync(m => m.Name.ToLower() == displayName.ToLower());
+
+    if (nameMatch is not null && (member is null || nameMatch.Id != member.Id))
+    {
+        return Results.Redirect($"/account?displayNameError={Uri.EscapeDataString("That name is already in use.")}#account-profile");
+    }
+
+    if (member is null)
+    {
+        member = new MemberEntity
+        {
+            Id = Guid.NewGuid(),
+            IsBgmMember = true,
+            Name = displayName,
+            Email = currentUser.Email ?? string.Empty
+        };
+        db.Members.Add(member);
+    }
+    else
+    {
+        member.Name = displayName;
+    }
+
+    await db.SaveChangesAsync();
+
+    var existingClaim = claims.FirstOrDefault(c => c.Type == BgmClaimTypes.DisplayName);
+    if (existingClaim is null)
+    {
+        await userManager.AddClaimAsync(currentUser, new Claim(BgmClaimTypes.DisplayName, displayName));
+    }
+    else if (!string.Equals(existingClaim.Value, displayName, StringComparison.Ordinal))
+    {
+        await userManager.ReplaceClaimAsync(currentUser, existingClaim, new Claim(BgmClaimTypes.DisplayName, displayName));
+    }
+
+    if (!Guid.TryParse(memberIdClaim, out _))
+    {
+        await userManager.AddClaimAsync(currentUser, new Claim(BgmClaimTypes.MemberId, member.Id.ToString()));
+    }
+
+    await signInManager.RefreshSignInAsync(currentUser);
+    members.InvalidateCache();
+
+    return Results.Redirect("/account?displayNameUpdated=1#account-profile");
+}).RequireAuthorization().RequireRateLimiting("account");
+
 app.MapPost("/account/resend-confirmation", async (
     UserManager<ApplicationUser> userManager,
     HttpContext http,
@@ -2425,19 +2513,19 @@ app.MapPost("/account/avatar", async (
 
     if (avatar is null || avatar.Length == 0)
     {
-        return Results.Redirect($"/?avatarError={Uri.EscapeDataString("Please choose an image.")}#people");
+        return Results.Redirect($"/account?avatarError={Uri.EscapeDataString("Please choose an image.")}#account-profile");
     }
 
     const long maxBytes = 10 * 1024 * 1024; // 10MB
     if (avatar.Length > maxBytes)
     {
-        return Results.Redirect($"/?avatarError={Uri.EscapeDataString("Image must be 10MB or smaller.")}#people");
+        return Results.Redirect($"/account?avatarError={Uri.EscapeDataString("Image must be 10MB or smaller.")}#account-profile");
     }
 
     if (!string.IsNullOrWhiteSpace(avatar.ContentType)
         && !avatar.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
     {
-        return Results.Redirect($"/?avatarError={Uri.EscapeDataString("That file doesn't look like an image.")}#people");
+        return Results.Redirect($"/account?avatarError={Uri.EscapeDataString("That file doesn't look like an image.")}#account-profile");
     }
 
     string? extension;
@@ -2451,12 +2539,12 @@ app.MapPost("/account/avatar", async (
     catch (Exception ex)
     {
         logger.LogWarning(ex, "Failed to read avatar upload stream.");
-        return Results.Redirect($"/?avatarError={Uri.EscapeDataString("Couldn't read that image. Try a different file.")}#people");
+        return Results.Redirect($"/account?avatarError={Uri.EscapeDataString("Couldn't read that image. Try a different file.")}#account-profile");
     }
 
     if (string.IsNullOrWhiteSpace(extension))
     {
-        return Results.Redirect($"/?avatarError={Uri.EscapeDataString("Supported formats: JPG, PNG, WEBP, GIF.")}#people");
+        return Results.Redirect($"/account?avatarError={Uri.EscapeDataString("Supported formats: JPG, PNG, WEBP, GIF.")}#account-profile");
     }
 
     if (string.Equals(extension, ".jpeg", StringComparison.OrdinalIgnoreCase))
@@ -2467,13 +2555,13 @@ app.MapPost("/account/avatar", async (
     var userName = http.User?.Identity?.Name;
     if (string.IsNullOrWhiteSpace(userName))
     {
-        return Results.Redirect($"/?avatarError={Uri.EscapeDataString("You must be logged in.")}#people");
+        return Results.Redirect($"/account?avatarError={Uri.EscapeDataString("You must be logged in.")}#account-profile");
     }
 
     var user = await userManager.FindByNameAsync(userName);
     if (user is null)
     {
-        return Results.Redirect($"/?avatarError={Uri.EscapeDataString("You must be logged in.")}#people");
+        return Results.Redirect($"/account?avatarError={Uri.EscapeDataString("You must be logged in.")}#account-profile");
     }
 
     var claims = await userManager.GetClaimsAsync(user);
@@ -2500,7 +2588,7 @@ app.MapPost("/account/avatar", async (
         member = new MemberEntity
         {
             Id = Guid.NewGuid(),
-            IsBgmMember = true, // Admins are BGM members
+            IsBgmMember = true,
             Name = displayName,
             Email = string.Empty
         };
@@ -2517,12 +2605,12 @@ app.MapPost("/account/avatar", async (
     catch (Exception ex)
     {
         logger.LogWarning(ex, "Avatar upload failed for user '{UserName}'.", userName);
-        return Results.Redirect($"/?avatarError={Uri.EscapeDataString("Upload failed. Try a smaller image or a different format.")}#people");
+        return Results.Redirect($"/account?avatarError={Uri.EscapeDataString("Upload failed. Try a smaller image or a different format.")}#account-profile");
     }
 
-    return Results.Redirect("/?avatarUpdated=1#people");
+    return Results.Redirect("/account?avatarUpdated=1#account-profile");
 })
-.RequireAuthorization(new Microsoft.AspNetCore.Authorization.AuthorizeAttribute { Roles = "Admin" })
+.RequireAuthorization()
 .RequireRateLimiting("account");
 
 // ============================================================================
@@ -2705,6 +2793,7 @@ internal sealed record ForgotPasswordRequest(string Email);
 internal sealed record ResendConfirmationRequest(string Email);
 internal sealed record ResetPasswordRequest(string Email, string Token, string Password, string ConfirmPassword);
 internal sealed record UpdateEmailRequest(string Email);
+internal sealed record UpdateDisplayNameRequest(string DisplayName);
 
 internal static class BgmClaimTypes
 {

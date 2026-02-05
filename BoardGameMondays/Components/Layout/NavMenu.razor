@@ -156,6 +156,30 @@
         }
     }
 
+    <div class="bgm-betsModal__section">
+        <div class="bgm-betsModal__sectionTitle">Monday coins</div>
+        @if (_pendingMondayCoinsLoading)
+        {
+            <div class="text-muted">Checking attendance...</div>
+        }
+        else if (_pendingMondayCoins <= 0)
+        {
+            <div class="text-muted">No Monday coins to claim yet.</div>
+        }
+        else
+        {
+            <div class="bgm-betsModal__summary bgm-betsModal__summary--compact">
+                <span>Pending: <strong>@_pendingMondayCoins</strong></span>
+                <button type="button"
+                        class="bgm-betsModal__claim"
+                        @onclick="ClaimMondayCoinsAsync"
+                        disabled="@_claimingMondayCoins">
+                    @(_claimingMondayCoins ? "Claiming..." : "Claim coins")
+                </button>
+            </div>
+        }
+    </div>
+
     <div class="bgm-betsModal__footer">
         <a class="bgm-betsModal__link" href="/leaderboard" @onclick="CloseBets">🏆 View leaderboard</a>
         <a class="bgm-betsModal__link" href="/bets" @onclick="CloseBets">View all bets</a>
@@ -210,6 +234,9 @@
     private string? _userId;
     private string? _userName;
     private int? _coins;
+    private int _pendingMondayCoins;
+    private bool _pendingMondayCoinsLoading;
+    private bool _claimingMondayCoins;
     private bool _userIsAdmin;
     private bool _userIsRealAdmin;
     private bool _viewAsNonAdmin;
@@ -278,6 +305,7 @@
         }
 
         _betsOpen = true;
+        await RefreshPendingMondayCoinsAsync();
         if (_betHistory.Count == 0)
         {
             _betsLoading = true;
@@ -304,6 +332,7 @@
             _userId = null;
             _userName = null;
             _coins = null;
+            _pendingMondayCoins = 0;
             _userIsAdmin = false;
             StateHasChanged();
             return;
@@ -347,6 +376,7 @@
         if (string.IsNullOrWhiteSpace(_userId))
         {
             _coins = null;
+            _pendingMondayCoins = 0;
             StateHasChanged();
             return;
         }
@@ -354,6 +384,47 @@
         _coins = await Coins.GetCoinsAsync(_userId);
         _oddsFormat = await PreferencesService.GetOddsDisplayFormatAsync(_userId);
         StateHasChanged();
+    }
+
+    private async Task RefreshPendingMondayCoinsAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_userId))
+        {
+            _pendingMondayCoins = 0;
+            return;
+        }
+
+        _pendingMondayCoinsLoading = true;
+        try
+        {
+            _pendingMondayCoins = await Coins.GetPendingMondayAttendanceCoinsAsync(_userId);
+        }
+        finally
+        {
+            _pendingMondayCoinsLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task ClaimMondayCoinsAsync()
+    {
+        if (_claimingMondayCoins || string.IsNullOrWhiteSpace(_userId))
+        {
+            return;
+        }
+
+        _claimingMondayCoins = true;
+        try
+        {
+            await Coins.ClaimMondayAttendanceCoinsAsync(_userId);
+            await RefreshCoinsAsync();
+            _pendingMondayCoins = await Coins.GetPendingMondayAttendanceCoinsAsync(_userId);
+        }
+        finally
+        {
+            _claimingMondayCoins = false;
+            StateHasChanged();
+        }
     }
 
     private async Task OnViewAsNonAdminChanged(ChangeEventArgs e)
