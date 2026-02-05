@@ -33,7 +33,19 @@
             @Body
         </article>
     </main>
+    <footer class="site-footer">
+        <div class="site-footer__content">
+            <span class="site-footer__copyright">© @DateTime.Now.Year Board Game Mondays</span>
+            <nav class="site-footer__links">
+                <a href="/privacy-policy">Privacy Policy</a>
+                <a href="/terms-of-service">Terms of Service</a>
+                <button type="button" class="site-footer__cookie-btn" onclick="cookieConsent.showBanner()">Cookie Settings</button>
+            </nav>
+        </div>
+    </footer>
 </div>
+
+<BoardGameMondays.Components.Sections.CookieConsent />
 
 <div id="blazor-error-ui" data-nosnippet>
     An unhandled error has occurred.

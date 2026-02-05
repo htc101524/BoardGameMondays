@@ -1,0 +1,128 @@
+@page "/account/export-data"
+@attribute [Authorize]
+
+@using System.Security.Claims
+@using System.Text.Json
+@using BoardGameMondays.Core
+@using Microsoft.AspNetCore.Authorization
+
+@inject GdprService GdprService
+@inject AuthenticationStateProvider AuthStateProvider
+@inject IJSRuntime JS
+
+<PageTitle>Export My Data - Board Game Mondays</PageTitle>
+
+<h1>Export My Data</h1>
+
+<p class="lead">
+    Under UK GDPR, you have the right to receive a copy of all personal data we hold about you.
+</p>
+
+<div class="card mb-4">
+    <div class="card-body">
+        <h5 class="card-title">What's included in your export?</h5>
+        <ul class="mb-0">
+            <li>Account information (username, email, display name)</li>
+            <li>Profile details (if you have a member profile)</li>
+            <li>All consent records</li>
+            <li>Betting history</li>
+            <li>Review agreements</li>
+            <li>Want-to-play votes</li>
+            <li>Shop purchases</li>
+        </ul>
+    </div>
+</div>
+
+@if (_isLoading)
+{
+    <div class="d-flex align-items-center">
+        <div class="spinner-border spinner-border-sm me-2" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+        <span>Preparing your data export...</span>
+    </div>
+}
+else if (_error is not null)
+{
+    <div class="alert alert-danger">@_error</div>
+}
+else if (_exportData is not null)
+{
+    <div class="alert alert-success">
+        <strong>Export ready!</strong> Click the button below to download your data.
+    </div>
+    
+    <button class="btn btn-primary" @onclick="DownloadExport">
+        <span class="me-1">📥</span> Download JSON Export
+    </button>
+    
+    <hr class="my-4" />
+    
+    <h3>Preview</h3>
+    <div class="card">
+        <div class="card-body">
+            <pre class="mb-0" style="max-height: 400px; overflow: auto;"><code>@_exportJson</code></pre>
+        </div>
+    </div>
+}
+else
+{
+    <button class="btn btn-primary" @onclick="GenerateExport">
+        <span class="me-1">📦</span> Generate Data Export
+    </button>
+}
+
+<div class="mt-4">
+    <a href="/account" class="btn btn-outline-secondary">← Back to Account Settings</a>
+</div>
+
+@code {
+    private GdprDataExport? _exportData;
+    private string? _exportJson;
+    private bool _isLoading;
+    private string? _error;
+
+    private async Task GenerateExport()
+    {
+        _isLoading = true;
+        _error = null;
+        StateHasChanged();
+
+        try
+        {
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var userId = authState.User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+            if (string.IsNullOrEmpty(userId))
+            {
+                _error = "Unable to identify your account. Please try logging in again.";
+                return;
+            }
+
+            _exportData = await GdprService.ExportUserDataAsync(userId);
+            _exportJson = JsonSerializer.Serialize(_exportData, new JsonSerializerOptions
+            {
+                WriteIndented = true
+            });
+        }
+        catch (Exception ex)
+        {
+            _error = $"Failed to generate export: {ex.Message}";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task DownloadExport()
+    {
+        if (_exportJson is null) return;
+
+        var fileName = $"bgm-data-export-{DateTime.UtcNow:yyyy-MM-dd}.json";
+        var bytes = System.Text.Encoding.UTF8.GetBytes(_exportJson);
+        var base64 = Convert.ToBase64String(bytes);
+
+        await JS.InvokeVoidAsync("downloadFile", fileName, "application/json", base64);
+    }
+}

@@ -34,6 +34,8 @@ public sealed class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<ShopItemEntity> ShopItems => Set<ShopItemEntity>();
     public DbSet<UserPurchaseEntity> UserPurchases => Set<UserPurchaseEntity>();
     public DbSet<GameResultReactionEntity> GameResultReactions => Set<GameResultReactionEntity>();
+    public DbSet<UserConsentEntity> UserConsents => Set<UserConsentEntity>();
+    public DbSet<DataDeletionRequestEntity> DataDeletionRequests => Set<DataDeletionRequestEntity>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -379,5 +381,52 @@ public sealed class ApplicationDbContext : IdentityDbContext<ApplicationUser>
 
         builder.Entity<ShopItemEntity>()
             .HasIndex(x => x.IsActive);
+
+        // GDPR consent tracking
+        builder.Entity<UserConsentEntity>()
+            .Property(x => x.ConsentedOn)
+            .HasConversion(
+                toDb => toDb.UtcDateTime.Ticks,
+                fromDb => new DateTimeOffset(new DateTime(fromDb, DateTimeKind.Utc)));
+
+        builder.Entity<UserConsentEntity>()
+            .HasIndex(x => x.UserId);
+
+        builder.Entity<UserConsentEntity>()
+            .HasIndex(x => x.AnonymousId);
+
+        builder.Entity<UserConsentEntity>()
+            .HasIndex(x => new { x.UserId, x.ConsentType });
+
+        // Data deletion requests
+        builder.Entity<DataDeletionRequestEntity>()
+            .Property(x => x.RequestedOn)
+            .HasConversion(
+                toDb => toDb.UtcDateTime.Ticks,
+                fromDb => new DateTimeOffset(new DateTime(fromDb, DateTimeKind.Utc)));
+
+        builder.Entity<DataDeletionRequestEntity>()
+            .Property(x => x.ScheduledDeletionOn)
+            .HasConversion(
+                toDb => toDb.UtcDateTime.Ticks,
+                fromDb => new DateTimeOffset(new DateTime(fromDb, DateTimeKind.Utc)));
+
+        builder.Entity<DataDeletionRequestEntity>()
+            .Property(x => x.CompletedOn)
+            .HasConversion(
+                toDb => toDb.HasValue ? toDb.Value.UtcDateTime.Ticks : (long?)null,
+                fromDb => fromDb.HasValue ? new DateTimeOffset(new DateTime(fromDb.Value, DateTimeKind.Utc)) : (DateTimeOffset?)null);
+
+        builder.Entity<DataDeletionRequestEntity>()
+            .Property(x => x.CancelledOn)
+            .HasConversion(
+                toDb => toDb.HasValue ? toDb.Value.UtcDateTime.Ticks : (long?)null,
+                fromDb => fromDb.HasValue ? new DateTimeOffset(new DateTime(fromDb.Value, DateTimeKind.Utc)) : (DateTimeOffset?)null);
+
+        builder.Entity<DataDeletionRequestEntity>()
+            .HasIndex(x => x.UserId);
+
+        builder.Entity<DataDeletionRequestEntity>()
+            .HasIndex(x => x.Status);
     }
 }

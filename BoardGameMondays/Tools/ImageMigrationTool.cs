@@ -87,7 +87,7 @@ public class ImageMigrationTool
                 var memberIdStr = Path.GetFileNameWithoutExtension(fileName);
                 if (Guid.TryParse(memberIdStr, out var memberId))
                 {
-                    var member = await _db.BgmMembers.FirstOrDefaultAsync(m => m.Id == memberId, ct);
+                    var member = await _db.Members.FirstOrDefaultAsync(m => m.Id == memberId, ct);
                     if (member != null)
                     {
                         var oldUrl = member.AvatarUrl;

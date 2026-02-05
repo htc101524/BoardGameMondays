@@ -1,0 +1,244 @@
+@page "/privacy-policy"
+
+@using BoardGameMondays.Core
+
+<PageTitle>Privacy Policy - Board Game Mondays</PageTitle>
+
+<div class="legal-page">
+    <h1>Privacy Policy</h1>
+    <p class="text-muted">Last updated: February 2026 | Version @ConsentService.PrivacyPolicyVersion</p>
+
+    <section class="legal-section">
+        <h2>1. Who We Are</h2>
+        <p>
+            Board Game Mondays ("we", "our", "us") operates this website. We are committed to protecting 
+            your privacy and complying with the UK General Data Protection Regulation (UK GDPR) and the 
+            Data Protection Act 2018.
+        </p>
+    </section>
+
+    <section class="legal-section">
+        <h2>2. What Data We Collect</h2>
+        <p>We collect and process the following personal data:</p>
+        
+        <h3>Account Information</h3>
+        <ul>
+            <li><strong>Username:</strong> Your chosen login name</li>
+            <li><strong>Email address:</strong> Used for password recovery and account notifications</li>
+            <li><strong>Display name:</strong> The name shown to other members</li>
+            <li><strong>Password:</strong> Stored securely using industry-standard hashing</li>
+        </ul>
+
+        <h3>Profile Information (Optional)</h3>
+        <ul>
+            <li>Profile photo/avatar</li>
+            <li>Profile tagline</li>
+            <li>Favourite game</li>
+            <li>Play style description</li>
+            <li>Fun fact about yourself</li>
+        </ul>
+
+        <h3>Activity Data</h3>
+        <ul>
+            <li>Game night attendance records</li>
+            <li>Game results and scores</li>
+            <li>BGM Coin balance and transactions</li>
+            <li>Bets placed and outcomes</li>
+            <li>Reviews and ratings submitted</li>
+            <li>Want-to-play votes</li>
+        </ul>
+
+        <h3>Technical Data</h3>
+        <ul>
+            <li>IP address (for security and consent audit purposes)</li>
+            <li>Browser type and version (user agent)</li>
+            <li>Consent records and timestamps</li>
+        </ul>
+    </section>
+
+    <section class="legal-section">
+        <h2>3. How We Use Your Data</h2>
+        <p>We use your personal data for the following purposes:</p>
+        
+        <table class="table table-bordered">
+            <thead>
+                <tr>
+                    <th>Purpose</th>
+                    <th>Lawful Basis</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Providing and maintaining your account</td>
+                    <td>Contract performance</td>
+                </tr>
+                <tr>
+                    <td>Tracking game night attendance and results</td>
+                    <td>Legitimate interests (community features)</td>
+                </tr>
+                <tr>
+                    <td>Displaying leaderboards and statistics</td>
+                    <td>Legitimate interests (community engagement)</td>
+                </tr>
+                <tr>
+                    <td>Sending password reset emails</td>
+                    <td>Contract performance</td>
+                </tr>
+                <tr>
+                    <td>Sending email confirmation requests</td>
+                    <td>Contract performance</td>
+                </tr>
+                <tr>
+                    <td>Security and fraud prevention</td>
+                    <td>Legitimate interests</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <p>We do <strong>not</strong> sell your personal data to third parties or use it for marketing purposes without your explicit consent.</p>
+    </section>
+
+    <section class="legal-section" id="cookies">
+        <h2>4. Cookies</h2>
+        <p>We use cookies to operate the website. Here's what we use:</p>
+        
+        <h3>Essential Cookies (Always Active)</h3>
+        <table class="table table-bordered">
+            <thead>
+                <tr>
+                    <th>Cookie Name</th>
+                    <th>Purpose</th>
+                    <th>Duration</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><code>bgm.auth</code></td>
+                    <td>Keeps you logged in to your account</td>
+                    <td>Session / Persistent (if "remember me")</td>
+                </tr>
+                <tr>
+                    <td><code>bgm_cookie_consent</code></td>
+                    <td>Remembers your cookie preferences</td>
+                    <td>1 year</td>
+                </tr>
+                <tr>
+                    <td><code>.AspNetCore.Antiforgery.*</code></td>
+                    <td>Security protection against cross-site request forgery</td>
+                    <td>Session</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h3>Optional Cookies</h3>
+        <p>We currently do not use any analytics or advertising cookies. If this changes, we will update this policy and request your consent.</p>
+
+        <p>
+            You can manage your cookie preferences at any time by clicking "Cookie Settings" in the website footer, 
+            or by clearing cookies in your browser settings.
+        </p>
+    </section>
+
+    <section class="legal-section">
+        <h2>5. Your Rights Under UK GDPR</h2>
+        <p>You have the following rights regarding your personal data:</p>
+        
+        <ul>
+            <li>
+                <strong>Right of Access:</strong> You can request a copy of all personal data we hold about you.
+                <br /><a href="/account/export-data" class="btn btn-outline-primary btn-sm mt-1">Export My Data</a>
+            </li>
+            <li class="mt-3">
+                <strong>Right to Rectification:</strong> You can update or correct inaccurate data via your account settings.
+                <br /><a href="/account" class="btn btn-outline-primary btn-sm mt-1">Account Settings</a>
+            </li>
+            <li class="mt-3">
+                <strong>Right to Erasure ("Right to be Forgotten"):</strong> You can request deletion of your account and personal data.
+                <br /><a href="/account/delete" class="btn btn-outline-danger btn-sm mt-1">Delete My Account</a>
+            </li>
+            <li class="mt-3">
+                <strong>Right to Data Portability:</strong> You can receive your data in a machine-readable format (JSON).
+            </li>
+            <li class="mt-3">
+                <strong>Right to Object:</strong> You can object to processing based on legitimate interests.
+            </li>
+            <li class="mt-3">
+                <strong>Right to Withdraw Consent:</strong> Where processing is based on consent, you can withdraw it at any time.
+            </li>
+        </ul>
+
+        <p>To exercise any of these rights, use the links above or contact us using the details in Section 8.</p>
+    </section>
+
+    <section class="legal-section">
+        <h2>6. Data Retention</h2>
+        <p>We retain your data for the following periods:</p>
+        
+        <table class="table table-bordered">
+            <thead>
+                <tr>
+                    <th>Data Type</th>
+                    <th>Retention Period</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Account data (username, email, display name)</td>
+                    <td>Until account deletion + 30 days grace period</td>
+                </tr>
+                <tr>
+                    <td>Profile information</td>
+                    <td>Until account deletion</td>
+                </tr>
+                <tr>
+                    <td>Game statistics and results</td>
+                    <td>Anonymised upon account deletion (preserved for community records)</td>
+                </tr>
+                <tr>
+                    <td>Consent records</td>
+                    <td>3 years (legal compliance)</td>
+                </tr>
+                <tr>
+                    <td>Security logs (IP addresses)</td>
+                    <td>90 days</td>
+                </tr>
+            </tbody>
+        </table>
+    </section>
+
+    <section class="legal-section">
+        <h2>7. Data Security</h2>
+        <p>We implement appropriate technical and organisational measures to protect your data:</p>
+        <ul>
+            <li>Passwords are hashed using industry-standard algorithms</li>
+            <li>All data transmission is encrypted using HTTPS/TLS</li>
+            <li>Authentication cookies are secured with HttpOnly, Secure, and SameSite flags</li>
+            <li>Rate limiting protects against brute-force attacks</li>
+        </ul>
+    </section>
+
+    <section class="legal-section">
+        <h2>8. Contact Us</h2>
+        <p>
+            If you have any questions about this Privacy Policy or wish to exercise your data protection rights, 
+            please contact us:
+        </p>
+        <ul>
+            <li><strong>Email:</strong> [Insert contact email]</li>
+        </ul>
+        <p>
+            You also have the right to lodge a complaint with the Information Commissioner's Office (ICO) 
+            if you believe your data protection rights have been violated: 
+            <a href="https://ico.org.uk/make-a-complaint/" target="_blank" rel="noopener">https://ico.org.uk/make-a-complaint/</a>
+        </p>
+    </section>
+
+    <section class="legal-section">
+        <h2>9. Changes to This Policy</h2>
+        <p>
+            We may update this Privacy Policy from time to time. When we make significant changes, 
+            we will notify you by updating the version number and "last updated" date at the top of this page.
+            Where required by law, we will request your consent to material changes.
+        </p>
+    </section>
+</div>

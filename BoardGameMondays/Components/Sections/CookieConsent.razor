@@ -1,0 +1,101 @@
+@inject IJSRuntime JS
+
+@if (_showBanner)
+{
+    <div class="cookie-consent-banner" role="dialog" aria-labelledby="cookie-consent-title" aria-describedby="cookie-consent-desc">
+        <div class="cookie-consent-content">
+            <h2 id="cookie-consent-title" class="cookie-consent-title">🍪 Cookie Preferences</h2>
+            <p id="cookie-consent-desc" class="cookie-consent-text">
+                We use cookies to ensure the website functions properly. You can choose which cookies to accept.
+                <a href="/privacy-policy#cookies" class="cookie-consent-link">Learn more about cookies</a>
+            </p>
+            
+            <div class="cookie-consent-options">
+                <label class="cookie-option cookie-option--required">
+                    <input type="checkbox" checked disabled />
+                    <span class="cookie-option-text">
+                        <strong>Essential cookies</strong>
+                        <small>Required for the site to work (authentication, security)</small>
+                    </span>
+                </label>
+                
+                <label class="cookie-option">
+                    <input type="checkbox" @bind="_analyticsCookies" />
+                    <span class="cookie-option-text">
+                        <strong>Analytics cookies</strong>
+                        <small>Help us understand how visitors use the site</small>
+                    </span>
+                </label>
+            </div>
+            
+            <div class="cookie-consent-actions">
+                <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="RejectAll">
+                    Reject optional
+                </button>
+                <button type="button" class="btn btn-primary btn-sm" @onclick="AcceptSelected">
+                    Save preferences
+                </button>
+                <button type="button" class="btn btn-success btn-sm" @onclick="AcceptAll">
+                    Accept all
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private bool _showBanner;
+    private bool _analyticsCookies;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                var hasConsent = await JS.InvokeAsync<bool>("cookieConsent.hasConsent");
+                if (!hasConsent)
+                {
+                    _showBanner = true;
+                    StateHasChanged();
+                }
+            }
+            catch
+            {
+                // JS not available (prerendering)
+            }
+        }
+    }
+
+    private async Task AcceptAll()
+    {
+        _analyticsCookies = true;
+        await SaveConsent();
+    }
+
+    private async Task AcceptSelected()
+    {
+        await SaveConsent();
+    }
+
+    private async Task RejectAll()
+    {
+        _analyticsCookies = false;
+        await SaveConsent();
+    }
+
+    private async Task SaveConsent()
+    {
+        await JS.InvokeVoidAsync("cookieConsent.saveConsent", true, _analyticsCookies);
+        _showBanner = false;
+    }
+
+    /// <summary>
+    /// Call this from JS to re-show the banner for preference changes.
+    /// </summary>
+    public void ShowBanner()
+    {
+        _showBanner = true;
+        StateHasChanged();
+    }
+}

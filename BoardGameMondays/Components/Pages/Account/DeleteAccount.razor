@@ -1,0 +1,180 @@
+@page "/account/delete"
+@attribute [Authorize]
+
+@using System.Security.Claims
+@using BoardGameMondays.Core
+@using BoardGameMondays.Data.Entities
+@using Microsoft.AspNetCore.Authorization
+
+@inject GdprService GdprService
+@inject AuthenticationStateProvider AuthStateProvider
+@inject NavigationManager Navigation
+
+<PageTitle>Delete My Account - Board Game Mondays</PageTitle>
+
+<h1>Delete My Account</h1>
+
+@if (_pendingRequest is not null)
+{
+    <div class="alert alert-warning">
+        <h4 class="alert-heading">Account Deletion Scheduled</h4>
+        <p>
+            Your account is scheduled for deletion on <strong>@_pendingRequest.ScheduledDeletionOn.ToString("dddd, d MMMM yyyy")</strong>.
+        </p>
+        <p>
+            You requested deletion on @_pendingRequest.RequestedOn.ToString("d MMMM yyyy 'at' HH:mm").
+        </p>
+        <hr />
+        <p class="mb-0">
+            Changed your mind? You can cancel the deletion request below.
+        </p>
+    </div>
+    
+    <button class="btn btn-success" @onclick="CancelDeletion" disabled="@_isLoading">
+        @if (_isLoading)
+        {
+            <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+        }
+        Cancel Deletion Request
+    </button>
+}
+else
+{
+    <div class="alert alert-danger">
+        <h4 class="alert-heading">⚠️ Warning: This action has serious consequences</h4>
+        <p>Deleting your account will:</p>
+        <ul>
+            <li>Remove your login credentials permanently</li>
+            <li>Forfeit all your BGM Coins</li>
+            <li>Delete your profile information</li>
+            <li>Anonymize your game statistics (to preserve community records)</li>
+        </ul>
+        <p class="mb-0">
+            <strong>This cannot be undone after the 30-day grace period.</strong>
+        </p>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-body">
+            <h5 class="card-title">Before you go...</h5>
+            <p>
+                You can <a href="/account/export-data">download a copy of your data</a> before deleting your account.
+            </p>
+        </div>
+    </div>
+
+    <div class="card border-danger">
+        <div class="card-header bg-danger text-white">
+            Request Account Deletion
+        </div>
+        <div class="card-body">
+            <div class="mb-3">
+                <label class="form-label">Why are you leaving? (optional)</label>
+                <textarea class="form-control" @bind="_reason" rows="3" maxlength="1024"
+                          placeholder="Your feedback helps us improve..."></textarea>
+            </div>
+
+            <div class="form-check mb-3">
+                <input class="form-check-input" type="checkbox" @bind="_confirmDelete" id="confirm-delete" />
+                <label class="form-check-label" for="confirm-delete">
+                    I understand that my account will be deleted after 30 days and this cannot be undone
+                </label>
+            </div>
+
+            @if (_error is not null)
+            {
+                <div class="alert alert-danger">@_error</div>
+            }
+
+            <button class="btn btn-danger" @onclick="RequestDeletion" disabled="@(!_confirmDelete || _isLoading)">
+                @if (_isLoading)
+                {
+                    <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                }
+                Delete My Account
+            </button>
+        </div>
+    </div>
+}
+
+<div class="mt-4">
+    <a href="/account" class="btn btn-outline-secondary">← Back to Account Settings</a>
+</div>
+
+@code {
+    private DataDeletionRequestEntity? _pendingRequest;
+    private string? _reason;
+    private bool _confirmDelete;
+    private bool _isLoading;
+    private string? _error;
+    private string? _userId;
+    private string? _userEmail;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        _userId = authState.User.FindFirstValue(ClaimTypes.NameIdentifier);
+        _userEmail = authState.User.FindFirstValue(ClaimTypes.Email);
+
+        if (!string.IsNullOrEmpty(_userId))
+        {
+            _pendingRequest = await GdprService.GetPendingDeletionRequestAsync(_userId);
+        }
+    }
+
+    private async Task RequestDeletion()
+    {
+        if (!_confirmDelete || string.IsNullOrEmpty(_userId) || string.IsNullOrEmpty(_userEmail))
+        {
+            return;
+        }
+
+        _isLoading = true;
+        _error = null;
+
+        try
+        {
+            _pendingRequest = await GdprService.RequestAccountDeletionAsync(_userId, _userEmail, _reason);
+        }
+        catch (Exception ex)
+        {
+            _error = $"Failed to request deletion: {ex.Message}";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task CancelDeletion()
+    {
+        if (string.IsNullOrEmpty(_userId))
+        {
+            return;
+        }
+
+        _isLoading = true;
+        _error = null;
+
+        try
+        {
+            var cancelled = await GdprService.CancelDeletionRequestAsync(_userId);
+            if (cancelled)
+            {
+                _pendingRequest = null;
+            }
+            else
+            {
+                _error = "Unable to cancel deletion request.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = $"Failed to cancel: {ex.Message}";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+}

@@ -253,6 +253,8 @@ builder.Services.AddScoped<BoardGameMondays.Core.RankingService>();
 builder.Services.AddScoped<BoardGameMondays.Core.OddsService>();
 builder.Services.AddScoped<BoardGameMondays.Core.UserPreferencesService>();
 builder.Services.AddScoped<BoardGameMondays.Core.RecapStatsService>();
+builder.Services.AddScoped<BoardGameMondays.Core.ConsentService>();
+builder.Services.AddScoped<BoardGameMondays.Core.GdprService>();
 
 // Persist Data Protection keys so auth cookies remain valid across instances/restarts on Azure App Service.
 // Preferred path resolution order:
@@ -336,6 +338,7 @@ try
         await EnsureSqlServerOddsDisplayFormatColumnAsync(db, app.Logger);
         await EnsureSqlServerShopItemColumnsAsync(db, app.Logger);
         await EnsureSqlServerGameScoreColumnsAsync(db, app.Logger);
+        await EnsureSqlServerGdprTablesAsync(db, app.Logger);
     }
 
     // Seed shop items (badge rings and emoji packs) - runs in both dev and production
@@ -770,6 +773,62 @@ END;
     catch (Exception ex)
     {
         logger.LogCritical(ex, "Failed to ensure score tracking columns exist in SQL Server schema.");
+        throw;
+    }
+}
+
+static async Task EnsureSqlServerGdprTablesAsync(ApplicationDbContext db, ILogger logger)
+{
+    if (!db.Database.IsSqlServer())
+    {
+        return;
+    }
+
+    const string sql = @"
+IF OBJECT_ID(N'dbo.UserConsents', N'U') IS NULL
+BEGIN
+    CREATE TABLE [dbo].[UserConsents] (
+        [Id] uniqueidentifier NOT NULL PRIMARY KEY,
+        [UserId] nvarchar(450) NULL,
+        [AnonymousId] nvarchar(128) NULL,
+        [ConsentType] nvarchar(64) NOT NULL,
+        [PolicyVersion] nvarchar(32) NOT NULL,
+        [IsGranted] bit NOT NULL,
+        [ConsentedOn] bigint NOT NULL,
+        [IpAddress] nvarchar(45) NULL,
+        [UserAgent] nvarchar(512) NULL
+    );
+    CREATE INDEX [IX_UserConsents_UserId] ON [dbo].[UserConsents] ([UserId]);
+    CREATE INDEX [IX_UserConsents_AnonymousId] ON [dbo].[UserConsents] ([AnonymousId]);
+    CREATE INDEX [IX_UserConsents_UserId_ConsentType] ON [dbo].[UserConsents] ([UserId], [ConsentType]);
+END;
+
+IF OBJECT_ID(N'dbo.DataDeletionRequests', N'U') IS NULL
+BEGIN
+    CREATE TABLE [dbo].[DataDeletionRequests] (
+        [Id] uniqueidentifier NOT NULL PRIMARY KEY,
+        [UserId] nvarchar(450) NOT NULL,
+        [Email] nvarchar(256) NOT NULL,
+        [RequestedOn] bigint NOT NULL,
+        [ScheduledDeletionOn] bigint NOT NULL,
+        [CompletedOn] bigint NULL,
+        [Status] nvarchar(32) NOT NULL,
+        [Reason] nvarchar(1024) NULL,
+        [CancelledOn] bigint NULL
+    );
+    CREATE INDEX [IX_DataDeletionRequests_UserId] ON [dbo].[DataDeletionRequests] ([UserId]);
+    CREATE INDEX [IX_DataDeletionRequests_Status] ON [dbo].[DataDeletionRequests] ([Status]);
+END;
+";
+
+    try
+    {
+        await db.Database.ExecuteSqlRawAsync(sql);
+        logger.LogInformation("Ensured GDPR consent tables exist in SQL Server schema.");
+    }
+    catch (Exception ex)
+    {
+        logger.LogCritical(ex, "Failed to ensure GDPR tables exist in SQL Server schema.");
         throw;
     }
 }
@@ -1791,6 +1850,62 @@ CREATE INDEX IF NOT EXISTS IX_GameResultReactions_UserId ON GameResultReactions(
             alter.CommandText = "ALTER TABLE ShopItems ADD COLUMN MinWinsRequired INTEGER NOT NULL DEFAULT 0;";
             await alter.ExecuteNonQueryAsync();
         }
+
+        // GDPR Consent tables
+        await using (var createUserConsents = connection.CreateCommand())
+        {
+            createUserConsents.CommandText = @"
+CREATE TABLE IF NOT EXISTS UserConsents (
+    Id TEXT NOT NULL PRIMARY KEY,
+    UserId TEXT NULL,
+    AnonymousId TEXT NULL,
+    ConsentType TEXT NOT NULL,
+    PolicyVersion TEXT NOT NULL,
+    IsGranted INTEGER NOT NULL,
+    ConsentedOn INTEGER NOT NULL,
+    IpAddress TEXT NULL,
+    UserAgent TEXT NULL
+);
+";
+            await createUserConsents.ExecuteNonQueryAsync();
+        }
+
+        await using (var createConsentIndexes = connection.CreateCommand())
+        {
+            createConsentIndexes.CommandText = @"
+CREATE INDEX IF NOT EXISTS IX_UserConsents_UserId ON UserConsents(UserId);
+CREATE INDEX IF NOT EXISTS IX_UserConsents_AnonymousId ON UserConsents(AnonymousId);
+CREATE INDEX IF NOT EXISTS IX_UserConsents_UserId_ConsentType ON UserConsents(UserId, ConsentType);
+";
+            await createConsentIndexes.ExecuteNonQueryAsync();
+        }
+
+        await using (var createDataDeletionRequests = connection.CreateCommand())
+        {
+            createDataDeletionRequests.CommandText = @"
+CREATE TABLE IF NOT EXISTS DataDeletionRequests (
+    Id TEXT NOT NULL PRIMARY KEY,
+    UserId TEXT NOT NULL,
+    Email TEXT NOT NULL,
+    RequestedOn INTEGER NOT NULL,
+    ScheduledDeletionOn INTEGER NOT NULL,
+    CompletedOn INTEGER NULL,
+    Status TEXT NOT NULL,
+    Reason TEXT NULL,
+    CancelledOn INTEGER NULL
+);
+";
+            await createDataDeletionRequests.ExecuteNonQueryAsync();
+        }
+
+        await using (var createDeletionIndexes = connection.CreateCommand())
+        {
+            createDeletionIndexes.CommandText = @"
+CREATE INDEX IF NOT EXISTS IX_DataDeletionRequests_UserId ON DataDeletionRequests(UserId);
+CREATE INDEX IF NOT EXISTS IX_DataDeletionRequests_Status ON DataDeletionRequests(Status);
+";
+            await createDeletionIndexes.ExecuteNonQueryAsync();
+        }
     }
     finally
     {
@@ -1963,6 +2078,11 @@ app.MapPost("/account/register", async (
         return Results.Redirect(ReturnUrlHelpers.AppendReturnUrl($"/register?error={Uri.EscapeDataString("That email address is already in use.")}", safeReturnUrl));
     }
 
+    if (!request.AcceptTerms)
+    {
+        return Results.Redirect(ReturnUrlHelpers.AppendReturnUrl($"/register?error={Uri.EscapeDataString("You must accept the Privacy Policy and Terms of Service.")}", safeReturnUrl));
+    }
+
     var user = new ApplicationUser { UserName = userName, Email = email };
     var createResult = await userManager.CreateAsync(user, request.Password);
     if (!createResult.Succeeded)
@@ -1978,6 +2098,15 @@ app.MapPost("/account/register", async (
     await userManager.AddClaimAsync(user, new Claim(BgmClaimTypes.MemberId, memberId.ToString()));
 
     await SendEmailConfirmationAsync(userManager, emailSender, user, http);
+
+    // Record GDPR consent for privacy policy and terms of service
+    using (var scope = app.Services.CreateScope())
+    {
+        var consentService = scope.ServiceProvider.GetRequiredService<ConsentService>();
+        var ipAddress = http.Connection.RemoteIpAddress?.ToString();
+        var userAgent = http.Request.Headers.UserAgent.ToString();
+        await consentService.RecordRegistrationConsentAsync(user.Id, ipAddress, userAgent);
+    }
 
     // Dev convenience: automatically grant Admin role so existing admin tooling works.
     if (env.IsDevelopment())
@@ -2563,7 +2692,7 @@ static bool IsMultipartBodyLengthLimitExceeded(Exception ex)
     return false;
 }
 
-internal sealed record RegisterRequest(string UserName, string DisplayName, string Email, string Password, string ConfirmPassword, string? ReturnUrl);
+internal sealed record RegisterRequest(string UserName, string DisplayName, string Email, string Password, string ConfirmPassword, string? ReturnUrl, bool AcceptTerms);
 internal sealed class LoginRequest
 {
     public string UserName { get; set; } = string.Empty;
