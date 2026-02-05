@@ -46,6 +46,8 @@
     </div>
 </section>
 
+<MondaysSection @ref="_mondaysSection" />
+
 <section id="thoughts" class="home-section" aria-label="What we thought">
     <div class="home-section__inner">
         @{
@@ -436,12 +438,8 @@
 </section>
 
 <GamesSection OnGameSelected="HandleGameSelectedAsync" />
-
-<MondaysSection @ref="_mondaysSection" />
-
-<BlogSection />
-
 <PeopleSection />
+
 
 @code {
     private BoardGame? _latestReviewed;
