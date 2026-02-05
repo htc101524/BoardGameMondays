@@ -44,4 +44,9 @@ public sealed class MemberEntity
     /// When the ELO rating was last updated.
     /// </summary>
     public DateTimeOffset? EloRatingUpdatedOn { get; set; }
+
+    /// <summary>
+    /// DateKey (YYYYMMDD) for the last Monday attendance coins claim.
+    /// </summary>
+    public int? LastMondayCoinsClaimedDateKey { get; set; }
 }

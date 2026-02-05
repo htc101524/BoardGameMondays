@@ -60,6 +60,33 @@ main {
     text-decoration: underline;
 }
 
+.site-footer__donate {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.35rem 0.75rem;
+    border-radius: 999px;
+    border: 1px solid rgba(34, 49, 28, 0.2);
+    background: #c9a44c;
+    color: #1f2b18;
+    font-weight: 700;
+    font-size: 0.85rem;
+    text-decoration: none;
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.site-footer__donate:hover {
+    background: #d6b35a;
+    color: #1b2515;
+    border-color: rgba(34, 49, 28, 0.35);
+    text-decoration: none;
+}
+
+.site-footer__donate:focus-visible {
+    outline: 2px solid rgba(201, 164, 76, 0.6);
+    outline-offset: 2px;
+}
+
 .site-footer__cookie-btn {
     background: none;
     border: none;

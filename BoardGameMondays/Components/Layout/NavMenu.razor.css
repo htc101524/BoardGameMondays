@@ -497,6 +497,16 @@
     color: #22311c;
 }
 
+.bgm-popup__link--donate {
+    background: rgba(201, 164, 76, 0.15);
+    color: #22311c;
+    font-weight: 700;
+}
+
+.bgm-popup__link--donate:hover {
+    background: rgba(201, 164, 76, 0.25);
+}
+
 .bgm-popup__linkButton {
     width: 100%;
     text-align: left;

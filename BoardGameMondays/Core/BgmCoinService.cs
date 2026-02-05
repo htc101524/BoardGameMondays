@@ -6,6 +6,8 @@ namespace BoardGameMondays.Core;
 
 public sealed class BgmCoinService
 {
+    private const int MondayAttendanceCoinsPerWeek = 10;
+
     private readonly IDbContextFactory<ApplicationDbContext> _dbFactory;
     private readonly IConfiguration _configuration;
 
@@ -16,6 +18,90 @@ public sealed class BgmCoinService
     }
 
     public event Action? Changed;
+
+    public async Task<int> GetPendingMondayAttendanceCoinsAsync(string userId, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            return 0;
+        }
+
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        var memberId = await GetMemberIdForUserAsync(db, userId, ct);
+        if (memberId is null)
+        {
+            return 0;
+        }
+
+        var member = await db.Members
+            .AsNoTracking()
+            .FirstOrDefaultAsync(m => m.Id == memberId.Value, ct);
+
+        if (member is null)
+        {
+            return 0;
+        }
+
+        var dateKeys = await db.GameNightAttendees
+            .AsNoTracking()
+            .Where(a => a.MemberId == memberId.Value)
+            .Select(a => a.GameNight.DateKey)
+            .ToListAsync(ct);
+
+        var summary = SummarizeAttendanceWeeks(dateKeys, member.LastMondayCoinsClaimedDateKey);
+        if (summary.Weeks == 0)
+        {
+            return 0;
+        }
+
+        return summary.Weeks * MondayAttendanceCoinsPerWeek;
+    }
+
+    public async Task<int> ClaimMondayAttendanceCoinsAsync(string userId, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            return 0;
+        }
+
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        var memberId = await GetMemberIdForUserAsync(db, userId, ct);
+        if (memberId is null)
+        {
+            return 0;
+        }
+
+        var member = await db.Members
+            .FirstOrDefaultAsync(m => m.Id == memberId.Value, ct);
+
+        if (member is null)
+        {
+            return 0;
+        }
+
+        var dateKeys = await db.GameNightAttendees
+            .AsNoTracking()
+            .Where(a => a.MemberId == memberId.Value)
+            .Select(a => a.GameNight.DateKey)
+            .ToListAsync(ct);
+
+        var summary = SummarizeAttendanceWeeks(dateKeys, member.LastMondayCoinsClaimedDateKey);
+        if (summary.Weeks == 0 || summary.LatestWeekKey is null)
+        {
+            return 0;
+        }
+
+        var coinsToAdd = summary.Weeks * MondayAttendanceCoinsPerWeek;
+        var added = await TryAddAsync(db, userId, coinsToAdd, ct);
+        if (!added)
+        {
+            return 0;
+        }
+
+        member.LastMondayCoinsClaimedDateKey = summary.LatestWeekKey;
+        await db.SaveChangesAsync(ct);
+        return coinsToAdd;
+    }
 
     public async Task<int?> GetCoinsAsync(string userId, CancellationToken ct = default)
     {
@@ -257,4 +343,40 @@ public sealed class BgmCoinService
 
     public sealed record CoinLeaderboardItem(string UserId, string DisplayName, int Coins);
     public sealed record FullLeaderboardItem(string UserId, string DisplayName, int Coins, bool IsBgmMember);
+
+    private static AttendanceWeekSummary SummarizeAttendanceWeeks(IEnumerable<int> dateKeys, int? lastClaimedWeekKey)
+    {
+        var weekKeys = new HashSet<int>();
+
+        foreach (var dateKey in dateKeys)
+        {
+            var weekKey = WantToPlayService.GetWeekKey(GameNightService.FromDateKey(dateKey));
+            if (lastClaimedWeekKey.HasValue && weekKey <= lastClaimedWeekKey.Value)
+            {
+                continue;
+            }
+
+            weekKeys.Add(weekKey);
+        }
+
+        if (weekKeys.Count == 0)
+        {
+            return new AttendanceWeekSummary(0, null);
+        }
+
+        return new AttendanceWeekSummary(weekKeys.Count, weekKeys.Max());
+    }
+
+    private static async Task<Guid?> GetMemberIdForUserAsync(ApplicationDbContext db, string userId, CancellationToken ct)
+    {
+        var memberIdValue = await db.UserClaims
+            .AsNoTracking()
+            .Where(c => c.UserId == userId && c.ClaimType == BgmClaimTypes.MemberId)
+            .Select(c => c.ClaimValue)
+            .FirstOrDefaultAsync(ct);
+
+        return Guid.TryParse(memberIdValue, out var memberId) ? memberId : null;
+    }
+
+    private sealed record AttendanceWeekSummary(int Weeks, int? LatestWeekKey);
 }
