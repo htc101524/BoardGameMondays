@@ -40,7 +40,7 @@
                     <div class="text-muted small me-2" style="display: flex; align-items: center;">@_userName</div>
                 }
                 <button class="bgm-coins bgm-coinsButton" type="button" aria-label="BGM Coins" @onclick="ToggleBetsAsync">
-                    <span class="bgm-coins__label">£:</span>
+                    <span class="bgm-coins__label"><span class="bgm-coins__label--full">BGM COINS:</span><span class="bgm-coins__label--short">BGMC:</span></span>
                     <span class="bgm-coins__value">@(_coins?.ToString() ?? "…")</span>
                 </button>
             }
