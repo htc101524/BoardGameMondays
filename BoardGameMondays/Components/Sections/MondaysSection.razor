@@ -716,7 +716,7 @@
                                             </div>
                                         }
 
-                                        @if (_isAdmin && _selected < _nextMonday)
+                                        @if (_isAdmin && CanSetResults)
                                         {
                                             <div class="mt-2" aria-label="Winner">
                                                 <div class="text-muted small mb-1">Winner</div>
@@ -1113,6 +1113,7 @@
     private DateOnly? _lastPastMonday;
 
     private bool _isAdmin;
+    private bool _isCurrentMonday;
     private string? _userId;
     private int? _coins;
     private Guid? _memberId;
@@ -1173,7 +1174,8 @@
     {
         var today = DateOnly.FromDateTime(DateTime.Today);
         var mondayOnOrBeforeToday = GetMondayOnOrBefore(today);
-        _nextMonday = today.DayOfWeek == DayOfWeek.Monday
+        _isCurrentMonday = today.DayOfWeek == DayOfWeek.Monday;
+        _nextMonday = _isCurrentMonday
             ? mondayOnOrBeforeToday
             : mondayOnOrBeforeToday.AddDays(7);
 
@@ -1258,6 +1260,8 @@
             StateHasChanged();
         }
     }
+
+    private bool CanSetResults => _selected < _nextMonday || (_selected == _nextMonday && _isCurrentMonday);
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {

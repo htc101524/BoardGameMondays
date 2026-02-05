@@ -175,7 +175,7 @@ public sealed class BettingService
         }
 
         var gameDate = GameNightService.FromDateKey(game.GameNight.DateKey);
-        if (gameDate >= DateOnly.FromDateTime(DateTime.Today))
+        if (gameDate > DateOnly.FromDateTime(DateTime.Today))
         {
             return ResolveResult.NotPast;
         }
