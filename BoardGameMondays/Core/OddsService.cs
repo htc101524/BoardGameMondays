@@ -594,12 +594,13 @@ public sealed class OddsService
 
     private async Task<double> GetTargetMarginAsync(ApplicationDbContext db, CancellationToken ct)
     {
-        var houseNet = await db.GameNightGameBets
+        var amounts = await db.GameNightGameBets
             .AsNoTracking()
             .Where(b => b.IsResolved)
             .Select(b => b.Amount - b.Payout)
-            .DefaultIfEmpty(0)
-            .SumAsync(ct);
+            .ToListAsync(ct);
+
+        var houseNet = amounts.DefaultIfEmpty(0).Sum();
 
         return GetTargetMarginFromHouseNet(houseNet);
     }

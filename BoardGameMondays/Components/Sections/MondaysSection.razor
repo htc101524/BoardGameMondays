@@ -4,6 +4,9 @@
 @using System.Globalization
 @using Microsoft.AspNetCore.SignalR.Client
 @inject GameNightService GameNightService
+@inject GameNightRsvpService GameNightRsvpService
+@inject GameNightPlayerService GameNightPlayerService
+@inject GameNightTeamService GameNightTeamService
 @inject BoardGameService BoardGameService
 @inject AuthenticationStateProvider AuthStateProvider
 @inject BettingService BettingService
@@ -1519,7 +1522,7 @@
         try
         {
             var snack = GetSnackDraft(memberId);
-            _selectedNight = await GameNightService.SetSnackBroughtAsync(_selectedNight.Id, memberId, snack);
+            _selectedNight = await GameNightRsvpService.SetSnackBroughtAsync(_selectedNight.Id, memberId, snack);
             SyncSnackStateForSelectedNight(clearStatuses: false);
             _snackStatusByMemberId[memberId] = "Saved";
         }
@@ -1629,7 +1632,7 @@
         _status = null;
         try
         {
-            var updated = await GameNightService.SetRsvpAsync(_selectedNight.Id, _memberId.Value, attending);
+            var updated = await GameNightRsvpService.SetRsvpAsync(_selectedNight.Id, _memberId.Value, attending);
             _selectedNight = updated;
             _amAttending = attending;
             _declinedMemberIds = _selectedNight?.Rsvps.Where(r => !r.IsAttending).Select(r => r.MemberId).ToHashSet() ?? new();
@@ -1662,7 +1665,7 @@
         try
         {
             // Don't set isPlayed here - it should only be set when winner result is confirmed
-            _selectedNight = await GameNightService.AddGameAsync(_selectedNight.Id, gameId, isPlayed: false);
+            _selectedNight = await GameNightPlayerService.AddGameAsync(_selectedNight.Id, gameId, isPlayed: false);
             _selectedGameId = null;
         }
         finally
@@ -1695,7 +1698,7 @@
         _status = null;
         try
         {
-            _selectedNight = await GameNightService.AddPlayerAsync(_selectedNight.Id, gameNightGameId, memberId);
+            _selectedNight = await GameNightPlayerService.AddPlayerAsync(_selectedNight.Id, gameNightGameId, memberId);
             _selectedPlayerByGameId[gameNightGameId] = null;
         }
         finally
@@ -1715,7 +1718,7 @@
         _status = null;
         try
         {
-            _selectedNight = await GameNightService.RemovePlayerAsync(_selectedNight.Id, gameNightGameId, memberId);
+            _selectedNight = await GameNightPlayerService.RemovePlayerAsync(_selectedNight.Id, gameNightGameId, memberId);
         }
         finally
         {
@@ -1761,7 +1764,7 @@
         _status = null;
         try
         {
-            _selectedNight = await GameNightService.SetPlayerTeamAsync(_selectedNight.Id, gameNightGameId, memberId, rawTeamName);
+            _selectedNight = await GameNightTeamService.SetPlayerTeamAsync(_selectedNight.Id, gameNightGameId, memberId, rawTeamName);
         }
         finally
         {
@@ -1791,8 +1794,8 @@
         _status = null;
         try
         {
-            _selectedNight = await GameNightService.AddPlayerAsync(nightId, gameNightGameId, memberId) ?? _selectedNight;
-            _selectedNight = await GameNightService.SetPlayerTeamAsync(nightId, gameNightGameId, memberId, teamName) ?? _selectedNight;
+            _selectedNight = await GameNightPlayerService.AddPlayerAsync(nightId, gameNightGameId, memberId) ?? _selectedNight;
+            _selectedNight = await GameNightTeamService.SetPlayerTeamAsync(nightId, gameNightGameId, memberId, teamName) ?? _selectedNight;
             _selectedPlayerByGameId[gameNightGameId] = null;
             _teamModeGameIds.Add(gameNightGameId);
         }
@@ -1829,7 +1832,7 @@
             // Clear existing players so the admin can rebuild the lineup into teams.
             foreach (var player in game.Players.ToArray())
             {
-                _selectedNight = await GameNightService.RemovePlayerAsync(nightId, gameNightGameId, player.MemberId) ?? _selectedNight;
+                _selectedNight = await GameNightPlayerService.RemovePlayerAsync(nightId, gameNightGameId, player.MemberId) ?? _selectedNight;
             }
 
             _teamModeGameIds.Add(gameNightGameId);
@@ -1882,8 +1885,8 @@
         _status = null;
         try
         {
-            _selectedNight = await GameNightService.AddPlayerAsync(nightId, gameNightGameId, memberId) ?? _selectedNight;
-            _selectedNight = await GameNightService.SetPlayerTeamAsync(nightId, gameNightGameId, memberId, teamName) ?? _selectedNight;
+            _selectedNight = await GameNightPlayerService.AddPlayerAsync(nightId, gameNightGameId, memberId) ?? _selectedNight;
+            _selectedNight = await GameNightTeamService.SetPlayerTeamAsync(nightId, gameNightGameId, memberId, teamName) ?? _selectedNight;
             // Remove any client-only placeholder team with the same name to avoid duplicate display entries.
             if (_clientTeams.TryGetValue(gameNightGameId, out var ctList))
             {
@@ -2001,7 +2004,7 @@
         try
         {
             // Set the team winner first
-            _selectedNight = await GameNightService.SetTeamWinnerAsync(_selectedNight.Id, gameNightGameId, teamName, score);
+            _selectedNight = await GameNightTeamService.SetTeamWinnerAsync(_selectedNight.Id, gameNightGameId, teamName, score);
             
             // Then resolve bets and update rankings
             if (_selectedNight is not null)
@@ -2081,7 +2084,7 @@
         try
         {
             // Set the winner first
-            _selectedNight = await GameNightService.SetWinnerAsync(_selectedNight.Id, gameNightGameId, winnerId, score);
+            _selectedNight = await GameNightTeamService.SetWinnerAsync(_selectedNight.Id, gameNightGameId, winnerId, score);
             
             // Then resolve bets and update rankings
             if (_selectedNight is not null)
@@ -2139,7 +2142,7 @@
         _status = null;
         try
         {
-            _selectedNight = await GameNightService.SetTeamColorAsync(_selectedNight.Id, gameNightGameId, teamName, color);
+            _selectedNight = await GameNightTeamService.SetTeamColorAsync(_selectedNight.Id, gameNightGameId, teamName, color);
         }
         finally
         {
@@ -2231,10 +2234,10 @@
 
         try
         {
-            var routes = await GameNightService.GetVictoryRoutesForGameAsync(game.GameId);
+            var routes = await GameNightTeamService.GetVictoryRoutesForGameAsync(game.GameId);
             _victoryRoutesByGameId[game.Id] = routes;
 
-            var existingValues = await GameNightService.GetVictoryRouteValuesAsync(game.Id);
+            var existingValues = await GameNightTeamService.GetVictoryRouteValuesAsync(game.Id);
             var byId = existingValues.ToDictionary(v => v.VictoryRouteId, v => v);
 
             var stringDraft = new Dictionary<Guid, string?>();
@@ -2323,7 +2326,7 @@
                 }
             }
 
-            var ok = await GameNightService.UpsertVictoryRouteValuesAsync(_selectedNight.Id, game.Id, values);
+            var ok = await GameNightTeamService.UpsertVictoryRouteValuesAsync(_selectedNight.Id, game.Id, values);
             _victoryRouteStatusByGameId[game.Id] = ok ? "Saved" : "Failed";
         }
         catch
@@ -2407,7 +2410,7 @@
         _status = null;
         try
         {
-            _selectedNight = await GameNightService.SetAttendanceAsync(_selectedNight.Id, memberId, attending, respectExplicitDeclines: attending);
+            _selectedNight = await GameNightRsvpService.SetAttendanceAsync(_selectedNight.Id, memberId, attending, respectExplicitDeclines: attending);
             _amAttending = _memberId is { } me && _selectedNight?.Attendees.Any(a => a.MemberId == me) == true;
             _declinedMemberIds = _selectedNight?.Rsvps.Where(r => !r.IsAttending).Select(r => r.MemberId).ToHashSet() ?? new();
             SyncSnackStateForSelectedNight(clearStatuses: false);
@@ -2462,7 +2465,7 @@
         try
         {
             CleanupRemovedGameClientState(gameNightGameId);
-            _selectedNight = await GameNightService.RemoveGameAsync(_selectedNight.Id, gameNightGameId);
+            _selectedNight = await GameNightPlayerService.RemoveGameAsync(_selectedNight.Id, gameNightGameId);
         }
         finally
         {
@@ -2513,9 +2516,9 @@
         _cancelConfirmedGameStatusByGameId[gameNightGameId] = null;
         try
         {
-            var result = await GameNightService.CancelConfirmedGameAsync(_selectedNight.Id, gameNightGameId, BettingService);
+            var result = await GameNightPlayerService.CancelConfirmedGameAsync(_selectedNight.Id, gameNightGameId, BettingService);
             
-            if (result.Status == GameNightService.CancelConfirmedGameStatus.Ok)
+            if (result.Status == GameNightPlayerService.CancelConfirmedGameStatus.Ok)
             {
                 CleanupRemovedGameClientState(gameNightGameId);
                 _selectedNight = result.Night;
@@ -2531,9 +2534,9 @@
             {
                 _cancelConfirmedGameStatusByGameId[gameNightGameId] = result.Status switch
                 {
-                    GameNightService.CancelConfirmedGameStatus.WinnerAlreadySet => "Cannot cancel: winner already set.",
-                    GameNightService.CancelConfirmedGameStatus.BetsAlreadyResolved => "Cannot cancel: bets already paid out.",
-                    GameNightService.CancelConfirmedGameStatus.NotConfirmed => "Game is not confirmed.",
+                    GameNightPlayerService.CancelConfirmedGameStatus.WinnerAlreadySet => "Cannot cancel: winner already set.",
+                    GameNightPlayerService.CancelConfirmedGameStatus.BetsAlreadyResolved => "Cannot cancel: bets already paid out.",
+                    GameNightPlayerService.CancelConfirmedGameStatus.NotConfirmed => "Game is not confirmed.",
                     _ => "Could not cancel game."
                 };
                 _cancelConfirmedGamePending.Remove(gameNightGameId);
@@ -2619,7 +2622,7 @@
         _status = null;
         try
         {
-            _selectedNight = await GameNightService.ConfirmGameAsync(_selectedNight.Id, gameNightGameId);
+            _selectedNight = await GameNightPlayerService.ConfirmGameAsync(_selectedNight.Id, gameNightGameId);
         }
         finally
         {

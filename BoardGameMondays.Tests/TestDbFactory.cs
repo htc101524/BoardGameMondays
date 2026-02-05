@@ -88,14 +88,14 @@ public static class TestData
         return night;
     }
 
-    public static GameNightGameEntity AddGameNightGame(ApplicationDbContext db, GameNightEntity night, BoardGameEntity game)
+    public static GameNightGameEntity AddGameNightGame(ApplicationDbContext db, GameNightEntity night, BoardGameEntity game, bool isConfirmed = false, bool isPlayed = true)
     {
         var entity = new GameNightGameEntity
         {
             GameNightId = night.Id,
             GameId = game.Id,
-            IsPlayed = true,
-            IsConfirmed = true,
+            IsPlayed = isPlayed,
+            IsConfirmed = isConfirmed,
             IsHighScore = false,
             CreatedOn = DateTimeOffset.UtcNow
         };

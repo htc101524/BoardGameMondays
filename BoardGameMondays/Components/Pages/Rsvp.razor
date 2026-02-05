@@ -6,6 +6,7 @@
 @using System.Globalization
 @using System.Security.Claims
 @inject GameNightService GameNightService
+@inject GameNightRsvpService GameNightRsvpService
 @inject AuthenticationStateProvider AuthStateProvider
 @inject NavigationManager Navigation
 
@@ -103,7 +104,7 @@
 
         if (_memberId is { } memberId)
         {
-            _isMember = await GameNightService.IsBgmMemberAsync(memberId);
+            _isMember = await GameNightRsvpService.IsBgmMemberAsync(memberId);
         }
 
         _night = await GameNightService.GetByDateAsync(_date);
@@ -146,7 +147,7 @@
         _status = null;
         try
         {
-            var updated = await GameNightService.SetRsvpAsync(_night.Id, _memberId.Value, attending);
+            var updated = await GameNightRsvpService.SetRsvpAsync(_night.Id, _memberId.Value, attending);
             _night = updated ?? _night;
             _amAttending = _night.Attendees.Any(a => a.MemberId == _memberId.Value);
             _status = attending ? "You're in." : "You're out.";

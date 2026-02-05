@@ -86,15 +86,17 @@ public sealed class BgmCoinServiceTests
         {
             var user = TestData.AddUser(db, "user-1", "alice");
             var member = TestData.AddMember(db, "winner");
-            var game = TestData.AddGame(db, "Catan");
+            var game1 = TestData.AddGame(db, "Catan");
+            var game2 = TestData.AddGame(db, "Ticket to Ride");
             var night = TestData.AddGameNight(db, new DateOnly(2026, 2, 1));
-            var nightGame = TestData.AddGameNightGame(db, night, game);
+            var nightGame1 = TestData.AddGameNightGame(db, night, game1, isConfirmed: true);
+            var nightGame2 = TestData.AddGameNightGame(db, night, game2, isConfirmed: true);
 
             // Bet 1: User loses $100, house gains $100 (payout = 0)
-            TestData.AddBet(db, nightGame, "user-1", member, amount: 100, oddsTimes100: 200, isResolved: true, payout: 0, resolvedOn: DateTimeOffset.UtcNow);
+            TestData.AddBet(db, nightGame1, "user-1", member, amount: 100, oddsTimes100: 200, isResolved: true, payout: 0, resolvedOn: DateTimeOffset.UtcNow);
 
             // Bet 2: User wins $50 on $50 bet (2:1 odds), house loses $50 (payout = 150, amount = 50, net = -100)
-            TestData.AddBet(db, nightGame, "user-1", member, amount: 50, oddsTimes100: 200, isResolved: true, payout: 150, resolvedOn: DateTimeOffset.UtcNow);
+            TestData.AddBet(db, nightGame2, "user-1", member, amount: 50, oddsTimes100: 200, isResolved: true, payout: 150, resolvedOn: DateTimeOffset.UtcNow);
         }
 
         var config = new ConfigurationBuilder().AddInMemoryCollection().Build();
@@ -146,7 +148,7 @@ public sealed class BgmCoinServiceTests
 
         var added = await service.TryAddAsync("user-1", 0);
 
-        Assert.True(added);
+        Assert.False(added);
 
         await using var verify = factory.CreateDbContext();
         var user = verify.Users.Single(u => u.Id == "user-1");
@@ -187,8 +189,8 @@ public sealed class BgmCoinServiceTests
             var oldNight = TestData.AddGameNight(db, new DateOnly(2025, 1, 1));
             var recentNight = TestData.AddGameNight(db, new DateOnly(2026, 2, 1));
 
-            var oldNightGame = TestData.AddGameNightGame(db, oldNight, game);
-            var recentNightGame = TestData.AddGameNightGame(db, recentNight, game);
+            var oldNightGame = TestData.AddGameNightGame(db, oldNight, game, isConfirmed: true);
+            var recentNightGame = TestData.AddGameNightGame(db, recentNight, game, isConfirmed: true);
 
             // Bet from old date
             TestData.AddBet(db, oldNightGame, "user-1", member, amount: 100, oddsTimes100: 200, isResolved: true, payout: 0, resolvedOn: new DateTimeOffset(2025, 1, 1, 0, 0, 0, TimeSpan.Zero));

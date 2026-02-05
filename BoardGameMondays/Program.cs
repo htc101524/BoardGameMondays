@@ -238,24 +238,58 @@ builder.Services.AddHttpContextAccessor();
 // Use the built-in Blazor Server auth state plumbing. This ensures the circuit principal is
 // populated from the ASP.NET Core authentication middleware (cookies/Identity).
 builder.Services.AddCascadingAuthenticationState();
-builder.Services.AddScoped<BoardGameMondays.Core.BgmMemberService>();
-builder.Services.AddScoped<BoardGameMondays.Core.BgmMemberDirectoryService>();
-builder.Services.AddScoped<BoardGameMondays.Core.BoardGameService>();
-builder.Services.AddScoped<BoardGameMondays.Core.GameRecommendationService>();
-builder.Services.AddScoped<BoardGameMondays.Core.TicketService>();
-builder.Services.AddScoped<BoardGameMondays.Core.AgreementService>();
+
+// ===== SERVICE LAYER CONFIGURATION =====
+// Services are organized by domain (see REFACTORING_CLEANUP_GUIDE.md for folder structure plan)
+// 
+// CRITICAL: All services inject IDbContextFactory<ApplicationDbContext>, not DbContext directly.
+// This is essential for Blazor Server (prevents concurrent-use conflicts on shared DbContext).
+// See Core/Infrastructure/DatabaseExtensions.cs for common context lifecycle patterns.
+//
+// Service domains (target organization after Phase 4):
+// - GameManagement: GameNightService (core CRUD, will split into 4 services in Phase 5)
+// - Gameplay: BettingService → OddsService → RankingService (core game loop)
+// - Community: BgmMemberService, BgmCoinService (member data + reward orchestration)
+// - Compliance: ConsentService, GdprService (GDPR + privacy management)
+// - Content: BlogService, BoardGameService, WantToPlayService, GameRecommendationService
+// - Admin: ShopService, TicketService, AgreementService (shop/event management)
+// - Reporting: RecapStatsService (game night analytics and stats generation)
+
+// Game Management Domain
 builder.Services.AddScoped<BoardGameMondays.Core.GameNightService>();
-builder.Services.AddScoped<BoardGameMondays.Core.BgmCoinService>();
+builder.Services.AddScoped<BoardGameMondays.Core.GameNightRsvpService>();
+builder.Services.AddScoped<BoardGameMondays.Core.GameNightPlayerService>();
+builder.Services.AddScoped<BoardGameMondays.Core.GameNightTeamService>();
+
+// Gameplay Domain - Core betting/ranking/odds orchestration
+// Dependency chain: BettingService → BgmCoinService → RankingService → OddsService
 builder.Services.AddScoped<BoardGameMondays.Core.BettingService>();
-builder.Services.AddScoped<BoardGameMondays.Core.ShopService>();
-builder.Services.AddScoped<BoardGameMondays.Core.BlogService>();
-builder.Services.AddScoped<BoardGameMondays.Core.WantToPlayService>();
 builder.Services.AddScoped<BoardGameMondays.Core.RankingService>();
 builder.Services.AddScoped<BoardGameMondays.Core.OddsService>();
-builder.Services.AddScoped<BoardGameMondays.Core.UserPreferencesService>();
-builder.Services.AddScoped<BoardGameMondays.Core.RecapStatsService>();
+
+// Community Domain - Member management and reward systems
+builder.Services.AddScoped<BoardGameMondays.Core.BgmMemberService>();
+builder.Services.AddScoped<BoardGameMondays.Core.BgmMemberDirectoryService>();
+builder.Services.AddScoped<BoardGameMondays.Core.BgmCoinService>();
+
+// Content Management Domain
+builder.Services.AddScoped<BoardGameMondays.Core.BoardGameService>();
+builder.Services.AddScoped<BoardGameMondays.Core.BlogService>();
+builder.Services.AddScoped<BoardGameMondays.Core.WantToPlayService>();
+builder.Services.AddScoped<BoardGameMondays.Core.GameRecommendationService>();
+
+// Admin & Shop Operations Domain
+builder.Services.AddScoped<BoardGameMondays.Core.ShopService>();
+builder.Services.AddScoped<BoardGameMondays.Core.TicketService>();
+builder.Services.AddScoped<BoardGameMondays.Core.AgreementService>();
+
+// Compliance & Privacy Domain
 builder.Services.AddScoped<BoardGameMondays.Core.ConsentService>();
 builder.Services.AddScoped<BoardGameMondays.Core.GdprService>();
+builder.Services.AddScoped<BoardGameMondays.Core.UserPreferencesService>();
+
+// Reporting & Analytics Domain
+builder.Services.AddScoped<BoardGameMondays.Core.RecapStatsService>();
 
 // Persist Data Protection keys so auth cookies remain valid across instances/restarts on Azure App Service.
 // Preferred path resolution order:
@@ -2937,3 +2971,4 @@ internal static class ReturnUrlHelpers
             || ua.Contains("twitterpreview");
     }
 }
+

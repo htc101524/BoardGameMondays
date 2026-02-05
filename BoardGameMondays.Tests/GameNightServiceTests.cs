@@ -15,17 +15,16 @@ public sealed class GameNightServiceTests
             TestData.AddMember(db, "Alice", isBgmMember: true);
         }
 
-        var ranking = new RankingService(factory);
-        var odds = new OddsService(factory, ranking);
         var cache = new MemoryCache(new MemoryCacheOptions { SizeLimit = 100 });
-        var service = new GameNightService(factory, odds, cache);
+        var gameNightService = new GameNightService(factory, cache);
+        var rsvpService = new GameNightRsvpService(factory, gameNightService);
 
-        var night = await service.CreateAsync(new DateOnly(2026, 2, 4));
+        var night = await gameNightService.CreateAsync(new DateOnly(2026, 2, 4));
 
         await using var db2 = factory.CreateDbContext();
         var memberId = db2.Members.Select(m => m.Id).Single();
 
-        var updated = await service.SetRsvpAsync(night.Id, memberId, attending: true);
+        var updated = await rsvpService.SetRsvpAsync(night.Id, memberId, attending: true);
 
         Assert.NotNull(updated);
         Assert.Single(updated!.Attendees);
@@ -42,18 +41,17 @@ public sealed class GameNightServiceTests
             TestData.AddMember(db, "Alice", isBgmMember: true);
         }
 
-        var ranking = new RankingService(factory);
-        var odds = new OddsService(factory, ranking);
         var cache = new MemoryCache(new MemoryCacheOptions { SizeLimit = 100 });
-        var service = new GameNightService(factory, odds, cache);
+        var gameNightService = new GameNightService(factory, cache);
+        var rsvpService = new GameNightRsvpService(factory, gameNightService);
 
-        var night = await service.CreateAsync(new DateOnly(2026, 2, 4));
+        var night = await gameNightService.CreateAsync(new DateOnly(2026, 2, 4));
 
         await using var db2 = factory.CreateDbContext();
         var memberId = db2.Members.Select(m => m.Id).Single();
 
-        await service.SetRsvpAsync(night.Id, memberId, attending: true);
-        var updated = await service.SetRsvpAsync(night.Id, memberId, attending: false);
+        await rsvpService.SetRsvpAsync(night.Id, memberId, attending: true);
+        var updated = await rsvpService.SetRsvpAsync(night.Id, memberId, attending: false);
 
         Assert.NotNull(updated);
         Assert.Empty(updated!.Attendees);
@@ -65,10 +63,8 @@ public sealed class GameNightServiceTests
     public async Task CreateAsync_CreatesNewGameNight()
     {
         using var factory = new TestDbFactory();
-        var ranking = new RankingService(factory);
-        var odds = new OddsService(factory, ranking);
         var cache = new MemoryCache(new MemoryCacheOptions { SizeLimit = 100 });
-        var service = new GameNightService(factory, odds, cache);
+        var service = new GameNightService(factory, cache);
 
         var date = new DateOnly(2026, 2, 11);
         var night = await service.CreateAsync(date);
@@ -91,10 +87,8 @@ public sealed class GameNightServiceTests
             nightId = night.Id;
         }
 
-        var ranking = new RankingService(factory);
-        var odds = new OddsService(factory, ranking);
         var cache = new MemoryCache(new MemoryCacheOptions { SizeLimit = 100 });
-        var service = new GameNightService(factory, odds, cache);
+        var service = new GameNightService(factory, cache);
 
         var retrieved = await service.GetByIdAsync(nightId);
 
@@ -106,10 +100,8 @@ public sealed class GameNightServiceTests
     public async Task GetByIdAsync_ReturnsNull_WhenGameNightNotFound()
     {
         using var factory = new TestDbFactory();
-        var ranking = new RankingService(factory);
-        var odds = new OddsService(factory, ranking);
         var cache = new MemoryCache(new MemoryCacheOptions { SizeLimit = 100 });
-        var service = new GameNightService(factory, odds, cache);
+        var service = new GameNightService(factory, cache);
 
         var retrieved = await service.GetByIdAsync(Guid.NewGuid());
 
@@ -131,12 +123,13 @@ public sealed class GameNightServiceTests
             gameId = game.Id;
         }
 
+        var cache = new MemoryCache(new MemoryCacheOptions { SizeLimit = 100 });
+        var gameNightService = new GameNightService(factory, cache);
         var ranking = new RankingService(factory);
         var odds = new OddsService(factory, ranking);
-        var cache = new MemoryCache(new MemoryCacheOptions { SizeLimit = 100 });
-        var service = new GameNightService(factory, odds, cache);
+        var playerService = new GameNightPlayerService(factory, gameNightService, odds);
 
-        var updated = await service.AddGameAsync(nightId, gameId, isPlayed: false);
+        var updated = await playerService.AddGameAsync(nightId, gameId, isPlayed: false);
 
         Assert.NotNull(updated);
         Assert.NotEmpty(updated!.Games);
@@ -159,12 +152,13 @@ public sealed class GameNightServiceTests
             gameNightGameId = nightGame.Id;
         }
 
+        var cache = new MemoryCache(new MemoryCacheOptions { SizeLimit = 100 });
+        var gameNightService = new GameNightService(factory, cache);
         var ranking = new RankingService(factory);
         var odds = new OddsService(factory, ranking);
-        var cache = new MemoryCache(new MemoryCacheOptions { SizeLimit = 100 });
-        var service = new GameNightService(factory, odds, cache);
+        var playerService = new GameNightPlayerService(factory, gameNightService, odds);
 
-        var updated = await service.RemoveGameAsync(nightId, gameNightGameId);
+        var updated = await playerService.RemoveGameAsync(nightId, gameNightGameId);
 
         Assert.NotNull(updated);
         Assert.Empty(updated!.Games);
@@ -199,12 +193,11 @@ public sealed class GameNightServiceTests
             await db.SaveChangesAsync();
         }
 
-        var ranking = new RankingService(factory);
-        var odds = new OddsService(factory, ranking);
         var cache = new MemoryCache(new MemoryCacheOptions { SizeLimit = 100 });
-        var service = new GameNightService(factory, odds, cache);
+        var gameNightService = new GameNightService(factory, cache);
+        var teamService = new GameNightTeamService(factory, gameNightService);
 
-        var updated = await service.SetWinnerAsync(nightId, gameNightGameId, memberId, score: null);
+        var updated = await teamService.SetWinnerAsync(nightId, gameNightGameId, memberId, score: null);
 
         Assert.NotNull(updated);
         var updatedGame = updated.Games.FirstOrDefault(g => g.Id == gameNightGameId);
