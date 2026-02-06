@@ -19,6 +19,12 @@ namespace BoardGameMondays.Migrations
                 name: "RoleNameIndex",
                 table: "AspNetRoles");
 
+            // IMPORTANT: The following AlterColumn statements convert to SQLite types (TEXT, INTEGER).
+            // These should ONLY run on SQLite dev environments, not on SQL Server (production).
+            // SQL Server doesn't support TEXT columns in indexes, so we skip these conversions when running
+            // against SQL Server. The schema changes (GDPR tables, new columns) are still applied below.
+            if (migrationBuilder.ActiveProvider == "Microsoft.EntityFrameworkCore.Sqlite")
+            {
             migrationBuilder.AlterColumn<int>(
                 name: "WeekKey",
                 table: "WantToPlayVotes",
@@ -1675,6 +1681,7 @@ namespace BoardGameMondays.Migrations
                 oldType: "int")
                 .Annotation("Sqlite:Autoincrement", true)
                 .OldAnnotation("Sqlite:Autoincrement", true);
+            } // End of SQLite-only type conversions
 
             migrationBuilder.CreateTable(
                 name: "DataDeletionRequests",
@@ -1769,6 +1776,9 @@ namespace BoardGameMondays.Migrations
                 name: "RoleNameIndex",
                 table: "AspNetRoles");
 
+            // Only revert type conversions on SQLite (Down migration reverses the Up conversions)
+            if (migrationBuilder.ActiveProvider == "Microsoft.EntityFrameworkCore.Sqlite")
+            {
             migrationBuilder.AlterColumn<int>(
                 name: "WeekKey",
                 table: "WantToPlayVotes",
@@ -3425,6 +3435,7 @@ namespace BoardGameMondays.Migrations
                 oldType: "INTEGER")
                 .Annotation("Sqlite:Autoincrement", true)
                 .OldAnnotation("Sqlite:Autoincrement", true);
+            } // End of SQLite-only type reversal conversions
 
             migrationBuilder.CreateIndex(
                 name: "UserNameIndex",
