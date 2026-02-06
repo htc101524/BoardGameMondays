@@ -1,5 +1,9 @@
+using System.Reflection;
 using BoardGameMondays.Data;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.EntityFrameworkCore.Migrations.Operations;
 using Xunit;
 
 namespace BoardGameMondays.Tests;
@@ -29,6 +33,9 @@ namespace BoardGameMondays.Tests;
 /// </summary>
 public sealed class MigrationTests
 {
+    private const string SqlServerProvider = "Microsoft.EntityFrameworkCore.SqlServer";
+    private static readonly string[] SqliteOnlyColumnTypes = { "TEXT", "INTEGER", "REAL", "BLOB" };
+
     [Fact]
     public void DesignTimeContextFactoryCreatesSuccessfully()
     {
@@ -102,6 +109,75 @@ public sealed class MigrationTests
         // 1. DbContext can be created
         // 2. Model is valid
         // 3. No structural issues with entity configurations
+    }
+
+    [Fact]
+    public void MigrationsAvoidSqliteColumnTypesForSqlServer()
+    {
+        // Arrange: build a SqlServer context without connecting to a real database.
+        var optionsBuilder = new DbContextOptionsBuilder<ApplicationDbContext>();
+        optionsBuilder.UseSqlServer("Server=(localdb)\\MSSQLLocalDB;Database=BgMigrationsTest;Trusted_Connection=True;TrustServerCertificate=True;");
+
+        using var db = new ApplicationDbContext(optionsBuilder.Options);
+        var migrationsAssembly = db.GetService<IMigrationsAssembly>();
+
+        // Act + Assert: each migration should not emit SQLite-only column types when targeting SqlServer.
+        foreach (var migrationPair in migrationsAssembly.Migrations)
+        {
+            var migration = (Migration)Activator.CreateInstance(migrationPair.Value)!;
+            SetActiveProvider(migration, SqlServerProvider);
+
+            var builder = new MigrationBuilder(SqlServerProvider);
+            migration.Up(builder);
+
+            var invalidTypes = builder.Operations
+                .SelectMany(GetColumnTypes)
+                .Where(type => SqliteOnlyColumnTypes.Contains(type, StringComparer.OrdinalIgnoreCase))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+
+            Assert.True(
+                invalidTypes.Length == 0,
+                $"Migration '{migrationPair.Key}' emits SQLite-only column types for SqlServer: {string.Join(", ", invalidTypes)}");
+        }
+    }
+
+    private static void SetActiveProvider(Migration migration, string provider)
+    {
+        var property = typeof(Migration).GetProperty("ActiveProvider", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+        if (property is { CanWrite: true })
+        {
+            property.SetValue(migration, provider);
+            return;
+        }
+
+        var field = typeof(Migration).GetField("_activeProvider", BindingFlags.Instance | BindingFlags.NonPublic);
+        if (field is not null)
+        {
+            field.SetValue(migration, provider);
+        }
+    }
+
+    private static IEnumerable<string> GetColumnTypes(MigrationOperation operation)
+    {
+        switch (operation)
+        {
+            case AddColumnOperation addColumn when !string.IsNullOrWhiteSpace(addColumn.ColumnType):
+                yield return addColumn.ColumnType!;
+                break;
+            case AlterColumnOperation alterColumn when !string.IsNullOrWhiteSpace(alterColumn.ColumnType):
+                yield return alterColumn.ColumnType!;
+                break;
+            case CreateTableOperation createTable:
+                foreach (var column in createTable.Columns)
+                {
+                    if (!string.IsNullOrWhiteSpace(column.ColumnType))
+                    {
+                        yield return column.ColumnType!;
+                    }
+                }
+                break;
+        }
     }
 }
 
