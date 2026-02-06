@@ -100,6 +100,11 @@ void ConfigureDbContextOptions(DbContextOptionsBuilder options)
                 errorNumbersToAdd: null);
         });
     }
+
+    // Suppress PendingModelChangesWarning during MigrateAsync() so the migrator can apply pending migrations
+    // even if there's a mismatch between the current model and the snapshot. This prevents startup crashes
+    // when deploying new entity changes that haven't been applied to the database yet.
+    options.ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning));
 }
 
 builder.Services.AddDbContext<ApplicationDbContext>(ConfigureDbContextOptions);
