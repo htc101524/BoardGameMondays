@@ -128,7 +128,11 @@ public sealed class MigrationTests
             SetActiveProvider(migration, SqlServerProvider);
 
             var builder = new MigrationBuilder(SqlServerProvider);
-            migration.Up(builder);
+            
+            // Use reflection to invoke protected Up method
+            var upMethod = typeof(Migration).GetMethod("Up", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
+            Assert.NotNull(upMethod);
+            upMethod!.Invoke(migration, new object[] { builder });
 
             var invalidTypes = builder.Operations
                 .SelectMany(GetColumnTypes)

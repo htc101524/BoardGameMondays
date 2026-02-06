@@ -13,7 +13,6 @@ namespace BoardGameMondays.Migrations
             migrationBuilder.AddColumn<bool>(
                 name: "IsAdminOnly",
                 table: "BlogPosts",
-                type: "INTEGER",
                 nullable: false,
                 defaultValue: false);
         }

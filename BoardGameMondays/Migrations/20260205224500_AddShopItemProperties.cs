@@ -13,14 +13,12 @@ namespace BoardGameMondays.Migrations
             migrationBuilder.AddColumn<int>(
                 name: "MinWinsRequired",
                 table: "ShopItems",
-                type: "INTEGER",
                 nullable: false,
                 defaultValue: 0);
 
             migrationBuilder.AddColumn<string>(
                 name: "CreatedOn",
                 table: "ShopItems",
-                type: "TEXT",
                 nullable: false,
                 defaultValue: "2026-02-05T00:00:00+00:00");
         }

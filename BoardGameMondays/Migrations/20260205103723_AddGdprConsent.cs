@@ -1687,15 +1687,15 @@ namespace BoardGameMondays.Migrations
                 name: "DataDeletionRequests",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    UserId = table.Column<string>(type: "TEXT", maxLength: 450, nullable: false),
-                    Email = table.Column<string>(type: "TEXT", maxLength: 256, nullable: false),
-                    RequestedOn = table.Column<long>(type: "INTEGER", nullable: false),
-                    ScheduledDeletionOn = table.Column<long>(type: "INTEGER", nullable: false),
-                    CompletedOn = table.Column<long>(type: "INTEGER", nullable: true),
-                    Status = table.Column<string>(type: "TEXT", maxLength: 32, nullable: false),
-                    Reason = table.Column<string>(type: "TEXT", maxLength: 1024, nullable: true),
-                    CancelledOn = table.Column<long>(type: "INTEGER", nullable: true)
+                    Id = table.Column<Guid>(nullable: false),
+                    UserId = table.Column<string>(maxLength: 450, nullable: false),
+                    Email = table.Column<string>(maxLength: 256, nullable: false),
+                    RequestedOn = table.Column<long>(nullable: false),
+                    ScheduledDeletionOn = table.Column<long>(nullable: false),
+                    CompletedOn = table.Column<long>(nullable: true),
+                    Status = table.Column<string>(maxLength: 32, nullable: false),
+                    Reason = table.Column<string>(maxLength: 1024, nullable: true),
+                    CancelledOn = table.Column<long>(nullable: true)
                 },
                 constraints: table =>
                 {
@@ -1706,15 +1706,15 @@ namespace BoardGameMondays.Migrations
                 name: "UserConsents",
                 columns: table => new
                 {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    UserId = table.Column<string>(type: "TEXT", maxLength: 450, nullable: true),
-                    AnonymousId = table.Column<string>(type: "TEXT", maxLength: 128, nullable: true),
-                    ConsentType = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
-                    PolicyVersion = table.Column<string>(type: "TEXT", maxLength: 32, nullable: false),
-                    IsGranted = table.Column<bool>(type: "INTEGER", nullable: false),
-                    ConsentedOn = table.Column<long>(type: "INTEGER", nullable: false),
-                    IpAddress = table.Column<string>(type: "TEXT", maxLength: 45, nullable: true),
-                    UserAgent = table.Column<string>(type: "TEXT", maxLength: 512, nullable: true)
+                    Id = table.Column<Guid>(nullable: false),
+                    UserId = table.Column<string>(maxLength: 450, nullable: true),
+                    AnonymousId = table.Column<string>(maxLength: 128, nullable: true),
+                    ConsentType = table.Column<string>(maxLength: 64, nullable: false),
+                    PolicyVersion = table.Column<string>(maxLength: 32, nullable: false),
+                    IsGranted = table.Column<bool>(nullable: false),
+                    ConsentedOn = table.Column<long>(nullable: false),
+                    IpAddress = table.Column<string>(maxLength: 45, nullable: true),
+                    UserAgent = table.Column<string>(maxLength: 512, nullable: true)
                 },
                 constraints: table =>
                 {
