@@ -2736,10 +2736,12 @@ app.MapPost("/account/avatar", async (
 // IMAGE MIGRATION ENDPOINT
 // One-time admin endpoint to migrate images from local storage to Azure Blob.
 // Usage: POST /api/migrate-images with JSON body: { "localAssetsFolder": "C:/path/to/downloaded/assets" }
+// If localAssetsFolder is omitted or empty, the server web root is used (wwwroot on App Service).
 // ============================================================================
 app.MapPost("/api/migrate-images", async (
     [FromBody] MigrateImagesRequest request,
     ApplicationDbContext db,
+    IWebHostEnvironment env,
     IOptions<StorageOptions> storageOptions,
     ILogger<Program> logger,
     ClaimsPrincipal user) =>
@@ -2755,9 +2757,15 @@ app.MapPost("/api/migrate-images", async (
         return Results.BadRequest(new { error = "Azure Blob Storage connection string is not configured. Set Storage:AzureBlob:ConnectionString." });
     }
 
-    if (string.IsNullOrWhiteSpace(request.LocalAssetsFolder) || !Directory.Exists(request.LocalAssetsFolder))
+    var assetsFolder = request.LocalAssetsFolder;
+    if (string.IsNullOrWhiteSpace(assetsFolder))
     {
-        return Results.BadRequest(new { error = $"Local assets folder not found: {request.LocalAssetsFolder}" });
+        assetsFolder = env.WebRootPath;
+    }
+
+    if (string.IsNullOrWhiteSpace(assetsFolder) || !Directory.Exists(assetsFolder))
+    {
+        return Results.BadRequest(new { error = $"Local assets folder not found: {assetsFolder}" });
     }
 
     try
@@ -2768,8 +2776,8 @@ app.MapPost("/api/migrate-images", async (
             blobOptions.ContainerName,
             blobOptions.BaseUrl);
 
-        logger.LogInformation("Starting image migration from {Folder}", request.LocalAssetsFolder);
-        var result = await tool.MigrateFromLocalFolderAsync(request.LocalAssetsFolder);
+        logger.LogInformation("Starting image migration from {Folder}", assetsFolder);
+        var result = await tool.MigrateFromLocalFolderAsync(assetsFolder);
         logger.LogInformation("Image migration completed: {Success}/{Total} files migrated successfully",
             result.SuccessCount, result.TotalFiles);
 
@@ -2920,7 +2928,7 @@ internal static class BgmClaimTypes
     public const string MemberId = "bgm:memberId";
 }
 
-internal record MigrateImagesRequest(string LocalAssetsFolder);
+internal record MigrateImagesRequest(string? LocalAssetsFolder);
 
 internal static class ReturnUrlHelpers
 {
