@@ -11,142 +11,130 @@ namespace BoardGameMondays.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.DropIndex(
-                name: "IX_GameNightGames_GameNightId_GameId",
-                table: "GameNightGames");
+            // Drop index if it exists
+            migrationBuilder.Sql(@"
+                IF EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_GameNightGames_GameNightId_GameId' AND object_id = OBJECT_ID('GameNightGames'))
+                DROP INDEX [IX_GameNightGames_GameNightId_GameId] ON [GameNightGames]
+            ");
 
-            migrationBuilder.AddColumn<int>(
-                name: "MinWinsRequired",
-                table: "ShopItems",
-                type: "int",
-                nullable: false,
-                defaultValue: 0);
+            // Add columns only if they don't exist
+            migrationBuilder.Sql(@"
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('ShopItems') AND name = 'MinWinsRequired')
+                ALTER TABLE [ShopItems] ADD [MinWinsRequired] int NOT NULL DEFAULT 0
+            ");
 
-            migrationBuilder.AddColumn<int>(
-                name: "LastMondayCoinsClaimedDateKey",
-                table: "Members",
-                type: "int",
-                nullable: true);
+            migrationBuilder.Sql(@"
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Members') AND name = 'LastMondayCoinsClaimedDateKey')
+                ALTER TABLE [Members] ADD [LastMondayCoinsClaimedDateKey] int NULL
+            ");
 
-            migrationBuilder.AddColumn<bool>(
-                name: "AreScoresCountable",
-                table: "Games",
-                type: "bit",
-                nullable: false,
-                defaultValue: false);
+            migrationBuilder.Sql(@"
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Games') AND name = 'AreScoresCountable')
+                ALTER TABLE [Games] ADD [AreScoresCountable] bit NOT NULL DEFAULT 0
+            ");
 
-            migrationBuilder.AddColumn<int>(
-                name: "HighScore",
-                table: "Games",
-                type: "int",
-                nullable: true);
+            migrationBuilder.Sql(@"
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Games') AND name = 'HighScore')
+                ALTER TABLE [Games] ADD [HighScore] int NULL
+            ");
 
-            migrationBuilder.AddColumn<long>(
-                name: "HighScoreAchievedOn",
-                table: "Games",
-                type: "bigint",
-                nullable: true);
+            migrationBuilder.Sql(@"
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Games') AND name = 'HighScoreAchievedOn')
+                ALTER TABLE [Games] ADD [HighScoreAchievedOn] bigint NULL
+            ");
 
-            migrationBuilder.AddColumn<Guid>(
-                name: "HighScoreMemberId",
-                table: "Games",
-                type: "uniqueidentifier",
-                nullable: true);
+            migrationBuilder.Sql(@"
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Games') AND name = 'HighScoreMemberId')
+                ALTER TABLE [Games] ADD [HighScoreMemberId] uniqueidentifier NULL
+            ");
 
-            migrationBuilder.AddColumn<string>(
-                name: "HighScoreMemberName",
-                table: "Games",
-                type: "nvarchar(128)",
-                maxLength: 128,
-                nullable: true);
+            migrationBuilder.Sql(@"
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Games') AND name = 'HighScoreMemberName')
+                ALTER TABLE [Games] ADD [HighScoreMemberName] nvarchar(128) NULL
+            ");
 
-            migrationBuilder.AddColumn<bool>(
-                name: "IsHighScore",
-                table: "GameNightGames",
-                type: "bit",
-                nullable: false,
-                defaultValue: false);
+            migrationBuilder.Sql(@"
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('GameNightGames') AND name = 'IsHighScore')
+                ALTER TABLE [GameNightGames] ADD [IsHighScore] bit NOT NULL DEFAULT 0
+            ");
 
-            migrationBuilder.AddColumn<int>(
-                name: "Score",
-                table: "GameNightGames",
-                type: "int",
-                nullable: true);
+            migrationBuilder.Sql(@"
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('GameNightGames') AND name = 'Score')
+                ALTER TABLE [GameNightGames] ADD [Score] int NULL
+            ");
 
-            migrationBuilder.AddColumn<bool>(
-                name: "IsAdminOnly",
-                table: "BlogPosts",
-                type: "bit",
-                nullable: false,
-                defaultValue: false);
+            migrationBuilder.Sql(@"
+                IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('BlogPosts') AND name = 'IsAdminOnly')
+                ALTER TABLE [BlogPosts] ADD [IsAdminOnly] bit NOT NULL DEFAULT 0
+            ");
 
-            migrationBuilder.CreateTable(
-                name: "DataDeletionRequests",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
-                    UserId = table.Column<string>(type: "nvarchar(450)", maxLength: 450, nullable: false),
-                    Email = table.Column<string>(type: "nvarchar(256)", maxLength: 256, nullable: false),
-                    RequestedOn = table.Column<long>(type: "bigint", nullable: false),
-                    ScheduledDeletionOn = table.Column<long>(type: "bigint", nullable: false),
-                    CompletedOn = table.Column<long>(type: "bigint", nullable: true),
-                    Status = table.Column<string>(type: "nvarchar(32)", maxLength: 32, nullable: false),
-                    Reason = table.Column<string>(type: "nvarchar(1024)", maxLength: 1024, nullable: true),
-                    CancelledOn = table.Column<long>(type: "bigint", nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_DataDeletionRequests", x => x.Id);
-                });
+            // Create tables only if they don't exist
+            migrationBuilder.Sql(@"
+                IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'DataDeletionRequests')
+                BEGIN
+                    CREATE TABLE [DataDeletionRequests] (
+                        [Id] uniqueidentifier NOT NULL,
+                        [UserId] nvarchar(450) NOT NULL,
+                        [Email] nvarchar(256) NOT NULL,
+                        [RequestedOn] bigint NOT NULL,
+                        [ScheduledDeletionOn] bigint NOT NULL,
+                        [CompletedOn] bigint NULL,
+                        [Status] nvarchar(32) NOT NULL,
+                        [Reason] nvarchar(1024) NULL,
+                        [CancelledOn] bigint NULL,
+                        CONSTRAINT [PK_DataDeletionRequests] PRIMARY KEY ([Id])
+                    )
+                END
+            ");
 
-            migrationBuilder.CreateTable(
-                name: "UserConsents",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
-                    UserId = table.Column<string>(type: "nvarchar(450)", maxLength: 450, nullable: true),
-                    AnonymousId = table.Column<string>(type: "nvarchar(128)", maxLength: 128, nullable: true),
-                    ConsentType = table.Column<string>(type: "nvarchar(64)", maxLength: 64, nullable: false),
-                    PolicyVersion = table.Column<string>(type: "nvarchar(32)", maxLength: 32, nullable: false),
-                    IsGranted = table.Column<bool>(type: "bit", nullable: false),
-                    ConsentedOn = table.Column<long>(type: "bigint", nullable: false),
-                    IpAddress = table.Column<string>(type: "nvarchar(45)", maxLength: 45, nullable: true),
-                    UserAgent = table.Column<string>(type: "nvarchar(512)", maxLength: 512, nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_UserConsents", x => x.Id);
-                });
+            migrationBuilder.Sql(@"
+                IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'UserConsents')
+                BEGIN
+                    CREATE TABLE [UserConsents] (
+                        [Id] uniqueidentifier NOT NULL,
+                        [UserId] nvarchar(450) NULL,
+                        [AnonymousId] nvarchar(128) NULL,
+                        [ConsentType] nvarchar(64) NOT NULL,
+                        [PolicyVersion] nvarchar(32) NOT NULL,
+                        [IsGranted] bit NOT NULL,
+                        [ConsentedOn] bigint NOT NULL,
+                        [IpAddress] nvarchar(45) NULL,
+                        [UserAgent] nvarchar(512) NULL,
+                        CONSTRAINT [PK_UserConsents] PRIMARY KEY ([Id])
+                    )
+                END
+            ");
 
-            migrationBuilder.CreateIndex(
-                name: "IX_GameNightGames_GameNightId_GameId",
-                table: "GameNightGames",
-                columns: new[] { "GameNightId", "GameId" });
+            // Create indexes only if they don't exist
+            migrationBuilder.Sql(@"
+                IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_GameNightGames_GameNightId_GameId' AND object_id = OBJECT_ID('GameNightGames'))
+                CREATE INDEX [IX_GameNightGames_GameNightId_GameId] ON [GameNightGames] ([GameNightId], [GameId])
+            ");
 
-            migrationBuilder.CreateIndex(
-                name: "IX_DataDeletionRequests_Status",
-                table: "DataDeletionRequests",
-                column: "Status");
+            migrationBuilder.Sql(@"
+                IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_DataDeletionRequests_Status' AND object_id = OBJECT_ID('DataDeletionRequests'))
+                CREATE INDEX [IX_DataDeletionRequests_Status] ON [DataDeletionRequests] ([Status])
+            ");
 
-            migrationBuilder.CreateIndex(
-                name: "IX_DataDeletionRequests_UserId",
-                table: "DataDeletionRequests",
-                column: "UserId");
+            migrationBuilder.Sql(@"
+                IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_DataDeletionRequests_UserId' AND object_id = OBJECT_ID('DataDeletionRequests'))
+                CREATE INDEX [IX_DataDeletionRequests_UserId] ON [DataDeletionRequests] ([UserId])
+            ");
 
-            migrationBuilder.CreateIndex(
-                name: "IX_UserConsents_AnonymousId",
-                table: "UserConsents",
-                column: "AnonymousId");
+            migrationBuilder.Sql(@"
+                IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_UserConsents_AnonymousId' AND object_id = OBJECT_ID('UserConsents'))
+                CREATE INDEX [IX_UserConsents_AnonymousId] ON [UserConsents] ([AnonymousId])
+            ");
 
-            migrationBuilder.CreateIndex(
-                name: "IX_UserConsents_UserId",
-                table: "UserConsents",
-                column: "UserId");
+            migrationBuilder.Sql(@"
+                IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_UserConsents_UserId' AND object_id = OBJECT_ID('UserConsents'))
+                CREATE INDEX [IX_UserConsents_UserId] ON [UserConsents] ([UserId])
+            ");
 
-            migrationBuilder.CreateIndex(
-                name: "IX_UserConsents_UserId_ConsentType",
-                table: "UserConsents",
-                columns: new[] { "UserId", "ConsentType" });
+            migrationBuilder.Sql(@"
+                IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_UserConsents_UserId_ConsentType' AND object_id = OBJECT_ID('UserConsents'))
+                CREATE INDEX [IX_UserConsents_UserId_ConsentType] ON [UserConsents] ([UserId], [ConsentType])
+            ");
         }
 
         /// <inheritdoc />
