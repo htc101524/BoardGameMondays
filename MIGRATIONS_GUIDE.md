@@ -262,3 +262,110 @@ Before you commit:
 - [ ] I ran `dotnet test` (all pass, including MigrationTests)
 - [ ] Migrations are in my git staging area
 - [ ] Entities and migrations are in the same commit
+---
+
+# Image Storage Management (v2)
+
+## Overview
+
+The image storage system is provider-agnostic and supports migration between different backends (Local filesystem, Azure Blob Storage, S3, GCS, etc.). This guide explains how to manage image migrations and cleanup.
+
+### Key Components
+
+| Component | Purpose |
+|-----------|---------|
+| `IAssetStorage` | Abstraction layer for image storage (upload, retrieve, list, delete, validate) |
+| `LocalAssetStorage` | Development/on-premises filesystem storage |
+| `AzureBlobAssetStorage` | Production Azure Blob Storage implementation |
+| `ImageMigrationOrchestrator` | Orchestrates migrations between providers with validation |
+| `ImageCleanupService` | Identifies and removes orphaned images, verifies storage integrity |
+| `ImageAuditLogger` | Logs all image operations for compliance and troubleshooting |
+| `BlogImageMigrationHelper` | Safely migrates image URLs in markdown blog content |
+
+---
+
+## Configuration
+
+### appsettings.json
+
+```json
+{
+  "Storage": {
+    "Provider": "Local",
+    "Local": {
+      "RootPath": null
+    },
+    "AzureBlob": {
+      "ConnectionString": "DefaultEndpointsProtocol=https;AccountName=...",
+      "ContainerName": "bgm-assets",
+      "BaseUrl": null,
+      "CreateContainerIfMissing": true,
+      "PublicAccessIfCreated": true
+    },
+    "EnableAuditLogging": true,
+    "AuditLogPath": "audit-logs"
+  }
+}
+```
+
+---
+
+## Workflow: Migrating Images from Local to Azure Blob
+
+### Step 1: Validate Images Before Migration
+
+```bash
+curl -X POST http://localhost:5000/api/admin/validate-images \
+  -H "Authorization: Bearer <admin-token>"
+```
+
+### Step 2: Perform Initial Migration
+
+```bash
+curl -X POST http://localhost:5000/api/admin/migrate-images-initial \
+  -H "Authorization: Bearer <admin-token>"
+```
+
+Update `appsettings.json` provider to `"AzureBlob"` and restart.
+
+### Step 3: Verify Storage Integrity
+
+```bash
+curl -X POST http://localhost:5000/api/admin/verify-storage-integrity \
+  -H "Authorization: Bearer <admin-token>"
+```
+
+### Step 4: Cleanup Orphaned Files
+
+```bash
+curl -X POST http://localhost:5000/api/admin/find-orphaned-images \
+  -H "Authorization: Bearer <admin-token>"
+```
+
+---
+
+## Admin Endpoints Reference
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/api/admin/validate-images` | POST | Validate all image URLs before migration |
+| `/api/admin/migrate-images-initial` | POST | Migrate all images from source to target provider |
+| `/api/admin/find-orphaned-images` | POST | Identify files in storage not referenced in DB |
+| `/api/admin/cleanup-orphaned-images` | POST | Delete orphaned images |
+| `/api/admin/verify-storage-integrity` | POST | Check for missing and orphaned files |
+| `/api/admin/image-audit-summary` | GET | Get audit log summary |
+
+---
+
+## Best Practices
+
+✅ **DO:**
+- Validate before migrating
+- Test in development environment first
+- Keep audit logging enabled for compliance
+- Monitor orphaned files regularly
+
+❌ **DON'T:**
+- Disable validation to speed up migration
+- Manually delete files from storage without updating DB
+- Switch providers without running integrity check

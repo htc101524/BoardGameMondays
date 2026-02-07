@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Components.Server;
 using BoardGameMondays.Core;
 using BoardGameMondays.Data;
 using BoardGameMondays.Data.Entities;
+using BoardGameMondays.Tools;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.DataProtection;
@@ -146,6 +147,12 @@ builder.Services.AddSingleton<IAssetStorage>(sp =>
         sp.GetRequiredService<IWebHostEnvironment>(),
         sp.GetRequiredService<IOptions<StorageOptions>>());
 });
+
+// NEW: Image management services for migration, audit logging, and cleanup.
+// See MIGRATIONS_GUIDE.md for usage.
+builder.Services.AddScoped<ImageAuditLogger>();
+builder.Services.AddScoped<ImageCleanupService>();
+builder.Services.AddScoped<ImageMigrationOrchestrator>();
 
 builder.Services.Configure<EmailOptions>(builder.Configuration.GetSection("Email"));
 // Email sender routing: pick API or SMTP at runtime based on Email options.
@@ -2798,6 +2805,237 @@ app.MapPost("/api/migrate-images", async (
 })
 .RequireAuthorization();
 
+// ============================================================================
+// NEW ADMIN ENDPOINTS (v2): Image management, validation, cleanup, and audit
+// ============================================================================
+
+// Validate all images before migration: Check they exist and are valid images.
+app.MapPost("/api/admin/validate-images", async (
+    ApplicationDbContext db,
+    ImageMigrationOrchestrator orchestrator,
+    ImageAuditLogger auditLogger,
+    ILogger<Program> logger,
+    ClaimsPrincipal user) =>
+{
+    if (!user.IsInRole("Admin"))
+        return Results.Forbid();
+
+    try
+    {
+        var result = await orchestrator.ValidateImagesBeforeMigrationAsync();
+
+        await auditLogger.LogImageOperationAsync(
+            ImageOperationType.Validation,
+            "batch_validation",
+            null,
+            result.IsValid,
+            result.IsValid ? null : $"{result.InvalidImages.Count} images failed validation",
+            new Dictionary<string, string>
+            {
+                { "InvalidCount", result.InvalidImages.Count.ToString() }
+            });
+
+        return Results.Ok(new
+        {
+            isValid = result.IsValid,
+            invalidImageCount = result.InvalidImages.Count,
+            invalidImages = result.InvalidImages.Take(10).ToList(), // Return first 10
+            completedAt = result.CompletedAt
+        });
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Image validation failed");
+        return Results.Problem($"Validation failed: {ex.Message}");
+    }
+})
+.WithName("ValidateImages")
+.RequireAuthorization();
+
+// Migrate images with auto-validation and audit logging.
+app.MapPost("/api/admin/migrate-images-initial", async (
+    ApplicationDbContext db,
+    ImageMigrationOrchestrator orchestrator,
+    ILogger<Program> logger,
+    ClaimsPrincipal user) =>
+{
+    if (!user.IsInRole("Admin"))
+        return Results.Forbid();
+
+    try
+    {
+        var result = await orchestrator.MigrateInitialAsync();
+
+        return Results.Ok(new
+        {
+            migrationMode = result.MigrationMode,
+            totalMigrated = result.TotalItemsMigrated,
+            totalErrors = result.TotalErrors,
+            hasErrors = result.HasErrors,
+            avatarCount = result.AvatarResults.Count(r => r.Success),
+            gameImageCount = result.GameImageResults.Count(r => r.Success),
+            blogImageCount = result.BlogImageResults.Count(r => r.Success),
+            completedAt = result.CompletedAt
+        });
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Image migration (initial) failed");
+        return Results.Problem($"Migration failed: {ex.Message}");
+    }
+})
+.WithName("MigrateImagesInitial")
+.RequireAuthorization();
+
+// Find orphaned images (files in storage but not referenced in DB).
+app.MapPost("/api/admin/find-orphaned-images", async (
+    ImageCleanupService cleanupService,
+    ILogger<Program> logger,
+    ClaimsPrincipal user) =>
+{
+    if (!user.IsInRole("Admin"))
+        return Results.Forbid();
+
+    try
+    {
+        var report = await cleanupService.FindOrphanedImagesAsync();
+
+        return Results.Ok(new
+        {
+            totalOrphans = report.TotalOrphans,
+            totalOrphanSizeBytes = report.TotalOrphanSizeBytes,
+            orphans = report.OrphanedFiles.Take(100).ToList(), // Return first 100
+            errors = report.Errors
+        });
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Orphan image detection failed");
+        return Results.Problem($"Detection failed: {ex.Message}");
+    }
+})
+.WithName("FindOrphanedImages")
+.RequireAuthorization();
+
+// Delete orphaned images based on a previous report.
+app.MapPost("/api/admin/cleanup-orphaned-images", async (
+    [FromBody] CleanupRequest request,
+    ImageCleanupService cleanupService,
+    ImageAuditLogger auditLogger,
+    ILogger<Program> logger,
+    ClaimsPrincipal user) =>
+{
+    if (!user.IsInRole("Admin"))
+        return Results.Forbid();
+
+    try
+    {
+        // Recreate the report from the cleanup request.
+        var report = new CleanupReport
+        {
+            OrphanedFiles = request.OrphanedFiles ?? new()
+        };
+
+        var result = await cleanupService.DeleteOrphanedImagesAsync(report);
+
+        await auditLogger.LogImageOperationAsync(
+            ImageOperationType.Cleanup,
+            "batch_cleanup",
+            null,
+            !result.HasFailures,
+            result.HasFailures ? $"{result.FailedDeletions.Count} deletions failed" : null,
+            new Dictionary<string, string>
+            {
+                { "DeletedCount", result.DeletedCount.ToString() },
+                { "FailedCount", result.FailedDeletions.Count.ToString() }
+            });
+
+        return Results.Ok(new
+        {
+            deletedCount = result.DeletedCount,
+            failedDeletions = result.FailedDeletions,
+            hasFailures = result.HasFailures,
+            completedAt = result.CompletedAt
+        });
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Image cleanup failed");
+        return Results.Problem($"Cleanup failed: {ex.Message}");
+    }
+})
+.WithName("CleanupOrphanedImages")
+.RequireAuthorization();
+
+// Verify storage integrity: Find missing files and orphans.
+app.MapPost("/api/admin/verify-storage-integrity", async (
+    ImageCleanupService cleanupService,
+    ILogger<Program> logger,
+    ClaimsPrincipal user) =>
+{
+    if (!user.IsInRole("Admin"))
+        return Results.Forbid();
+
+    try
+    {
+        var report = await cleanupService.VerifyStorageIntegrityAsync();
+
+        return Results.Ok(new
+        {
+            isHealthy = report.IsHealthy,
+            missingFilesCount = report.MissingFiles.Count,
+            missingFiles = report.MissingFiles.Take(20).ToList(), // Return first 20
+            orphanedFilesCount = report.OrphanedFiles.Count,
+            orphanedFiles = report.OrphanedFiles.Take(20).ToList(), // Return first 20
+            completedAt = report.CompletedAt
+        });
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Storage integrity verification failed");
+        return Results.Problem($"Verification failed: {ex.Message}");
+    }
+})
+.WithName("VerifyStorageIntegrity")
+.RequireAuthorization();
+
+// Get image audit log summary.
+app.MapGet("/api/admin/image-audit-summary", async (
+    ImageAuditLogger auditLogger,
+    ILogger<Program> logger,
+    ClaimsPrincipal user) =>
+{
+    if (!user.IsInRole("Admin"))
+        return Results.Forbid();
+
+    try
+    {
+        var summary = await auditLogger.GetAuditSummaryAsync();
+
+        return Results.Ok(new
+        {
+            totalOperations = summary.TotalOperations,
+            successfulOperations = summary.SuccessfulOperations,
+            failedOperations = summary.FailedOperations,
+            avatarUploads = summary.AvatarUploads,
+            gameImageUploads = summary.GameImageUploads,
+            blogImageUploads = summary.BlogImageUploads,
+            deletions = summary.Deletions,
+            migrations = summary.Migrations,
+            validations = summary.Validations,
+            firstOperation = summary.FirstOperation,
+            lastOperation = summary.LastOperation
+        });
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Failed to get audit summary");
+        return Results.Problem($"Failed to get summary: {ex.Message}");
+    }
+})
+.WithName("GetImageAuditSummary")
+.RequireAuthorization();
+
 // For social crawlers (WhatsApp/Facebook/Slack/etc) request to `/rsvp` return a small
 // HTML document with Open Graph meta tags so link previews show a proper image/title.
 app.Use(async (context, next) =>
@@ -2929,6 +3167,12 @@ internal static class BgmClaimTypes
 }
 
 internal record MigrateImagesRequest(string? LocalAssetsFolder);
+
+// NEW: Request classes for image management endpoints.
+internal sealed class CleanupRequest
+{
+    public List<OrphanedFileEntry>? OrphanedFiles { get; set; }
+}
 
 internal static class ReturnUrlHelpers
 {

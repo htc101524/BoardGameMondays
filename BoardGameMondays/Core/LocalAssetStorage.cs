@@ -4,10 +4,23 @@ using Microsoft.Extensions.Options;
 
 namespace BoardGameMondays.Core;
 
+/// <summary>
+/// Local filesystem storage for development and on-premises deployment.
+/// Assets are stored in a folder structure: uploads/avatars/, images/games/, uploads/blog/
+/// In production on Azure App Service, uses %HOME%/bgm-assets (persistent across redeploys).
+/// </summary>
 public sealed class LocalAssetStorage : IAssetStorage
 {
     private readonly IWebHostEnvironment _env;
     private readonly StorageOptions _options;
+
+    public StorageProviderMetadata Metadata => new()
+    {
+        ProviderName = "Local Filesystem",
+        SupportsListing = true,
+        SupportsDelete = true,
+        SupportsValidation = true
+    };
 
     public LocalAssetStorage(IWebHostEnvironment env, IOptions<StorageOptions> options)
     {
@@ -80,5 +93,120 @@ public sealed class LocalAssetStorage : IAssetStorage
         }
 
         return $"/uploads/blog/{fileName}";
+    }
+
+    public Task<string?> GetImageUrlAsync(string relativePath, CancellationToken ct = default)
+    {
+        // For local storage, the URL is just the relative path.
+        // If the file doesn't exist, return null.
+        var fullPath = Path.Combine(ResolveAssetsRoot(), relativePath.TrimStart('/'));
+        var result = File.Exists(fullPath) ? $"/{relativePath.TrimStart('/')}" : null;
+        return Task.FromResult(result);
+    }
+
+    public async Task<(bool isValid, string? error)> ValidateImageAsync(string url, CancellationToken ct = default)
+    {
+        try
+        {
+            // For local storage, strip leading slash and check file exists and is readable.
+            var relativePath = url.TrimStart('/').Split('?')[0]; // Remove query params
+            var fullPath = Path.Combine(ResolveAssetsRoot(), relativePath);
+
+            if (!File.Exists(fullPath))
+                return (false, $"File not found: {fullPath}");
+
+            // Try to read a few bytes to confirm it's readable and likely an image.
+            var bytes = new byte[8];
+            await using (var fs = File.OpenRead(fullPath))
+            {
+                await fs.ReadAsync(bytes, 0, bytes.Length, ct);
+            }
+
+            // Basic magic number check for common image formats.
+            if (!IsLikelyImageMagicNumber(bytes))
+                return (false, $"File doesn't appear to be a valid image (bad magic number): {fullPath}");
+
+            return (true, null);
+        }
+        catch (Exception ex)
+        {
+            return (false, $"Error validating image: {ex.Message}");
+        }
+    }
+
+    public Task<IEnumerable<string>> ListImagesAsync(string folder, CancellationToken ct = default)
+    {
+        var folderPath = Path.Combine(ResolveAssetsRoot(), folder);
+        if (!Directory.Exists(folderPath))
+        {
+            return Task.FromResult(Enumerable.Empty<string>());
+        }
+
+        var files = Directory.GetFiles(folderPath)
+            .Select(f => Path.GetFileName(f))
+            .OrderBy(f => f);
+
+        return Task.FromResult<IEnumerable<string>>(files);
+    }
+
+    public Task<bool> DeleteImageAsync(string relativePath, CancellationToken ct = default)
+    {
+        try
+        {
+            var fullPath = Path.Combine(ResolveAssetsRoot(), relativePath.TrimStart('/'));
+            if (File.Exists(fullPath))
+            {
+                File.Delete(fullPath);
+                return Task.FromResult(true);
+            }
+            return Task.FromResult(false);
+        }
+        catch
+        {
+            return Task.FromResult(false);
+        }
+    }
+
+    public Task<int> DeleteFolderAsync(string folder, CancellationToken ct = default)
+    {
+        try
+        {
+            var folderPath = Path.Combine(ResolveAssetsRoot(), folder);
+            if (!Directory.Exists(folderPath))
+                return Task.FromResult(0);
+
+            var files = Directory.GetFiles(folderPath);
+            foreach (var file in files)
+            {
+                File.Delete(file);
+            }
+
+            return Task.FromResult(files.Length);
+        }
+        catch
+        {
+            return Task.FromResult(0);
+        }
+    }
+
+    private static bool IsLikelyImageMagicNumber(byte[] bytes)
+    {
+        // JPEG: FF D8
+        // PNG: 89 50 4E 47
+        // GIF: 47 49 46 38
+        // WebP: RIFF ... WEBP
+        if (bytes.Length < 2)
+            return false;
+
+        if (bytes[0] == 0xFF && bytes[1] == 0xD8)
+            return true; // JPEG
+        if (bytes.Length >= 4 && bytes[0] == 0x89 && bytes[1] == 0x50 && bytes[2] == 0x4E && bytes[3] == 0x47)
+            return true; // PNG
+        if (bytes.Length >= 3 && bytes[0] == 0x47 && bytes[1] == 0x49 && bytes[2] == 0x46)
+            return true; // GIF
+        if (bytes.Length >= 4 && bytes[0] == 0x52 && bytes[1] == 0x49 && bytes[2] == 0x46 && bytes[3] == 0x46)
+            return true; // RIFF (WebP)
+
+        return false;
     }
 }
