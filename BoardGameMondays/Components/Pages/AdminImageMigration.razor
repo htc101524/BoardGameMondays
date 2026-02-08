@@ -1,0 +1,286 @@
+@page "/admin/image-migration"
+@using BoardGameMondays.Core
+@using BoardGameMondays.Tools
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "Admin")]
+@inject ImageMigrationOrchestrator MigrationOrchestrator
+@inject IAssetStorage AssetStorage
+@inject NavigationManager Navigation
+
+<PageTitle>Image Migration - Board Game Mondays</PageTitle>
+
+<div class="container py-4" style="max-width: 900px;">
+    <nav class="mb-4">
+        <a href="/" class="text-decoration-none">← Back to home</a>
+    </nav>
+
+    <h1>Image Migration Manager</h1>
+    <p class="text-muted">Manage image migrations between local storage and Azure Blob Storage.</p>
+
+    @if (_loading)
+    {
+        <div class="alert alert-info">
+            <div class="spinner-border spinner-border-sm me-2" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            @_statusMessage
+        </div>
+    }
+    else if (_result is not null)
+    {
+        <div class="alert @(_result.TotalErrors > 0 ? "alert-warning" : "alert-success")">
+            <h5>Migration Complete: @_result.MigrationMode</h5>
+            <p class="mb-2">
+                <strong>Total Migrated:</strong> @_result.TotalItemsMigrated
+                @if (_result.TotalErrors > 0)
+                {
+                    <span class="text-danger ms-3"><strong>Errors:</strong> @_result.TotalErrors</span>
+                }
+            </p>
+
+            @if (_result.AvatarResults?.Any() == true)
+            {
+                <div class="mt-3">
+                    <h6>Avatars</h6>
+                    <p class="small text-muted">@_result.AvatarResults.Count(r => r.Success) / @_result.AvatarResults.Count successful</p>
+                    @if (_result.AvatarResults.Any(r => !r.Success))
+                    {
+                        <div class="small">
+                            @foreach (var error in _result.AvatarResults.Where(r => !r.Success))
+                            {
+                                <div class="text-danger">❌ @error.ImagePath: @error.ErrorMessage</div>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+
+            @if (_result.GameImageResults?.Any() == true)
+            {
+                <div class="mt-3">
+                    <h6>Game Images</h6>
+                    <p class="small text-muted">@_result.GameImageResults.Count(r => r.Success) / @_result.GameImageResults.Count successful</p>
+                    @if (_result.GameImageResults.Any(r => !r.Success))
+                    {
+                        <div class="small">
+                            @foreach (var error in _result.GameImageResults.Where(r => !r.Success))
+                            {
+                                <div class="text-danger">❌ @error.ImagePath: @error.ErrorMessage</div>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+
+            @if (_result.BlogImageResults?.Any() == true)
+            {
+                <div class="mt-3">
+                    <h6>Blog Images</h6>
+                    <p class="small text-muted">@_result.BlogImageResults.Count(r => r.Success) / @_result.BlogImageResults.Count successful</p>
+                    @if (_result.BlogImageResults.Any(r => !r.Success))
+                    {
+                        <div class="small">
+                            @foreach (var error in _result.BlogImageResults.Where(r => !r.Success))
+                            {
+                                <div class="text-danger">❌ @error.ImagePath: @error.ErrorMessage</div>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+
+            <div class="mt-4">
+                <button class="btn btn-primary" @onclick="ResetResults">← Back to Migration Options</button>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Migration Options</h5>
+                <p class="text-muted">Choose the migration mode:</p>
+
+                <div class="d-grid gap-3">
+                    <!-- Initial Migration -->
+                    <div class="border rounded p-3">
+                        <h6 class="mb-2">
+                            <strong>Initial Migration</strong>
+                            <span class="badge bg-info ms-2">One-Time</span>
+                        </h6>
+                        <p class="small text-muted mb-3">
+                            Migrate all avatars, game images, and blog images from local storage to Azure Blob Storage.
+                            Validates all images before migration and updates database URLs.
+                        </p>
+                        <button 
+                            class="btn btn-primary" 
+                            @onclick="() => PerformMigration('initial')"
+                            disabled="@_loading">
+                            @if (_loading)
+                            {
+                                <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                            }
+                            Start Initial Migration
+                        </button>
+                    </div>
+
+                    <!-- Incremental Migration -->
+                    <div class="border rounded p-3">
+                        <h6 class="mb-2">
+                            <strong>Incremental Migration</strong>
+                            <span class="badge bg-secondary ms-2">Since Date</span>
+                        </h6>
+                        <p class="small text-muted mb-3">
+                            Migrate only images added or modified since a specific date.
+                            Useful for ongoing synchronization after initial migration.
+                        </p>
+                        <div class="mb-3">
+                            <label class="form-label" for="incrementalDate">Since Date</label>
+                            <input 
+                                type="date" 
+                                id="incrementalDate"
+                                class="form-control" 
+                                @bind="_incrementalDate" />
+                        </div>
+                        <button 
+                            class="btn btn-secondary" 
+                            @onclick="() => PerformMigration('incremental')"
+                            disabled="@(_loading || string.IsNullOrEmpty(_incrementalDate))">
+                            @if (_loading)
+                            {
+                                <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                            }
+                            Start Incremental Migration
+                        </button>
+                    </div>
+
+                    <!-- Rollback -->
+                    <div class="border rounded p-3 border-danger">
+                        <h6 class="mb-2 text-danger">
+                            <strong>⚠️ Rollback Migration</strong>
+                            <span class="badge bg-danger ms-2">Destructive</span>
+                        </h6>
+                        <p class="small text-muted mb-3">
+                            Revert all image URLs back to the previous storage provider.
+                            Use this if you need to switch back or if migration fails.
+                        </p>
+                        <button 
+                            class="btn btn-danger" 
+                            @onclick="() => ShowRollbackConfirmation()"
+                            disabled="@_loading">
+                            @if (_loading)
+                            {
+                                <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                            }
+                            Rollback All Images
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Rollback Confirmation Modal -->
+        @if (_showRollbackConfirmation)
+        {
+            <div class="modal d-block" style="background-color: rgba(0, 0, 0, 0.5);" role="dialog">
+                <div class="modal-dialog" role="document">
+                    <div class="modal-content">
+                        <div class="modal-header border-danger">
+                            <h5 class="modal-title text-danger">Confirm Rollback</h5>
+                            <button type="button" class="btn-close" @onclick="CancelRollback" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <p class="text-danger">
+                                <strong>⚠️ This action will revert all image URLs back to the previous storage provider.</strong>
+                            </p>
+                            <p>
+                                This is a destructive operation. Make sure you have a backup before proceeding.
+                            </p>
+                            <p class="mb-0">
+                                <strong>Are you sure you want to continue?</strong>
+                            </p>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" @onclick="CancelRollback">Cancel</button>
+                            <button type="button" class="btn btn-danger" @onclick="() => PerformMigration('rollback')">
+                                Yes, Rollback All
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+
+        <!-- Info Section -->
+        <div class="alert alert-info mt-4">
+            <h5>Migration Information</h5>
+            <ul class="mb-0 small">
+                <li><strong>Avatars:</strong> User profile pictures stored in member profiles.</li>
+                <li><strong>Game Images:</strong> Board game cover images and artwork.</li>
+                <li><strong>Blog Images:</strong> Images embedded in blog posts and articles.</li>
+                <li><strong>Validation:</strong> All images are validated for integrity before migration.</li>
+                <li><strong>Audit Logging:</strong> All operations are logged for compliance and troubleshooting.</li>
+            </ul>
+        </div>
+    }
+</div>
+
+@code {
+    private ImageMigrationResult? _result;
+    private bool _loading;
+    private string _statusMessage = "";
+    private string _incrementalDate = DateTime.UtcNow.AddDays(-30).ToString("yyyy-MM-dd");
+    private bool _showRollbackConfirmation;
+
+    private async Task PerformMigration(string mode)
+    {
+        try
+        {
+            _loading = true;
+            _statusMessage = mode switch
+            {
+                "initial" => "Starting initial migration... This may take a few minutes.",
+                "incremental" => "Starting incremental migration...",
+                "rollback" => "Starting rollback... This may take a few minutes.",
+                _ => "Processing migration..."
+            };
+
+            _showRollbackConfirmation = false;
+
+            _result = mode switch
+            {
+                "initial" => await MigrationOrchestrator.MigrateInitialAsync(CancellationToken.None),
+                "incremental" => await MigrationOrchestrator.MigrateIncrementalAsync(
+                    DateTime.Parse(_incrementalDate),
+                    CancellationToken.None),
+                "rollback" => await MigrationOrchestrator.RollbackAsync(CancellationToken.None),
+                _ => null
+            };
+        }
+        catch (Exception ex)
+        {
+            _statusMessage = $"Error: {ex.Message}";
+            _result = null;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void ShowRollbackConfirmation()
+    {
+        _showRollbackConfirmation = true;
+    }
+
+    private void CancelRollback()
+    {
+        _showRollbackConfirmation = false;
+    }
+
+    private void ResetResults()
+    {
+        _result = null;
+        _statusMessage = "";
+    }
+}
