@@ -2,7 +2,7 @@
     --bgm-header-height: 64px;
     --bgm-header-height-desktop: 110px;
     --bgm-menu-area-width: 64px;
-    --bgm-menu-bg: #064e6d;
+    --bgm-menu-bg: #22311c;
 }
 
 .bgm-header {
@@ -48,7 +48,7 @@
 }
 
 .bgm-menuArea:hover {
-    background: #075a7e;
+    background: #2d4024;
 }
 
 .bgm-menuArea .bgm-menuButton {
@@ -250,7 +250,7 @@
 }
 
 .bgm-coins {
-    color: rgba(34, 49, 28, 0.95);
+    color: #fff;
     font-weight: 700;
     letter-spacing: 0.02em;
     white-space: nowrap;
@@ -258,7 +258,7 @@
 
 .bgm-coinsButton {
     border: 0;
-    background: transparent;
+    background: #22311c;
     padding: 0 16px;
     border-radius: 0;
     cursor: pointer;
@@ -266,10 +266,11 @@
     display: flex;
     align-items: center;
     transition: background 0.15s ease;
+    color: #fff;
 }
 
 .bgm-coinsButton:hover {
-    background: rgba(191, 161, 74, 0.15);
+    background: #2d4024;
 }
 
 .bgm-coinsButton:focus-visible {
