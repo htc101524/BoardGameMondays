@@ -59,6 +59,7 @@
                     </div>
                 </div>
                 <a class="bgm-header__actionLink" href="/blog">Blog</a>
+                <a class="bgm-header__actionLink" href="/shop">Shop</a>
                 
                 @if (_userId is not null)
                 {
@@ -191,6 +192,7 @@
             </div>
         </div>
         <a class="bgm-popup__link" href="/blog" @onclick="CloseMenu">Blog</a>
+        <a class="bgm-popup__link" href="/shop" @onclick="CloseMenu">Shop</a>
         <a class="bgm-popup__link bgm-popup__link--donate" href="https://buymeacoffee.com/henrytcarter" target="_blank" rel="noopener noreferrer" @onclick="CloseMenu">Buy us a coffee</a>
 
         @if (_userId is not null)
