@@ -76,12 +76,23 @@
                 {
                     <a class="bgm-header__actionLink" href="/login">Login</a>
                     <a class="bgm-header__actionLink bgm-header__actionLink--signup" href="/register">Sign up</a>
-                    <span class="text-muted small ms-2">Log in to bet on who you think will win.</span>
                 }
             </div>
         </div>
     </div>
 </header>
+
+@if (_showLoginToast)
+{
+    <div class="bgm-loginToast" role="status" aria-live="polite">
+        <div class="bgm-loginToast__content">
+            <span class="bgm-loginToast__text">Log in to bet on who you think will win.</span>
+            <a class="bgm-loginToast__link" href="/login">Log in</a>
+            <a class="bgm-loginToast__link bgm-loginToast__link--signup" href="/register">Sign up</a>
+        </div>
+        <button type="button" class="bgm-loginToast__close" aria-label="Dismiss" @onclick="DismissLoginToast">×</button>
+    </div>
+}
 
 <div class="bgm-backdrop @(_menuOpen ? "is-open" : "")" @onclick="CloseMenu"></div>
 
@@ -213,7 +224,6 @@
         {
             <button type="button" class="bgm-popup__link bgm-popup__linkButton" @onclick="GoToLogin">Login</button>
             <button type="button" class="bgm-popup__link bgm-popup__linkButton" @onclick="GoToRegister">Sign up</button>
-            <div class="text-muted small px-3">Log in to bet on who you think will win.</div>
         }
     </nav>
 </aside>
@@ -232,6 +242,8 @@
     private bool _betsLoading;
     private IReadOnlyList<BoardGameMondays.Core.BettingService.UserBetHistory> _betHistory = Array.Empty<BoardGameMondays.Core.BettingService.UserBetHistory>();
     private OddsDisplayFormat _oddsFormat = OddsDisplayFormat.Fraction;
+    private bool _showLoginToast;
+    private bool _loginToastCheckPending;
     
     private bool _disposed;
 
@@ -247,6 +259,12 @@
         if (firstRender)
         {
             await RefreshCoinsAsync();
+        }
+
+        if (_loginToastCheckPending)
+        {
+            _loginToastCheckPending = false;
+            await EvaluateLoginToastAsync();
         }
     }
 
@@ -320,6 +338,7 @@
             _coins = null;
             _pendingMondayCoins = 0;
             _userIsAdmin = false;
+            _loginToastCheckPending = true;
             StateHasChanged();
             return;
         }
@@ -327,11 +346,15 @@
         _userId = user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
         _userName = user.Identity?.Name;
         _userIsAdmin = user.IsInRole("Admin");
+        _showLoginToast = false;
+        _loginToastCheckPending = false;
 
         if (string.IsNullOrWhiteSpace(_userId))
         {
             _coins = null;
             _pendingMondayCoins = 0;
+            _showLoginToast = false;
+            _loginToastCheckPending = false;
             StateHasChanged();
             return;
         }
@@ -409,6 +432,31 @@
         await JS.InvokeVoidAsync("bgm.scrollToTopNextFrame", "smooth");
     }
 
+    private async Task EvaluateLoginToastAsync()
+    {
+        if (_userId is not null)
+        {
+            _showLoginToast = false;
+            StateHasChanged();
+            return;
+        }
+
+        var status = await JS.InvokeAsync<LoginToastStatus>("bgmLoginToast.getStatus");
+        _showLoginToast = status.Show;
+        if (_showLoginToast && !status.Seen)
+        {
+            await JS.InvokeVoidAsync("bgmLoginToast.markSeen");
+        }
+        StateHasChanged();
+    }
+
+    private async Task DismissLoginToast()
+    {
+        _showLoginToast = false;
+        await JS.InvokeVoidAsync("bgmLoginToast.dismiss");
+        StateHasChanged();
+    }
+
     private void GoToLogin()
     {
         CloseMenu();
@@ -426,4 +474,10 @@
 
     private static string FormatNet(int net)
         => net >= 0 ? $"+{net}" : net.ToString();
+
+    private sealed class LoginToastStatus
+    {
+        public bool Show { get; set; }
+        public bool Seen { get; set; }
+    }
 }
