@@ -15,6 +15,7 @@ public sealed class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<BoardGameEntity> Games => Set<BoardGameEntity>();
     public DbSet<ReviewEntity> Reviews => Set<ReviewEntity>();
     public DbSet<ReviewAgreementEntity> ReviewAgreements => Set<ReviewAgreementEntity>();
+    public DbSet<ReviewPromptSentEntity> ReviewPromptSents => Set<ReviewPromptSentEntity>();
     public DbSet<FeaturedStateEntity> FeaturedState => Set<FeaturedStateEntity>();
     public DbSet<TicketEntity> Tickets => Set<TicketEntity>();
     public DbSet<TicketPriorityEntity> TicketPriorities => Set<TicketPriorityEntity>();
@@ -61,6 +62,12 @@ public sealed class ApplicationDbContext : IdentityDbContext<ApplicationUser>
 
         builder.Entity<ReviewAgreementEntity>()
             .Property(x => x.CreatedOn)
+            .HasConversion(
+                toDb => toDb.UtcDateTime.Ticks,
+                fromDb => new DateTimeOffset(new DateTime(fromDb, DateTimeKind.Utc)));
+
+        builder.Entity<ReviewPromptSentEntity>()
+            .Property(x => x.SentOn)
             .HasConversion(
                 toDb => toDb.UtcDateTime.Ticks,
                 fromDb => new DateTimeOffset(new DateTime(fromDb, DateTimeKind.Utc)));

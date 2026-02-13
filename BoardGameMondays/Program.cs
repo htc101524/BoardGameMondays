@@ -289,6 +289,7 @@ builder.Services.AddScoped<BoardGameMondays.Core.BoardGameService>();
 builder.Services.AddScoped<BoardGameMondays.Core.BlogService>();
 builder.Services.AddScoped<BoardGameMondays.Core.WantToPlayService>();
 builder.Services.AddScoped<BoardGameMondays.Core.GameRecommendationService>();
+builder.Services.AddScoped<BoardGameMondays.Core.ReviewPromptService>();
 
 // Admin & Shop Operations Domain
 builder.Services.AddScoped<BoardGameMondays.Core.ShopService>();
