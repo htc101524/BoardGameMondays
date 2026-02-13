@@ -36,8 +36,8 @@
 .bgm-newspaper__title {
     font-weight: 800;
     letter-spacing: 0.02em;
-    font-size: 1.35rem;
-    line-height: 1.15;
+    font-size: 1.55rem;
+    line-height: 1.1;
 }
 
 .bgm-newspaper__byline {
@@ -45,10 +45,10 @@
 }
 
 .bgm-newspaper__body {
-    margin-top: 14px;
+    margin-top: 16px;
     white-space: pre-line;
     color: var(--bs-body-color);
-    line-height: 1.55;
+    line-height: 1.65;
 }
 
 .bgm-newspaper__body > * {
@@ -57,7 +57,7 @@
 
 .bgm-newspaper__dropcap {
     float: left;
-    font-size: 2.8rem;
+    font-size: 3rem;
     line-height: 0.95;
     font-weight: 800;
     margin-right: 10px;
@@ -67,7 +67,7 @@
 @media (min-width: 992px) {
     .bgm-newspaper__body {
         column-count: 2;
-        column-gap: 28px;
+        column-gap: 32px;
         column-rule: 1px solid var(--bs-border-color);
     }
 }
@@ -78,7 +78,7 @@
     border-top: 1px solid var(--bs-border-color);
 }
 
-/* Mobile improvements for newspaper card */
+/* Mobile improvements for reading */
 @media (max-width: 640px) {
     .bgm-newspaper {
         padding: 16px 14px 12px;
@@ -96,13 +96,13 @@
     }
 
     .bgm-newspaper__title {
-        font-size: 1.15rem;
+        font-size: 1.25rem;
         line-height: 1.2;
     }
 
     .bgm-newspaper__body {
-        font-size: 0.95rem;
-        line-height: 1.6;
+        font-size: 1rem;
+        line-height: 1.7;
         margin-top: 12px;
     }
 
@@ -122,6 +122,17 @@
         min-height: 44px;
         touch-action: manipulation;
     }
+
+    .bgm-newspaper--reading {
+        border: none;
+        border-radius: 0;
+        background: transparent;
+        padding: 0;
+    }
+
+    .bgm-newspaper--reading::after {
+        display: none;
+    }
 }
 
 /* Extra small screens */
@@ -131,15 +142,19 @@
     }
 
     .bgm-newspaper__title {
-        font-size: 1.05rem;
+        font-size: 1.1rem;
     }
 
     .bgm-newspaper__body {
-        font-size: 0.9rem;
+        font-size: 0.95rem;
     }
 
     .bgm-newspaper__dropcap {
-        font-size: 1.8rem;
+        font-size: 1.9rem;
+    }
+
+    .bgm-newspaper--reading {
+        padding: 0;
     }
 }
 
@@ -241,4 +256,3 @@
     border-top: 1px solid var(--bs-border-color);
     margin: 1.5em 0;
 }
-
