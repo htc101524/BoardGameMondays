@@ -255,6 +255,35 @@ else
 
                 <div class="card mt-4">
                     <div class="card-body">
+                        <h2 class="h5">High score games</h2>
+                        @if (_highScoreGames.Count == 0)
+                        {
+                            <div class="text-muted">No high scores yet.</div>
+                        }
+                        else
+                        {
+                            <div class="list-group list-group-flush">
+                                @foreach (var hs in _highScoreGames)
+                                {
+                                    <div class="list-group-item px-0">
+                                        <div class="d-flex justify-content-between align-items-start gap-2">
+                                            <div class="text-truncate">
+                                                <div class="fw-semibold">@hs.GameName</div>
+                                                <div class="text-muted small">Score: @hs.Score</div>
+                                            </div>
+                                            <div class="text-muted text-end text-nowrap">
+                                                <div class="small">@FormatLongDate(DateOnly.FromDateTime(hs.AchievedOn.DateTime))</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <div class="card mt-4">
+                    <div class="card-body">
                         <h2 class="h5">Snack log</h2>
                         @if (_recentAttendances.Count == 0)
                         {
@@ -295,6 +324,7 @@ else
 
     private MemberStats _stats = new();
     private List<TopGame> _topGames = new();
+    private List<HighScoreGame> _highScoreGames = new();
     private List<AttendanceRow> _recentAttendances = new();
     private bool _winsVisible;
     private List<WinRow> _wins = new();
@@ -371,6 +401,7 @@ else
         {
             _stats = new();
             _topGames = new();
+            _highScoreGames = new();
             _recentAttendances = new();
             _edit = new();
             return;
@@ -441,6 +472,18 @@ else
 
         _topGames = topGamesRaw
             .Select(x => new TopGame(x.GameId, x.GameName, x.Plays))
+            .ToList();
+
+        // High score games
+        var highScoreGamesRaw = await db.Games
+            .AsNoTracking()
+            .Where(g => g.HighScoreMemberId == MemberId && g.AreScoresCountable && g.HighScore != null)
+            .OrderByDescending(g => g.HighScore)
+            .Select(g => new { g.Id, g.Name, g.HighScore, g.HighScoreAchievedOn })
+            .ToListAsync();
+
+        _highScoreGames = highScoreGamesRaw
+            .Select(x => new HighScoreGame(x.Id, x.Name, x.HighScore!.Value, x.HighScoreAchievedOn ?? DateTimeOffset.UtcNow))
             .ToList();
 
         // Recent attendances (for snack log)
@@ -635,6 +678,8 @@ else
     }
 
     private sealed record TopGame(Guid GameId, string GameName, int Plays);
+
+    private sealed record HighScoreGame(Guid GameId, string GameName, int Score, DateTimeOffset AchievedOn);
 
     private sealed class AttendanceRow
     {
