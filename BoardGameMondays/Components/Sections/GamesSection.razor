@@ -107,6 +107,9 @@
                                     @if (_isAdmin)
                                     {
                                         <div class="bgm-gameCardActions">
+                                            <a href="/admin/games/@game.Id" class="btn btn-sm btn-outline-primary" title="Edit game">
+                                                Edit
+                                            </a>
                                             <button type="button"
                                                     class="btn btn-sm @(HasVoted(game.Id) ? "btn-success" : "btn-outline-secondary")"
                                                     disabled="@(HasVoted(game.Id) || _votesRemaining <= 0)"
