@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Options;
 
 namespace BoardGameMondays.Core;
 
@@ -16,10 +17,10 @@ namespace BoardGameMondays.Core;
 public sealed class ImageAuditLogger
 {
     private readonly IAssetStorage _storage;
-    private readonly StorageOptions _options;
+    private readonly IOptions<StorageOptions> _options;
     private readonly IHttpContextAccessor _httpContextAccessor;
 
-    public ImageAuditLogger(IAssetStorage storage, StorageOptions options, IHttpContextAccessor httpContextAccessor)
+    public ImageAuditLogger(IAssetStorage storage, IOptions<StorageOptions> options, IHttpContextAccessor httpContextAccessor)
     {
         _storage = storage;
         _options = options;
@@ -38,7 +39,7 @@ public sealed class ImageAuditLogger
         Dictionary<string, string>? metadata = null,
         CancellationToken ct = default)
     {
-        if (!_options.EnableAuditLogging)
+        if (!_options.Value.EnableAuditLogging)
             return;
 
         var userId = ExtractUserId();
@@ -68,7 +69,7 @@ public sealed class ImageAuditLogger
         DateTime? beforeDate = null,
         CancellationToken ct = default)
     {
-        if (!_options.EnableAuditLogging)
+        if (!_options.Value.EnableAuditLogging)
             return new();
 
         var entries = new List<ImageAuditEntry>();
@@ -76,7 +77,7 @@ public sealed class ImageAuditLogger
         try
         {
             // List all audit log files.
-            var auditLogs = await _storage.ListImagesAsync(_options.AuditLogPath ?? "audit-logs", ct);
+            var auditLogs = await _storage.ListImagesAsync(_options.Value.AuditLogPath ?? "audit-logs", ct);
 
             foreach (var logFile in auditLogs)
             {
@@ -133,7 +134,7 @@ public sealed class ImageAuditLogger
         {
             // Create daily log file (e.g., audit-logs/2026-02-07.jsonl).
             var logFileName = DateTimeOffset.UtcNow.ToString("yyyy-MM-dd") + ".jsonl";
-            var logPath = Path.Combine(_options.AuditLogPath ?? "audit-logs", logFileName);
+            var logPath = Path.Combine(_options.Value.AuditLogPath ?? "audit-logs", logFileName);
 
             var json = JsonSerializer.Serialize(entry) + Environment.NewLine;
             var stream = new MemoryStream();
