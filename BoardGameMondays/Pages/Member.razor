@@ -83,9 +83,9 @@ else
                 <div class="bgm-memberStat__value">@_stats.GamesPlayed</div>
             </div>
             <div class="bgm-memberStat">
-                <div class="bgm-memberStat__label">Games won</div>
+                <div class="bgm-memberStat__label">Solo wins</div>
                 <div class="bgm-memberStat__value">
-                    <button class="btn btn-link p-0 bgm-memberStat__value" @onclick="ToggleWinsAsync" aria-label="Show wins">@_stats.GamesWon</button>
+                    <button class="btn btn-link p-0 bgm-memberStat__value" @onclick="ToggleWinsAsync" aria-label="Show wins">@_stats.SoloWins</button>
                 </div>
             </div>
             <div class="bgm-memberStat">
@@ -102,7 +102,7 @@ else
         {
             <div class="card mt-3">
                 <div class="card-body">
-                    <h2 class="h5">Wins</h2>
+                    <h2 class="h5">Wins (solo + team)</h2>
                     @if (_wins.Count == 0)
                     {
                         <div class="text-muted">No wins recorded.</div>
@@ -450,7 +450,8 @@ else
             SnacksBrought = snacksBrought,
             GamesPlayed = gamesPlayed,
             TeamWins = teamWinIds.Count,
-            GamesWon = soloWins + teamWinIds.Count
+            SoloWins = soloWins,
+            TeamWins = teamWinIds.Count
         };
 
         // Top games (query shape kept EF-translatable: group by scalar key, then join)
@@ -672,7 +673,7 @@ else
     {
         public int Attendances { get; set; }
         public int GamesPlayed { get; set; }
-        public int GamesWon { get; set; }
+        public int SoloWins { get; set; }
         public int TeamWins { get; set; }
         public int SnacksBrought { get; set; }
     }
