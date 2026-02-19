@@ -24,7 +24,9 @@ public sealed class LatestBlogPostHighlight : IHomeHighlight
 
     public string? ImageUrl => null;
 
-    public string? NavigationUrl => "#blog";
+    public string? NavigationUrl => _post is not null && !string.IsNullOrWhiteSpace(_post.Slug)
+        ? $"/blog/{_post.Slug}"
+        : "/blog";
 
     public string AccentColor => "81, 118, 108"; // Teal/green
 

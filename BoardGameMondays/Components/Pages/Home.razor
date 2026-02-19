@@ -511,8 +511,15 @@
                 Navigation.NavigateTo("/leaderboard");
                 break;
 
-            case LatestBlogPostHighlight:
-                await JS.InvokeVoidAsync("bgm.scrollToIdNextFrame", "blog", "smooth");
+            case LatestBlogPostHighlight blogHighlight:
+                if (!string.IsNullOrWhiteSpace(blogHighlight.Post?.Slug))
+                {
+                    Navigation.NavigateTo($"/blog/{blogHighlight.Post.Slug}");
+                }
+                else
+                {
+                    Navigation.NavigateTo("/blog");
+                }
                 break;
 
             default:
