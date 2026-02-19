@@ -2,10 +2,12 @@
 @using BoardGameMondays.Core
 @using BoardGameMondays.Tools
 @using Microsoft.AspNetCore.Authorization
+@using Microsoft.Extensions.Options
 @attribute [Authorize(Roles = "Admin")]
 @inject ImageMigrationOrchestrator MigrationOrchestrator
 @inject IAssetStorage AssetStorage
 @inject NavigationManager Navigation
+@inject IOptions<StorageOptions> StorageOptions
 
 <PageTitle>Image Migration - Board Game Mondays</PageTitle>
 
@@ -108,6 +110,50 @@
     }
     else
     {
+        <div class="card mb-4">
+            <div class="card-body">
+                <h5 class="card-title">Target Azure Blob Settings</h5>
+                <p class="text-muted small mb-3">
+                    Provide the Azure Blob connection string for this migration. If left empty, the configured value
+                    from app settings will be used.
+                </p>
+
+                @if (!string.Equals(_currentProvider, "Local", StringComparison.OrdinalIgnoreCase))
+                {
+                    <div class="alert alert-warning">
+                        Current storage provider is <strong>@_currentProvider</strong>. Migration expects <strong>Local</strong>
+                        so the server can read existing files from disk.
+                    </div>
+                }
+
+                <div class="mb-3">
+                    <label class="form-label" for="azureConnectionString">Azure Blob connection string</label>
+                    <input type="password" id="azureConnectionString" class="form-control" @bind="_targetConnectionString" />
+                    <div class="form-text">
+                        @if (_hasConfiguredConnectionString)
+                        {
+                            <span>Configured connection string is available; leaving this blank will use it.</span>
+                        }
+                        else
+                        {
+                            <span>No configured connection string detected.</span>
+                        }
+                    </div>
+                </div>
+
+                <div class="row g-3">
+                    <div class="col-12 col-md-6">
+                        <label class="form-label" for="azureContainer">Container name</label>
+                        <input id="azureContainer" class="form-control" @bind="_targetContainerName" />
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <label class="form-label" for="azureBaseUrl">Base URL (optional)</label>
+                        <input id="azureBaseUrl" class="form-control" @bind="_targetBaseUrl" />
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div class="card">
             <div class="card-body">
                 <h5 class="card-title">Migration Options</h5>
@@ -223,10 +269,22 @@
     private string _statusMessage = "";
     private string _incrementalDateString = "";
     private bool _showRollbackConfirmation;
+    private string _targetConnectionString = "";
+    private string _targetContainerName = "";
+    private string _targetBaseUrl = "";
+    private bool _hasConfiguredConnectionString;
+    private string _currentProvider = "Local";
 
     protected override void OnInitialized()
     {
+        var storageOptions = StorageOptions.Value;
+        var azureOptions = storageOptions.AzureBlob;
+
         _incrementalDateString = DateTime.UtcNow.AddDays(-30).ToString("yyyy-MM-dd");
+        _targetContainerName = azureOptions.ContainerName;
+        _targetBaseUrl = azureOptions.BaseUrl ?? "";
+        _hasConfiguredConnectionString = !string.IsNullOrWhiteSpace(azureOptions.ConnectionString);
+        _currentProvider = storageOptions.Provider ?? "Local";
     }
 
     private async Task MigrateInitial()
@@ -237,7 +295,28 @@
             _statusMessage = "Starting initial migration... This may take a few minutes.";
             _showRollbackConfirmation = false;
 
-            _result = await MigrationOrchestrator.MigrateInitialAsync(CancellationToken.None);
+            if (string.IsNullOrWhiteSpace(_targetConnectionString) && !_hasConfiguredConnectionString)
+            {
+                _statusMessage = "Azure Blob connection string is required for migration.";
+                _result = null;
+                return;
+            }
+
+            if (!string.Equals(_currentProvider, "Local", StringComparison.OrdinalIgnoreCase))
+            {
+                _statusMessage = "Storage provider must be set to Local before running migration.";
+                _result = null;
+                return;
+            }
+
+            var targetOverrides = new AzureMigrationTargetOptions
+            {
+                ConnectionString = string.IsNullOrWhiteSpace(_targetConnectionString) ? null : _targetConnectionString,
+                ContainerName = string.IsNullOrWhiteSpace(_targetContainerName) ? null : _targetContainerName,
+                BaseUrl = string.IsNullOrWhiteSpace(_targetBaseUrl) ? null : _targetBaseUrl
+            };
+
+            _result = await MigrationOrchestrator.MigrateInitialAsync(targetOverrides, CancellationToken.None);
         }
         catch (Exception ex)
         {

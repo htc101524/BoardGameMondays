@@ -1,12 +1,16 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using BoardGameMondays.Core;
 using BoardGameMondays.Data;
 using BoardGameMondays.Data.Entities;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace BoardGameMondays.Tools;
 
@@ -23,42 +27,49 @@ namespace BoardGameMondays.Tools;
 public sealed class ImageMigrationOrchestrator
 {
     private readonly ApplicationDbContext _db;
-    private readonly IAssetStorage _sourceStorage;
-    private readonly IAssetStorage _targetStorage;
     private readonly ImageAuditLogger _auditLogger;
+    private readonly IWebHostEnvironment _environment;
+    private readonly IOptions<StorageOptions> _storageOptions;
+    private readonly ILogger<ImageMigrationOrchestrator> _logger;
 
     public ImageMigrationOrchestrator(
         ApplicationDbContext db,
-        IAssetStorage sourceStorage,
-        IAssetStorage targetStorage,
-        ImageAuditLogger auditLogger)
+        ImageAuditLogger auditLogger,
+        IWebHostEnvironment environment,
+        IOptions<StorageOptions> storageOptions,
+        ILogger<ImageMigrationOrchestrator> logger)
     {
         _db = db;
-        _sourceStorage = sourceStorage;
-        _targetStorage = targetStorage;
         _auditLogger = auditLogger;
+        _environment = environment;
+        _storageOptions = storageOptions;
+        _logger = logger;
     }
 
     /// <summary>
     /// Perform initial migration from source storage to target storage.
     /// Validates all images before migration, updates database URLs after successful uploads.
     /// </summary>
-    public async Task<ImageMigrationResult> MigrateInitialAsync(CancellationToken ct = default)
+    public async Task<ImageMigrationResult> MigrateInitialAsync(
+        AzureMigrationTargetOptions? targetOverrides = null,
+        CancellationToken ct = default)
     {
+        EnsureLocalSourceProvider();
+        var targetStorage = CreateAzureTargetStorage(targetOverrides);
         var result = new ImageMigrationResult { MigrationMode = "Initial" };
 
         // Migrate avatars.
-        var avatarResults = await MigrateAvatarsAsync(ct);
+        var avatarResults = await MigrateAvatarsAsync(targetStorage, ct);
         result.AvatarResults = avatarResults;
         result.TotalItemsMigrated += avatarResults.Count(r => r.Success);
 
         // Migrate game images.
-        var gameResults = await MigrateGameImagesAsync(ct);
+        var gameResults = await MigrateGameImagesAsync(targetStorage, ct);
         result.GameImageResults = gameResults;
         result.TotalItemsMigrated += gameResults.Count(r => r.Success);
 
         // Migrate blog images.
-        var blogResults = await MigrateBlogImagesAsync(ct);
+        var blogResults = await MigrateBlogImagesAsync(targetStorage, ct);
         result.BlogImageResults = blogResults;
         result.TotalItemsMigrated += blogResults.Count(r => r.Success);
 
@@ -157,13 +168,15 @@ public sealed class ImageMigrationOrchestrator
     /// </summary>
     public async Task<ImageValidationResult> ValidateImagesBeforeMigrationAsync(CancellationToken ct = default)
     {
+        EnsureLocalSourceProvider();
+        var sourceStorage = CreateLocalSourceStorage();
         var result = new ImageValidationResult();
 
         // Validate avatars.
         var members = await _db.Members.Where(m => m.AvatarUrl != null).ToListAsync(ct);
         foreach (var member in members)
         {
-            var validation = await _sourceStorage.ValidateImageAsync(member.AvatarUrl!, ct);
+            var validation = await sourceStorage.ValidateImageAsync(member.AvatarUrl!, ct);
             if (!validation.isValid)
             {
                 result.InvalidImages.Add(new InvalidImageEntry
@@ -180,7 +193,7 @@ public sealed class ImageMigrationOrchestrator
         var games = await _db.Games.Where(g => g.ImageUrl != null).ToListAsync(ct);
         foreach (var game in games)
         {
-            var validation = await _sourceStorage.ValidateImageAsync(game.ImageUrl!, ct);
+            var validation = await sourceStorage.ValidateImageAsync(game.ImageUrl!, ct);
             if (!validation.isValid)
             {
                 result.InvalidImages.Add(new InvalidImageEntry
@@ -200,7 +213,7 @@ public sealed class ImageMigrationOrchestrator
             var imageUrls = BlogImageMigrationHelper.ExtractImageUrls(post.Body);
             foreach (var url in imageUrls)
             {
-                var validation = await _sourceStorage.ValidateImageAsync(url, ct);
+                var validation = await sourceStorage.ValidateImageAsync(url, ct);
                 if (!validation.isValid)
                 {
                     result.InvalidImages.Add(new InvalidImageEntry
@@ -219,7 +232,7 @@ public sealed class ImageMigrationOrchestrator
         return result;
     }
 
-    private async Task<List<ImageMigrationEntry>> MigrateAvatarsAsync(CancellationToken ct)
+    private async Task<List<ImageMigrationEntry>> MigrateAvatarsAsync(IAssetStorage targetStorage, CancellationToken ct)
     {
         var results = new List<ImageMigrationEntry>();
         var members = await _db.Members.Where(m => m.AvatarUrl != null).ToListAsync(ct);
@@ -229,9 +242,9 @@ public sealed class ImageMigrationOrchestrator
             try
             {
                 var oldUrl = member.AvatarUrl!;
-                var newUrl = await CopyImageToTargetStorageAsync(oldUrl, $"avatars/{member.Id}.jpg", ct);
+                var newUrl = await CopyAvatarToTargetStorageAsync(targetStorage, member.Id, oldUrl, ct);
 
-                if (newUrl != null)
+                if (!string.IsNullOrWhiteSpace(newUrl))
                 {
                     member.AvatarUrl = newUrl;
                     await _db.SaveChangesAsync(ct);
@@ -247,6 +260,11 @@ public sealed class ImageMigrationOrchestrator
                         null,
                         new Dictionary<string, string> { { "MemberId", member.Id.ToString() } },
                         ct);
+                }
+                else
+                {
+                    results.Add(new ImageMigrationEntry(
+                        Guid.NewGuid(), oldUrl, null, false, "Unable to read source image", "Avatar", member.Id.ToString()));
                 }
             }
             catch (Exception ex)
@@ -268,7 +286,7 @@ public sealed class ImageMigrationOrchestrator
         return results;
     }
 
-    private async Task<List<ImageMigrationEntry>> MigrateGameImagesAsync(CancellationToken ct)
+    private async Task<List<ImageMigrationEntry>> MigrateGameImagesAsync(IAssetStorage targetStorage, CancellationToken ct)
     {
         var results = new List<ImageMigrationEntry>();
         var games = await _db.Games.Where(g => g.ImageUrl != null).ToListAsync(ct);
@@ -278,10 +296,9 @@ public sealed class ImageMigrationOrchestrator
             try
             {
                 var oldUrl = game.ImageUrl!;
-                var fileName = Path.GetFileName(new Uri(oldUrl).LocalPath);
-                var newUrl = await CopyImageToTargetStorageAsync(oldUrl, $"games/{fileName}", ct);
+                var newUrl = await CopyGameImageToTargetStorageAsync(targetStorage, oldUrl, ct);
 
-                if (newUrl != null)
+                if (!string.IsNullOrWhiteSpace(newUrl))
                 {
                     game.ImageUrl = newUrl;
                     await _db.SaveChangesAsync(ct);
@@ -297,6 +314,11 @@ public sealed class ImageMigrationOrchestrator
                         null,
                         new Dictionary<string, string> { { "GameId", game.Id.ToString() } },
                         ct);
+                }
+                else
+                {
+                    results.Add(new ImageMigrationEntry(
+                        Guid.NewGuid(), oldUrl, null, false, "Unable to read source image", "GameImage", game.Id.ToString()));
                 }
             }
             catch (Exception ex)
@@ -318,7 +340,7 @@ public sealed class ImageMigrationOrchestrator
         return results;
     }
 
-    private async Task<List<ImageMigrationEntry>> MigrateBlogImagesAsync(CancellationToken ct)
+    private async Task<List<ImageMigrationEntry>> MigrateBlogImagesAsync(IAssetStorage targetStorage, CancellationToken ct)
     {
         var results = new List<ImageMigrationEntry>();
         var posts = await _db.BlogPosts.ToListAsync(ct);
@@ -336,10 +358,9 @@ public sealed class ImageMigrationOrchestrator
 
                 try
                 {
-                    var fileName = Path.GetFileName(new Uri(oldUrl).LocalPath);
-                    var newUrl = await CopyImageToTargetStorageAsync(oldUrl, $"blog/{fileName}", ct);
+                    var newUrl = await CopyBlogImageToTargetStorageAsync(targetStorage, oldUrl, ct);
 
-                    if (newUrl != null)
+                    if (!string.IsNullOrWhiteSpace(newUrl))
                     {
                         urlMappings[oldUrl] = newUrl;
                         results.Add(new ImageMigrationEntry(
@@ -353,6 +374,11 @@ public sealed class ImageMigrationOrchestrator
                             null,
                             new Dictionary<string, string> { { "BlogPostId", post.Id.ToString() } },
                             ct);
+                    }
+                    else
+                    {
+                        results.Add(new ImageMigrationEntry(
+                            Guid.NewGuid(), oldUrl, null, false, "Unable to read source image", "BlogImage", post.Id.ToString()));
                     }
                 }
                 catch (Exception ex)
@@ -422,12 +448,162 @@ public sealed class ImageMigrationOrchestrator
         return results;
     }
 
-    private async Task<string?> CopyImageToTargetStorageAsync(string sourceUrl, string targetPath, CancellationToken ct)
+    private async Task<string?> CopyAvatarToTargetStorageAsync(
+        IAssetStorage targetStorage,
+        Guid memberId,
+        string sourceUrl,
+        CancellationToken ct)
     {
-        // TODO: Implement actual copying from source to target storage.
-        // For now, this is a placeholder.
-        return null;
+        await using var sourceStream = await OpenLocalImageStreamAsync(sourceUrl, ct);
+        if (sourceStream is null)
+            return null;
+
+        var extension = GetExtensionOrDefault(sourceUrl, ".jpg");
+        return await targetStorage.SaveAvatarAsync(memberId, sourceStream, extension, ct);
     }
+
+    private async Task<string?> CopyGameImageToTargetStorageAsync(
+        IAssetStorage targetStorage,
+        string sourceUrl,
+        CancellationToken ct)
+    {
+        await using var sourceStream = await OpenLocalImageStreamAsync(sourceUrl, ct);
+        if (sourceStream is null)
+            return null;
+
+        var extension = GetExtensionOrDefault(sourceUrl, ".jpg");
+        return await targetStorage.SaveGameImageAsync(sourceStream, extension, ct);
+    }
+
+    private async Task<string?> CopyBlogImageToTargetStorageAsync(
+        IAssetStorage targetStorage,
+        string sourceUrl,
+        CancellationToken ct)
+    {
+        await using var sourceStream = await OpenLocalImageStreamAsync(sourceUrl, ct);
+        if (sourceStream is null)
+            return null;
+
+        var extension = GetExtensionOrDefault(sourceUrl, ".jpg");
+        return await targetStorage.SaveBlogImageAsync(sourceStream, extension, ct);
+    }
+
+    private Task<Stream?> OpenLocalImageStreamAsync(string url, CancellationToken ct)
+    {
+        var localPath = ResolveLocalPathFromUrl(url);
+        if (string.IsNullOrWhiteSpace(localPath) || !File.Exists(localPath))
+        {
+            _logger.LogWarning("Image migration skipped missing local file: {Url} (resolved path: {Path})", url, localPath);
+            return Task.FromResult<Stream?>(null);
+        }
+
+        var stream = (Stream)File.OpenRead(localPath);
+        return Task.FromResult<Stream?>(stream);
+    }
+
+    private string? ResolveLocalPathFromUrl(string url)
+    {
+        if (string.IsNullOrWhiteSpace(url))
+            return null;
+
+        var sanitized = url.Split('?', 2)[0];
+        if (Uri.TryCreate(sanitized, UriKind.Absolute, out var absolute))
+        {
+            sanitized = absolute.AbsolutePath;
+        }
+
+        var relative = sanitized.TrimStart('/').Replace('/', Path.DirectorySeparatorChar);
+        if (string.IsNullOrWhiteSpace(relative))
+            return null;
+
+        return Path.Combine(ResolveAssetsRoot(), relative);
+    }
+
+    private string ResolveAssetsRoot()
+    {
+        var configured = _storageOptions.Value.Local.RootPath?.Trim();
+        if (!string.IsNullOrWhiteSpace(configured))
+        {
+            return configured;
+        }
+
+        if (!_environment.IsDevelopment())
+        {
+            var home = Environment.GetEnvironmentVariable("HOME");
+            if (!string.IsNullOrWhiteSpace(home))
+            {
+                return Path.Combine(home, "bgm-assets");
+            }
+        }
+
+        return _environment.WebRootPath;
+    }
+
+    private static string GetExtensionOrDefault(string url, string fallback)
+    {
+        var sanitized = url.Split('?', 2)[0];
+        if (Uri.TryCreate(sanitized, UriKind.Absolute, out var absolute))
+        {
+            sanitized = absolute.AbsolutePath;
+        }
+
+        var extension = Path.GetExtension(sanitized);
+        return string.IsNullOrWhiteSpace(extension) ? fallback : extension;
+    }
+
+    private void EnsureLocalSourceProvider()
+    {
+        var provider = (_storageOptions.Value.Provider ?? "Local").Trim();
+        if (!provider.Equals("Local", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("Image migration expects Storage:Provider=Local so source images can be read from disk.");
+        }
+    }
+
+    private IAssetStorage CreateLocalSourceStorage()
+    {
+        return new LocalAssetStorage(_environment, _storageOptions);
+    }
+
+    private IAssetStorage CreateAzureTargetStorage(AzureMigrationTargetOptions? overrides)
+    {
+        var configured = _storageOptions.Value.AzureBlob;
+        var connectionString = string.IsNullOrWhiteSpace(overrides?.ConnectionString)
+            ? configured.ConnectionString
+            : overrides!.ConnectionString;
+
+        if (string.IsNullOrWhiteSpace(connectionString))
+        {
+            throw new InvalidOperationException("Azure Blob Storage connection string is required for migration.");
+        }
+
+        var azureOptions = new StorageOptions.AzureBlobStorageOptions
+        {
+            ConnectionString = connectionString,
+            ContainerName = string.IsNullOrWhiteSpace(overrides?.ContainerName) ? configured.ContainerName : overrides!.ContainerName,
+            BaseUrl = string.IsNullOrWhiteSpace(overrides?.BaseUrl) ? configured.BaseUrl : overrides!.BaseUrl,
+            CreateContainerIfMissing = configured.CreateContainerIfMissing,
+            PublicAccessIfCreated = configured.PublicAccessIfCreated
+        };
+
+        var effectiveOptions = new StorageOptions
+        {
+            Provider = "AzureBlob",
+            AzureBlob = azureOptions,
+            Local = _storageOptions.Value.Local,
+            EnableAuditLogging = _storageOptions.Value.EnableAuditLogging,
+            AuditLogPath = _storageOptions.Value.AuditLogPath
+        };
+
+        return new AzureBlobAssetStorage(Options.Create(effectiveOptions));
+    }
+}
+
+public sealed class AzureMigrationTargetOptions
+{
+    public string? ConnectionString { get; set; }
+    public string? ContainerName { get; set; }
+    public string? BaseUrl { get; set; }
 }
 
 /// <summary>
