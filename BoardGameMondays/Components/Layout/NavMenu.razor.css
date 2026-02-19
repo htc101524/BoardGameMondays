@@ -346,7 +346,7 @@
 }
 
 .bgm-menuIcon {
-    stroke: #22311c;
+    stroke: #1f3b2c;
     stroke-width: 2;
     stroke-linecap: round;
     fill: none;
@@ -429,7 +429,7 @@
 
 .bgm-menuIcon path {
     fill: none;
-    stroke: rgba(34, 49, 28, 0.95);
+    stroke: #1f3b2c;
     stroke-width: 3.2;
     stroke-linecap: round;
     stroke-linejoin: round;
@@ -776,5 +776,5 @@
     /* show tappable square on left */
     .bgm-menuArea { display: flex; background: var(--bgm-menu-bg); flex-shrink: 0; }
     .bgm-menuArea .bgm-menuButton { border-radius: 0; }
-    .bgm-menuIcon path { stroke: #fff; fill: none; }
+    .bgm-menuIcon path { stroke: #1f3b2c; fill: none; }
 }
