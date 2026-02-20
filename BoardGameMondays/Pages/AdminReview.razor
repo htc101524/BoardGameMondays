@@ -1,0 +1,192 @@
+@page "/admin/review"
+@using BoardGameMondays.Core
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Components.Forms
+@attribute [Authorize(Roles = "Admin")]
+@rendermode Microsoft.AspNetCore.Components.Web.RenderMode.InteractiveServer
+@inject BoardGameService BoardGameService
+@inject BgmMemberDirectoryService MemberDirectory
+
+<PageTitle>Add Game Review - Board Game Mondays</PageTitle>
+
+<div class="mb-3">
+    <a class="btn btn-sm btn-outline-secondary" href="/admin">← Back to admin</a>
+</div>
+
+<h1>Add a Game Review</h1>
+<p class="text-muted mb-4">Select a game and submit your review.</p>
+
+@if (_games.Count == 0)
+{
+    <p class="text-muted">No games found. <a href="/admin/games/new">Add a game first.</a></p>
+}
+else
+{
+    <div class="mb-4" style="max-width: 480px;">
+        <label class="form-label fw-semibold" for="gamePicker">Choose a game</label>
+        <select id="gamePicker" class="form-select form-select-lg" @onchange="OnGameSelected">
+            <option value="">— select a game —</option>
+            @foreach (var game in _games)
+            {
+                <option value="@game.Id">@game.Name</option>
+            }
+        </select>
+    </div>
+
+    @if (_selectedGame is not null)
+    {
+        <div class="card" style="max-width: 640px;">
+            <div class="card-body">
+                <h2 class="h5 card-title mb-1">@_selectedGame.Name</h2>
+                @if (!string.IsNullOrWhiteSpace(_selectedGame.Tagline))
+                {
+                    <p class="text-muted small mb-3">@_selectedGame.Tagline</p>
+                }
+                else
+                {
+                    <div class="mb-3"></div>
+                }
+
+                @if (_existingReview is not null)
+                {
+                    <div class="alert alert-info py-2 mb-3">
+                        <span class="fw-semibold">You have an existing review.</span> Saving will update it.
+                    </div>
+                }
+
+                <EditForm Model="_reviewModel" OnValidSubmit="SaveReviewAsync">
+                    <div class="mb-3">
+                        <label class="form-label">Rating <span class="text-muted small">(0–10)</span></label>
+                        <InputNumber class="form-control" TValue="double" @bind-Value="_reviewModel.Rating" step="0.1" min="0" max="10" style="max-width: 120px;" />
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Review</label>
+                        <InputTextArea class="form-control" @bind-Value="_reviewModel.Description" rows="8" placeholder="Share your thoughts about this game…" />
+                    </div>
+
+                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                        <button type="submit" class="btn btn-primary" disabled="@_saving">
+                            @(_saving ? "Saving…" : "Save review")
+                        </button>
+                        @if (!string.IsNullOrWhiteSpace(_reviewStatus))
+                        {
+                            <span class="@(_reviewStatusIsError ? "text-danger" : "text-success")">@_reviewStatus</span>
+                        }
+                    </div>
+                </EditForm>
+            </div>
+        </div>
+    }
+}
+
+@code {
+    [CascadingParameter]
+    public Task<AuthenticationState> AuthenticationStateTask { get; set; } = default!;
+
+    private List<BoardGame> _games = new();
+    private BoardGame? _selectedGame;
+    private MemberReview? _existingReview;
+    private string? _currentReviewerName;
+    private bool _saving;
+
+    private ReviewModel _reviewModel = new();
+    private string? _reviewStatus;
+    private bool _reviewStatusIsError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _games = (await BoardGameService.GetAllAsync())
+            .OrderBy(g => g.Name)
+            .ToList();
+
+        var auth = await AuthenticationStateTask;
+        var user = auth.User;
+        _currentReviewerName = user.FindFirst("bgm:displayName")?.Value?.Trim();
+        if (string.IsNullOrWhiteSpace(_currentReviewerName))
+        {
+            _currentReviewerName = user.Identity?.Name?.Trim();
+        }
+    }
+
+    private async Task OnGameSelected(ChangeEventArgs e)
+    {
+        _reviewStatus = null;
+        _reviewStatusIsError = false;
+        _selectedGame = null;
+        _existingReview = null;
+
+        if (e.Value is string idStr && Guid.TryParse(idStr, out var id))
+        {
+            _selectedGame = await BoardGameService.GetByIdAsync(id);
+            if (_selectedGame is not null && !string.IsNullOrWhiteSpace(_currentReviewerName))
+            {
+                _existingReview = _selectedGame.Reviews
+                    .OfType<MemberReview>()
+                    .FirstOrDefault(r => string.Equals(r.Reviewer.Name, _currentReviewerName, StringComparison.OrdinalIgnoreCase));
+            }
+
+            _reviewModel = new ReviewModel
+            {
+                Rating = _existingReview?.Rating ?? 8,
+                Description = _existingReview?.Description ?? string.Empty
+            };
+        }
+    }
+
+    private async Task SaveReviewAsync()
+    {
+        if (_selectedGame is null)
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_currentReviewerName))
+        {
+            _reviewStatus = "You must be logged in to review.";
+            _reviewStatusIsError = true;
+            return;
+        }
+
+        _reviewStatus = null;
+        _reviewStatusIsError = false;
+        _saving = true;
+
+        try
+        {
+            var reviewer = MemberDirectory.GetOrCreate(_currentReviewerName);
+            var review = new MemberReview(reviewer, _reviewModel.Rating, _reviewModel.Description ?? string.Empty);
+
+            var updated = await BoardGameService.AddReviewAsync(_selectedGame.Id, review);
+            if (updated is null)
+            {
+                _reviewStatus = "Game not found.";
+                _reviewStatusIsError = true;
+                return;
+            }
+
+            _selectedGame = updated;
+            _existingReview = updated.Reviews
+                .OfType<MemberReview>()
+                .FirstOrDefault(r => string.Equals(r.Reviewer.Name, _currentReviewerName, StringComparison.OrdinalIgnoreCase));
+
+            _reviewStatus = "Review saved!";
+        }
+        catch (Exception ex)
+        {
+            _reviewStatus = $"Failed to save: {ex.Message}";
+            _reviewStatusIsError = true;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private sealed class ReviewModel
+    {
+        public double Rating { get; set; } = 8;
+        public string? Description { get; set; }
+    }
+}
