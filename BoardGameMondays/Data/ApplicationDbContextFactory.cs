@@ -9,9 +9,9 @@ public sealed class ApplicationDbContextFactory : IDesignTimeDbContextFactory<Ap
     public ApplicationDbContext CreateDbContext(string[] args)
     {
         // Design-time factory for EF migrations.
-        // Uses the connection string from configuration (Development or Production).
-        // Falls back to a default SQL Server connection for migration generation if SQLite is configured
-        // AND no explicit --connection argument was passed via EF tools.
+        // Always targets SQL Server for migration scaffolding so generated code
+        // uses the correct column types (nvarchar, bit, int, …).
+        // Set EF_PROVIDER=sqlite to scaffold for SQLite instead.
 
         var basePath = Directory.GetCurrentDirectory();
 
@@ -25,7 +25,6 @@ public sealed class ApplicationDbContextFactory : IDesignTimeDbContextFactory<Ap
         var connectionString = configuration.GetConnectionString("DefaultConnection");
 
         // Check if an explicit connection string was passed via --connection argument
-        // EF tools pass this as an environment variable
         var explicitConnection = Environment.GetEnvironmentVariable("EFCORETOOLSDB");
         if (!string.IsNullOrWhiteSpace(explicitConnection))
         {
@@ -34,12 +33,14 @@ public sealed class ApplicationDbContextFactory : IDesignTimeDbContextFactory<Ap
 
         var optionsBuilder = new DbContextOptionsBuilder<ApplicationDbContext>();
 
-        // Use the appropriate provider based on the connection string format
-        if (IsSqliteConnectionString(connectionString))
+        // Only use SQLite when explicitly requested via environment variable
+        var provider = Environment.GetEnvironmentVariable("EF_PROVIDER");
+        if (string.Equals(provider, "sqlite", StringComparison.OrdinalIgnoreCase)
+            && IsSqliteConnectionString(connectionString))
         {
             optionsBuilder.UseSqlite(connectionString);
         }
-        else if (!string.IsNullOrWhiteSpace(connectionString))
+        else if (!string.IsNullOrWhiteSpace(connectionString) && !IsSqliteConnectionString(connectionString))
         {
             optionsBuilder.UseSqlServer(connectionString, sql =>
             {
@@ -51,7 +52,7 @@ public sealed class ApplicationDbContextFactory : IDesignTimeDbContextFactory<Ap
         }
         else
         {
-            // Fall back to SQL Server for migration generation when no valid connection is available
+            // Default: SQL Server stub connection for migration generation
             connectionString = "Server=localhost;Database=BoardGameMondays;User Id=sa;Password=ChangeMe!123;Encrypt=False;";
             optionsBuilder.UseSqlServer(connectionString);
         }

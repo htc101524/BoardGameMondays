@@ -721,6 +721,30 @@ namespace BoardGameMondays.Migrations
                     b.ToTable("Reviews");
                 });
 
+            modelBuilder.Entity("BoardGameMondays.Data.Entities.ReviewPromptSentEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("GameId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("MemberId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<long>("SentOn")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GameId");
+
+                    b.HasIndex("MemberId");
+
+                    b.ToTable("ReviewPromptSents");
+                });
+
             modelBuilder.Entity("BoardGameMondays.Data.Entities.ShopItemEntity", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1320,6 +1344,25 @@ namespace BoardGameMondays.Migrations
                     b.Navigation("Game");
 
                     b.Navigation("Reviewer");
+                });
+
+            modelBuilder.Entity("BoardGameMondays.Data.Entities.ReviewPromptSentEntity", b =>
+                {
+                    b.HasOne("BoardGameMondays.Data.Entities.BoardGameEntity", "Game")
+                        .WithMany()
+                        .HasForeignKey("GameId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("BoardGameMondays.Data.Entities.MemberEntity", "Member")
+                        .WithMany()
+                        .HasForeignKey("MemberId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Game");
+
+                    b.Navigation("Member");
                 });
 
             modelBuilder.Entity("BoardGameMondays.Data.Entities.TicketPriorityEntity", b =>
