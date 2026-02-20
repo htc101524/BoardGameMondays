@@ -1,0 +1,156 @@
+@page "/admin/blog/new"
+@using BoardGameMondays.Core
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.AspNetCore.Components.Web
+@using static Microsoft.AspNetCore.Components.Web.RenderMode
+@attribute [Authorize(Roles = "Admin")]
+@rendermode InteractiveServer
+@inject BlogService BlogService
+@inject IAssetStorage AssetStorage
+@inject NavigationManager Navigation
+
+<PageTitle>Log Feature / Bug - Board Game Mondays</PageTitle>
+
+<div class="container py-4" style="max-width: 900px;">
+    <nav class="mb-4">
+        <a href="/admin" class="text-decoration-none">← Back to admin</a>
+    </nav>
+
+    <h1>Log a Feature / Bug</h1>
+    <p class="text-muted mb-4">Create an internal note to track a feature request or report a bug. These posts are only visible to admins by default.</p>
+
+    <div class="card">
+        <div class="card-body">
+            <div class="text-muted small mb-3">
+                Supports Markdown: **bold**, *italic*, [links](url), ![images](url), and more.
+            </div>
+
+            <div class="d-grid gap-3">
+                <div>
+                    <label class="form-label fw-semibold">Title</label>
+                    <input class="form-control" @bind="_title" placeholder="e.g. Bug: scores not saving, Feature: add dark mode" />
+                </div>
+
+                <div>
+                    <label class="form-label fw-semibold">Description (Markdown)</label>
+                    <textarea class="form-control font-monospace" rows="12" @bind="_body" placeholder="Describe the issue or feature request in detail..."></textarea>
+                </div>
+
+                <label class="form-check">
+                    <input type="checkbox" class="form-check-input" @bind="_isAdminOnly" />
+                    <span class="form-check-label">Admin only (internal post, not visible to the public)</span>
+                </label>
+
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                    <button type="button" class="btn btn-primary" disabled="@_saving" @onclick="SaveAsync">
+                        @(_saving ? "Saving…" : "Save")
+                    </button>
+                    <label class="btn btn-outline-secondary mb-0">
+                        <InputFile OnChange="UploadImageAsync" accept="image/*" style="display:none" />
+                        📷 Upload image
+                    </label>
+                    <a href="/admin" class="btn btn-link">Cancel</a>
+                    @if (!string.IsNullOrWhiteSpace(_status))
+                    {
+                        <span class="@(_statusIsError ? "text-danger" : "text-success")">@_status</span>
+                    }
+                </div>
+            </div>
+
+            @if (!string.IsNullOrWhiteSpace(_body))
+            {
+                <div class="mt-4">
+                    <div class="fw-semibold mb-2">Preview</div>
+                    <div class="border rounded p-3 bgm-markdown">
+                        @MarkdownRenderer.ToMarkupString(_body)
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    [CascadingParameter]
+    public Task<AuthenticationState> AuthenticationStateTask { get; set; } = default!;
+
+    private string _title = string.Empty;
+    private string _body = string.Empty;
+    private bool _isAdminOnly = true;
+    private bool _saving;
+    private string? _status;
+    private bool _statusIsError;
+
+    private async Task SaveAsync()
+    {
+        _status = null;
+        _statusIsError = false;
+
+        var title = _title.Trim();
+        var body = _body.Trim();
+
+        if (string.IsNullOrWhiteSpace(title) || string.IsNullOrWhiteSpace(body))
+        {
+            _status = "Title and description are required.";
+            _statusIsError = true;
+            return;
+        }
+
+        _saving = true;
+        try
+        {
+            var auth = await AuthenticationStateTask;
+            var userId = auth.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+
+            var post = await BlogService.AddAsync(title, body, _isAdminOnly, userId);
+            Navigation.NavigateTo($"/admin/blog/{post.Id}");
+        }
+        catch (Exception ex)
+        {
+            _status = $"Failed to save: {ex.Message}";
+            _statusIsError = true;
+            _saving = false;
+        }
+    }
+
+    private async Task UploadImageAsync(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+        if (file is null) return;
+
+        var maxSize = 5 * 1024 * 1024;
+        if (file.Size > maxSize)
+        {
+            _status = "Image too large (max 5 MB).";
+            _statusIsError = true;
+            return;
+        }
+
+        _status = "Uploading…";
+        _statusIsError = false;
+        StateHasChanged();
+
+        try
+        {
+            await using var stream = file.OpenReadStream(maxAllowedSize: maxSize);
+            var extension = Path.GetExtension(file.Name).TrimStart('.');
+            if (string.IsNullOrWhiteSpace(extension)) extension = "png";
+
+            var url = await AssetStorage.SaveBlogImageAsync(stream, extension);
+
+            var imageMarkdown = $"![{file.Name}]({url})";
+            _body = string.IsNullOrWhiteSpace(_body)
+                ? imageMarkdown
+                : _body + "\n\n" + imageMarkdown;
+
+            _status = "Image uploaded.";
+        }
+        catch (Exception ex)
+        {
+            _status = $"Failed to upload image: {ex.Message}";
+            _statusIsError = true;
+        }
+    }
+}
