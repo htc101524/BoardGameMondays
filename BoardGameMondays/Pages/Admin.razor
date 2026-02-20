@@ -1,108 +1,18 @@
 @page "/admin"
 @using BoardGameMondays.Core
 @using BoardGameMondays.Data
-@using BoardGameMondays.Tools
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.AspNetCore.Components.Forms
 @using Microsoft.EntityFrameworkCore
-@using Microsoft.Extensions.Options
-@using System.Net.Http.Headers
-@using System.IO.Compression
 @attribute [Authorize(Roles = "Admin")]
 @inject BoardGameService BoardGameService
 @inject IDbContextFactory<ApplicationDbContext> DbFactory
-@inject IOptions<StorageOptions> StorageOptions
 @inject ILogger<Admin> Logger
-@inject IHttpClientFactory HttpClientFactory
 
 <h1>Admin</h1>
 
 <div class="mb-4 d-flex gap-2 flex-wrap">
     <a class="btn btn-outline-secondary" href="/admin/tickets">Tickets</a>
-</div>
-
-<div class="mb-4">
-    <h2 class="h4">Image migration</h2>
-    <p class="text-muted small mb-3">
-        Upload a zip exported from the old Windows app service (wwwroot), or download it directly
-        from Kudu. The zip should contain uploads/avatars, images/games, and optionally uploads/blog.
-    </p>
-    <div class="mb-3">
-        <a class="btn btn-outline-primary btn-sm" href="/admin/image-migration">Open Azure migration manager</a>
-        <span class="text-muted small ms-2">Use this for in-place Local → Azure Blob migration.</span>
-    </div>
-
-    <div class="card mb-3" style="max-width: 720px;">
-        <div class="card-body">
-            <div class="fw-semibold mb-2">Download from Windows App Service (Kudu)</div>
-            <div class="text-muted small mb-2">
-                Use the Kudu zip endpoint, e.g. https://&lt;app&gt;.scm.azurewebsites.net/api/zip/site/wwwroot
-            </div>
-            <div class="d-grid gap-2">
-                <input class="form-control" placeholder="Kudu zip URL" @bind="_kuduZipUrl" />
-                <div class="row g-2">
-                    <div class="col-12 col-md-6">
-                        <input class="form-control" placeholder="Kudu username" @bind="_kuduUser" />
-                    </div>
-                    <div class="col-12 col-md-6">
-                        <input class="form-control" placeholder="Kudu password" @bind="_kuduPassword" type="password" />
-                    </div>
-                </div>
-            </div>
-            @if (!string.IsNullOrWhiteSpace(_downloadStatus))
-            {
-                <div class="mt-2 text-muted small">@_downloadStatus</div>
-            }
-        </div>
-    </div>
-
-    <div class="d-flex align-items-center gap-2 flex-wrap">
-        <InputFile OnChange="OnMigrationFileSelected" accept=".zip" />
-        <button type="button" class="btn btn-primary" @onclick="RunMigrationAsync" disabled="@(_migrationRunning || (!CanUseKuduDownload && _migrationFile is null))">
-            @(_migrationRunning ? "Migrating…" : "Download & migrate")
-        </button>
-        <button type="button" class="btn btn-outline-secondary" @onclick="ClearMigration" disabled="@(_migrationRunning)">Clear</button>
-        @if (!string.IsNullOrWhiteSpace(_migrationFileName))
-        {
-            <span class="text-muted small">@_migrationFileName</span>
-        }
-    </div>
-
-    @if (!string.IsNullOrWhiteSpace(_migrationStatus))
-    {
-        <div class="mt-2 @(_migrationStatusIsError ? "text-danger" : "text-success")">@_migrationStatus</div>
-    }
-
-    @if (_migrationResult is not null)
-    {
-        <div class="mt-3">
-            <div class="fw-semibold">Results</div>
-            <div class="text-muted small">@_migrationResult.SuccessCount / @_migrationResult.TotalFiles files migrated successfully.</div>
-
-            @if (_migrationFailures.Count > 0)
-            {
-                <div class="table-responsive mt-2">
-                    <table class="table table-sm">
-                        <thead>
-                            <tr>
-                                <th>File</th>
-                                <th>Note</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach (var failure in _migrationFailures)
-                            {
-                                <tr>
-                                    <td class="text-nowrap">@failure.FileName</td>
-                                    <td>@failure.Note</td>
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
-                </div>
-            }
-        </div>
-    }
 </div>
 
 <div class="mb-4">
@@ -188,17 +98,6 @@ else
     private FeaturedFormModel _featuredForm = new();
     private string? _featuredStatus;
 
-    private IBrowserFile? _migrationFile;
-    private string? _migrationFileName;
-    private bool _migrationRunning;
-    private string? _migrationStatus;
-    private bool _migrationStatusIsError;
-    private ImageMigrationTool.MigrationResult? _migrationResult;
-    private string? _kuduZipUrl;
-    private string? _kuduUser;
-    private string? _kuduPassword;
-    private string? _downloadStatus;
-
     protected override async Task OnInitializedAsync()
     {
         _games = (await BoardGameService.GetAllAsync()).ToList();
@@ -212,175 +111,5 @@ else
         _featuredStatus = _featuredForm.SelectedFeatured is null
             ? "Set to Auto (latest reviewed)."
             : "Featured game updated.";
-    }
-
-    private void OnMigrationFileSelected(InputFileChangeEventArgs e)
-    {
-        _migrationFile = e.File;
-        _migrationFileName = _migrationFile?.Name;
-        _migrationStatus = null;
-        _migrationStatusIsError = false;
-        _migrationResult = null;
-    }
-
-    private async Task RunMigrationAsync()
-    {
-        if (_migrationFile is null || _migrationRunning)
-        {
-            if (!CanUseKuduDownload || _migrationRunning)
-            {
-                return;
-            }
-        }
-
-        _migrationRunning = true;
-        _migrationStatus = null;
-        _migrationStatusIsError = false;
-        _migrationResult = null;
-        _downloadStatus = null;
-
-        var blobOptions = StorageOptions.Value.AzureBlob;
-        if (string.IsNullOrWhiteSpace(blobOptions.ConnectionString))
-        {
-            _migrationStatus = "Azure Blob Storage connection string is not configured.";
-            _migrationStatusIsError = true;
-            _migrationRunning = false;
-            return;
-        }
-
-        var tempRoot = Path.Combine(Path.GetTempPath(), $"bgm-migration-{Guid.NewGuid():N}");
-        Directory.CreateDirectory(tempRoot);
-        var zipPath = Path.Combine(tempRoot, "assets.zip");
-
-        try
-        {
-            if (_migrationFile is not null)
-            {
-                await using (var stream = File.Create(zipPath))
-                {
-                    await _migrationFile.OpenReadStream(maxAllowedSize: 512 * 1024 * 1024).CopyToAsync(stream);
-                }
-            }
-            else
-            {
-                await DownloadZipFromKuduAsync(zipPath);
-            }
-
-            var extractRoot = Path.Combine(tempRoot, "extracted");
-            Directory.CreateDirectory(extractRoot);
-            ZipFile.ExtractToDirectory(zipPath, extractRoot);
-
-            var assetsRoot = FindAssetsRoot(extractRoot);
-            if (assetsRoot is null)
-            {
-                _migrationStatus = "Could not find uploads/ or images/ folders in the zip.";
-                _migrationStatusIsError = true;
-                return;
-            }
-
-            await using var db = await DbFactory.CreateDbContextAsync();
-            var tool = new ImageMigrationTool(db, blobOptions.ConnectionString, blobOptions.ContainerName, blobOptions.BaseUrl);
-            _migrationResult = await tool.MigrateFromLocalFolderAsync(assetsRoot);
-
-            _migrationStatus = _migrationResult.SuccessCount == _migrationResult.TotalFiles
-                ? "Migration complete."
-                : "Migration complete with some issues.";
-        }
-        catch (Exception ex)
-        {
-            Logger.LogError(ex, "Image migration failed");
-            _migrationStatus = "Migration failed. Check logs for details.";
-            _migrationStatusIsError = true;
-        }
-        finally
-        {
-            _migrationRunning = false;
-
-            try
-            {
-                if (Directory.Exists(tempRoot))
-                {
-                    Directory.Delete(tempRoot, true);
-                }
-            }
-            catch
-            {
-                // Ignore cleanup failures
-            }
-        }
-    }
-
-    private void ClearMigration()
-    {
-        _migrationFile = null;
-        _migrationFileName = null;
-        _migrationStatus = null;
-        _migrationStatusIsError = false;
-        _migrationResult = null;
-        _kuduZipUrl = null;
-        _kuduUser = null;
-        _kuduPassword = null;
-        _downloadStatus = null;
-    }
-
-    private List<ImageMigrationTool.ImageMigrationEntry> _migrationFailures
-        => _migrationResult is null
-            ? new()
-            : _migrationResult.AvatarResults
-                .Concat(_migrationResult.GameImageResults)
-                .Concat(_migrationResult.BlogImageResults)
-                .Where(r => !r.Success)
-                .ToList();
-
-    private static string? FindAssetsRoot(string root)
-    {
-        if (Directory.Exists(Path.Combine(root, "uploads")) || Directory.Exists(Path.Combine(root, "images")))
-        {
-            return root;
-        }
-
-        var wwwroot = Directory.GetDirectories(root, "wwwroot", SearchOption.AllDirectories)
-            .FirstOrDefault(dir => Directory.Exists(Path.Combine(dir, "uploads")) || Directory.Exists(Path.Combine(dir, "images")));
-        if (wwwroot is not null)
-        {
-            return wwwroot;
-        }
-
-        var uploadsDir = Directory.GetDirectories(root, "uploads", SearchOption.AllDirectories).FirstOrDefault();
-        if (uploadsDir is not null)
-        {
-            return Directory.GetParent(uploadsDir)?.FullName;
-        }
-
-        return null;
-    }
-
-    private bool CanUseKuduDownload
-        => !string.IsNullOrWhiteSpace(_kuduZipUrl)
-           && !string.IsNullOrWhiteSpace(_kuduUser)
-           && !string.IsNullOrWhiteSpace(_kuduPassword);
-
-    private async Task DownloadZipFromKuduAsync(string zipPath)
-    {
-        if (!CanUseKuduDownload)
-        {
-            throw new InvalidOperationException("Kudu download settings are incomplete.");
-        }
-
-        _downloadStatus = "Downloading from Kudu…";
-        StateHasChanged();
-
-        var client = HttpClientFactory.CreateClient();
-        var authValue = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes($"{_kuduUser}:{_kuduPassword}"));
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", authValue);
-
-        using var response = await client.GetAsync(_kuduZipUrl, HttpCompletionOption.ResponseHeadersRead);
-        response.EnsureSuccessStatusCode();
-
-        await using var responseStream = await response.Content.ReadAsStreamAsync();
-        await using var fileStream = File.Create(zipPath);
-        await responseStream.CopyToAsync(fileStream);
-
-        _downloadStatus = "Download complete.";
     }
 }
